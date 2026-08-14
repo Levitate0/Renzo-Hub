@@ -1,6 +1,7 @@
 package app.renzoshiori.client
 
 import android.app.Application
+import app.renzoshiori.client.data.auth.AndroidTokenStore
 import app.renzoshiori.client.data.auth.TokenStore
 import app.renzoshiori.client.data.network.NetworkModule
 import app.renzoshiori.client.data.offline.OfflineRepository
@@ -21,17 +22,22 @@ import okhttp3.OkHttpClient
  * attaches the same Bearer header the REST client uses so page images and
  * thumbnails authenticate identically.
  */
-open class RenzoApp : Application(), SingletonImageLoader.Factory {
-    val tokenStore: TokenStore by lazy { TokenStore(this) }
-    val network: NetworkModule by lazy { NetworkModule(tokenStore) }
+open class RenzoApp : Application(), SingletonImageLoader.Factory, ShioriApp {
+    override val tokenStore: TokenStore by lazy { AndroidTokenStore(this) }
+    override val network: NetworkModule by lazy { NetworkModule(tokenStore) }
 
     /** Shared with the anime half — one folder, one manifest, one downloader. */
-    val offlineStore: OfflineStore by lazy { OfflineStore(this) }
-    val offline: OfflineRepository by lazy { OfflineRepository(offlineStore) }
+    override val offlineStore: OfflineStore by lazy { OfflineStore(this) }
+    override val offline: OfflineRepository by lazy { OfflineRepository(offlineStore) }
 
     override fun onCreate() {
         super.onCreate()
-        app.renzoshiori.client.ui.util.AdultFilter.init(this)
+        // The commonMain screens resolve services and platform facts through
+        // these — set before any UI can compose.
+        top.levitatemedia.renzo.hub.core.HubContextHolder.context = this
+        ShioriRuntime.app = this
+        NetworkModule.logBodies = BuildConfig.DEBUG
+        app.renzoshiori.client.ui.util.AdultFilter.init()
 
         // Registered here rather than in ShioriRoot, because the downloader has
         // to be able to sign requests when this half is NOT on screen — a queue

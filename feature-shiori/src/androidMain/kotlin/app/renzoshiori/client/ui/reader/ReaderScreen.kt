@@ -122,11 +122,7 @@ fun ReaderScreen(
     onExit: () -> Unit,
     vm: ReaderViewModel = viewModel(
         key = "reader-$seriesId-$chapterNumber",
-        factory = ReaderViewModel.factory(
-            LocalContext.current.applicationContext as Application,
-            seriesId,
-            chapterNumber,
-        ),
+        factory = ReaderViewModel.factory(seriesId, chapterNumber),
     ),
 ) {
     val state by vm.state.collectAsState()

@@ -163,7 +163,7 @@ fun enqueueEpisodes(
             assets = null, // resolved late — see RenzoDownloadSource
         )
     }
-    DownloadQueue(context.applicationContext).enqueue(
+    DownloadQueue().enqueue(
         DownloadJob(
             target = HubTarget.Renzo,
             baseUrl = baseUrl,

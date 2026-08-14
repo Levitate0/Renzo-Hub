@@ -81,7 +81,7 @@ fun ShioriRoot(onSwitchApp: (() -> Unit)? = null) {
         java.io.File(application.filesDir, "last-crash.txt")
     }
 
-    val authViewModel: AuthViewModel = viewModel(factory = AuthViewModel.factory(application))
+    val authViewModel: AuthViewModel = viewModel(factory = AuthViewModel.factory())
 
     // Provided once, here, so every screen below can branch on device class
     // without re-detecting it. There is deliberately no separate TV screen tree

@@ -15,6 +15,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+compose.resources {
+    // Keeps the generated accessor out of the default `<module>.generated` spot
+    // and inside the app package the screens already import from.
+    packageOfResClass = "app.renzoshiori.client.resources"
+}
+
 kotlin {
     androidTarget {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
@@ -35,6 +41,10 @@ kotlin {
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.coil.compose)
+                implementation(compose.components.resources)
+                implementation(libs.jb.lifecycle.viewmodel.compose)
+                implementation(libs.jb.lifecycle.runtime.compose)
+                implementation(libs.jb.navigation.compose)
             }
         }
         // JVM-family shared (Retrofit/OkHttp API layer as it hoists).

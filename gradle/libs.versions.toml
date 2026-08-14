@@ -13,6 +13,11 @@ kotlin = "2.4.10"
 # step with `composeBom` when bumping either.
 composeMultiplatform = "1.10.1"
 coroutines = "1.11.0"
+# JetBrains' multiplatform redistributions of androidx.lifecycle/navigation —
+# the desktop target's ViewModel and NavHost. Android resolves them to the
+# matching androidx artifacts.
+jbLifecycle = "2.10.0"
+jbNavigation = "2.10.0-alpha02"
 
 compileSdk = "36"
 targetSdk = "36"
@@ -78,6 +83,9 @@ retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit
 retrofit-serialization = { module = "com.squareup.retrofit2:converter-kotlinx-serialization", version.ref = "retrofit" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+jb-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "jbLifecycle" }
+jb-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "jbLifecycle" }
+jb-navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "jbNavigation" }
 
 media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
 media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3" }

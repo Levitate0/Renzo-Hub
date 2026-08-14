@@ -30,7 +30,7 @@ import java.io.OutputStream
  * pass `shiori/…` or `renzo/…`), not in the root, precisely so that the old
  * unprefixed `offline/…` paths keep resolving.
  */
-class OfflineStore(private val context: Context) {
+class OfflineStore(private val context: Context) : HubOfflineFiles {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -93,7 +93,7 @@ class OfflineStore(private val context: Context) {
     // ── reads ────────────────────────────────────────────────────────────────
 
     /** Whole-file read. Pages and subtitles only — never call this for video. */
-    fun readFile(relPath: String): ByteArray? =
+    override fun readFile(relPath: String): ByteArray? =
         if (treeUri() != null) {
             rememberedDoc(relPath)?.let {
                 runCatching { context.contentResolver.openInputStream(it)?.use { s -> s.readBytes() } }.getOrNull()
@@ -116,12 +116,12 @@ class OfflineStore(private val context: Context) {
                 ?.let { Uri.fromFile(it) }
         }
 
-    fun exists(relPath: String): Boolean =
+    override fun exists(relPath: String): Boolean =
         if (treeUri() != null) rememberedDoc(relPath) != null
         else File(defaultRoot, segments(relPath).joinToString("/")).exists()
 
     /** Bytes already on disk, for resuming a partial transfer. */
-    fun sizeOf(relPath: String): Long =
+    override fun sizeOf(relPath: String): Long =
         if (treeUri() != null) {
             rememberedDoc(relPath)
                 ?.let { runCatching { DocumentFile.fromSingleUri(context, it)?.length() }.getOrNull() }
@@ -132,7 +132,7 @@ class OfflineStore(private val context: Context) {
 
     // ── writes ───────────────────────────────────────────────────────────────
 
-    fun writeFile(relPath: String, bytes: ByteArray) {
+    override fun writeFile(relPath: String, bytes: ByteArray) {
         openOutput(relPath, append = false)?.use { it.write(bytes) }
     }
 
@@ -140,7 +140,7 @@ class OfflineStore(private val context: Context) {
      * Streaming write. [append] resumes a partial file rather than truncating,
      * which is what makes a 2 GB episode survive a dropped connection.
      */
-    fun openOutput(relPath: String, append: Boolean = false): OutputStream? {
+    override fun openOutput(relPath: String, append: Boolean): OutputStream? {
         ensureNoMedia()
         return if (treeUri() != null) {
             val segs = segments(relPath)
@@ -160,7 +160,7 @@ class OfflineStore(private val context: Context) {
         }
     }
 
-    fun deletePath(relPath: String) {
+    override fun deletePath(relPath: String) {
         if (treeUri() != null) {
             val prefix = docKey(relPath)
             val e = prefs.edit()
@@ -179,7 +179,7 @@ class OfflineStore(private val context: Context) {
 
     // ── download folder ──────────────────────────────────────────────────────
 
-    fun folderLabel(): String? = treeUri()?.let {
+    override fun folderLabel(): String? = treeUri()?.let {
         runCatching { DocumentFile.fromTreeUri(context, it)?.name ?: Uri.decode(it.lastPathSegment) }.getOrNull()
     }
 
@@ -192,7 +192,7 @@ class OfflineStore(private val context: Context) {
     }
 
     /** Free space at the download location, for pre-flighting a large item. */
-    fun usableSpaceBytes(): Long = runCatching {
+    override fun usableSpaceBytes(): Long = runCatching {
         if (treeUri() != null) {
             context.contentResolver.openFileDescriptor(treeUri()!!, "r")?.use {
                 android.os.StatFs(defaultRoot.path).availableBytes
@@ -207,14 +207,14 @@ class OfflineStore(private val context: Context) {
     // Same `kv_` prefix and same prefs file the standalone client used, so
     // settings like auto-purge survive the upgrade rather than silently resetting.
 
-    fun kvGet(key: String): String? = prefs.getString("kv_$key", null)
+    override fun kvGet(key: String): String? = prefs.getString("kv_$key", null)
 
-    fun kvSet(key: String, value: String) = prefs.edit().putString("kv_$key", value).apply()
+    override fun kvSet(key: String, value: String) = prefs.edit().putString("kv_$key", value).apply()
 
     // ── manifest ─────────────────────────────────────────────────────────────
 
     @Synchronized
-    fun getManifest(): DownloadManifest {
+    override fun getManifest(): DownloadManifest {
         prefs.getString(KEY_MANIFEST_V3, null)?.let { raw ->
             runCatching { json.decodeFromString<DownloadManifest>(raw) }.getOrNull()?.let { return it }
         }
@@ -230,12 +230,12 @@ class OfflineStore(private val context: Context) {
     }
 
     @Synchronized
-    fun setManifest(m: DownloadManifest) {
+    override fun setManifest(m: DownloadManifest) {
         prefs.edit().putString(KEY_MANIFEST_V3, json.encodeToString(m)).apply()
     }
 
     @Synchronized
-    fun updateManifest(block: (DownloadManifest) -> DownloadManifest) {
+    override fun updateManifest(block: (DownloadManifest) -> DownloadManifest) {
         setManifest(block(getManifest()))
     }
 

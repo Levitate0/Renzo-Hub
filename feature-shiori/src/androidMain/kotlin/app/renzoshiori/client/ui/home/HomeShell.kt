@@ -217,7 +217,7 @@ fun HomeShell(
     }
 
     val libraryVm: LibraryViewModel = viewModel(
-        factory = LibraryViewModel.factory(context.applicationContext as android.app.Application),
+        factory = LibraryViewModel.factory(),
     )
     val libraryState by libraryVm.state.collectAsState()
 
@@ -892,7 +892,7 @@ private fun BoxScope.AccountPanel(
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    val hideAdult = rememberHideAdult(context)
+    val hideAdult = rememberHideAdult()
     val isTv = LocalIsTv.current
     val scrimInteraction = remember { MutableInteractionSource() }
     var copied by remember { mutableStateOf(false) }
