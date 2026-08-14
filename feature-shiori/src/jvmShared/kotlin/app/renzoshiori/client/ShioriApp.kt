@@ -25,4 +25,6 @@ interface ShioriApp {
  */
 object ShioriRuntime {
     lateinit var app: ShioriApp
+
+    val installed: Boolean get() = ::app.isInitialized
 }

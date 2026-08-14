@@ -1,6 +1,6 @@
 package app.renzoshiori.client.ui.importwizard
 
-import androidx.activity.compose.BackHandler
+import app.renzoshiori.client.ui.util.HubBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,11 +39,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import app.renzoshiori.client.RenzoApp
+import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.network.SetupWizardApi
 
 /** One step of the wizard — RenzoFrontend comp/import-wizard/index.tsx WIZARD_STEPS. */
@@ -101,7 +100,7 @@ private val WIZARD_STEPS = listOf(
  */
 @Composable
 fun ImportWizardScreen(titleOnly: Boolean, onClose: () -> Unit) {
-    val app = LocalContext.current.applicationContext as RenzoApp
+    val app = ShioriRuntime.app
     val api = remember(app.network.serverUrl) { app.network.currentServiceOf<SetupWizardApi>() }
     val scope = rememberCoroutineScope()
 
@@ -116,7 +115,7 @@ fun ImportWizardScreen(titleOnly: Boolean, onClose: () -> Unit) {
     val isLastStep = currentStep == total - 1
     val canPrevious = currentStep > 0
 
-    BackHandler { onClose() }
+    HubBackHandler { onClose() }
 
     Column(
         modifier = Modifier

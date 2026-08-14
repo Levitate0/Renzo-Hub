@@ -1,5 +1,6 @@
 package app.renzoshiori.client
 
+import app.renzoshiori.client.ShioriRuntime
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +20,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalContext
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.tv.TvUseAComputerScreen
 import app.renzoshiori.client.ui.tv.rememberIsTvDevice
@@ -29,6 +29,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
+import androidx.savedstate.read
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -76,9 +77,8 @@ import app.renzoshiori.client.ui.theme.RenzoTheme
  */
 @Composable
 fun ShioriRoot(onSwitchApp: (() -> Unit)? = null) {
-    val application = LocalContext.current.applicationContext as RenzoApp
     val crashFile = androidx.compose.runtime.remember {
-        java.io.File(application.filesDir, "last-crash.txt")
+        top.levitatemedia.renzo.hub.core.hubCrashFile()
     }
 
     val authViewModel: AuthViewModel = viewModel(factory = AuthViewModel.factory())
@@ -233,7 +233,7 @@ private fun SignedInNavHost(
         ) { entry ->
             ConfigRoute("Import series", "/library") {
                 ImportWizardScreen(
-                    titleOnly = entry.arguments!!.getBoolean("titleOnly"),
+                    titleOnly = entry.arguments!!.read { getBoolean("titleOnly") },
                     onClose = { nav.popBackStack() },
                 )
             }
@@ -242,7 +242,7 @@ private fun SignedInNavHost(
             "series/{seriesId}",
             arguments = listOf(navArgument("seriesId") { type = NavType.StringType }),
         ) { entry ->
-            val seriesId = entry.arguments!!.getString("seriesId")!!
+            val seriesId = entry.arguments!!.read { getString("seriesId") }
             SeriesDetailScreen(
                 seriesId = seriesId,
                 onBack = { nav.popBackStack() },
@@ -253,7 +253,7 @@ private fun SignedInNavHost(
             "offline-series/{seriesId}",
             arguments = listOf(navArgument("seriesId") { type = NavType.StringType }),
         ) { entry ->
-            val seriesId = entry.arguments!!.getString("seriesId")!!
+            val seriesId = entry.arguments!!.read { getString("seriesId") }
             OfflineSeriesScreen(
                 seriesId = seriesId,
                 onBack = { nav.popBackStack() },
@@ -267,8 +267,8 @@ private fun SignedInNavHost(
                 navArgument("chapter") { type = NavType.FloatType },
             ),
         ) { entry ->
-            val seriesId = entry.arguments!!.getString("seriesId")!!
-            val chapter = entry.arguments!!.getFloat("chapter").toDouble()
+            val seriesId = entry.arguments!!.read { getString("seriesId") }
+            val chapter = entry.arguments!!.read { getFloat("chapter") }.toDouble()
             ReaderScreen(
                 seriesId = seriesId,
                 chapterNumber = chapter,
@@ -301,6 +301,6 @@ private fun ConfigRoute(title: String, path: String, content: @Composable () -> 
         content()
         return
     }
-    val store = (LocalContext.current.applicationContext as RenzoApp).tokenStore
+    val store = ShioriRuntime.app.tokenStore
     TvUseAComputerScreen(title = title, serverUrl = store.serverUrl, path = path)
 }

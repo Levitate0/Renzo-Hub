@@ -17,7 +17,7 @@ coroutines = "1.11.0"
 # the desktop target's ViewModel and NavHost. Android resolves them to the
 # matching androidx artifacts.
 jbLifecycle = "2.10.0"
-jbNavigation = "2.10.0-alpha02"
+jbNavigation = "2.9.2"
 
 compileSdk = "36"
 targetSdk = "36"
@@ -83,6 +83,9 @@ retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit
 retrofit-serialization = { module = "com.squareup.retrofit2:converter-kotlinx-serialization", version.ref = "retrofit" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+# Dispatchers.Main for the desktop JVM (AWT event thread) — without it every
+# viewModelScope.launch throws "Module with the Main dispatcher is missing".
+kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 jb-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "jbLifecycle" }
 jb-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "jbLifecycle" }
 jb-navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "jbNavigation" }

@@ -1,6 +1,6 @@
 package app.renzoshiori.client.ui.onboarding
 
-import androidx.activity.compose.BackHandler
+import app.renzoshiori.client.ui.util.HubBackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -64,15 +64,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
+import org.jetbrains.compose.resources.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import app.renzoshiori.client.R
-import app.renzoshiori.client.RenzoApp
+import app.renzoshiori.client.resources.Res
+import app.renzoshiori.client.resources.*
+import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.UserDto
 import app.renzoshiori.client.data.model.UserLevel
 import app.renzoshiori.client.data.model.preferencesUpdateBody
@@ -158,7 +158,7 @@ private const val GAP_DP = 12f
  */
 @Composable
 fun WalkthroughOverlay(onFinish: () -> Unit) {
-    val context = LocalContext.current.applicationContext as RenzoApp
+    val context = ShioriRuntime.app
     val prefsApi = remember(context.network.serverUrl) {
         context.network.currentServiceOf<OnboardingPrefsApi>()
     }
@@ -289,8 +289,9 @@ fun WalkthroughOverlay(onFinish: () -> Unit) {
 
     if (closed) return
 
-    val screenWidthPx = context.resources.displayMetrics.widthPixels.toFloat()
-    val screenHeightPx = context.resources.displayMetrics.heightPixels.toFloat()
+    val containerSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val screenWidthPx = containerSize.width.toFloat()
+    val screenHeightPx = containerSize.height.toFloat()
     val marginPx = with(density) { 12.dp.toPx() }
     val padPx = with(density) { SPOTLIGHT_PAD_DP.dp.toPx() }
     val gapPx = with(density) { GAP_DP.dp.toPx() }
@@ -332,7 +333,7 @@ fun WalkthroughOverlay(onFinish: () -> Unit) {
 
     // Back closes the tour rather than the app — and on TV it replaces the
     // tap-anywhere-to-skip backdrop below.
-    BackHandler { close() }
+    HubBackHandler { close() }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Backdrop — dims everything and skips on tap. When a target is spotlit
@@ -409,7 +410,7 @@ fun WalkthroughOverlay(onFinish: () -> Unit) {
                 ) {
                     if (isWelcome) {
                         Image(
-                            painter = painterResource(R.drawable.renzo_login_banner),
+                            painter = painterResource(Res.drawable.renzo_login_banner),
                             contentDescription = "Renzo Shiori",
                             modifier = Modifier.height(44.dp),
                         )

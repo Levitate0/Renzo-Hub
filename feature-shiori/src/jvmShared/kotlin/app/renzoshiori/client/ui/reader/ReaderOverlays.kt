@@ -1,8 +1,5 @@
 package app.renzoshiori.client.ui.reader
 
-import top.levitatemedia.renzo.hub.core.HubForeground
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -257,7 +253,6 @@ fun LockedChapterScreen(
     onNext: () -> Unit,
     onExit: () -> Unit,
 ) {
-    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -292,12 +287,7 @@ fun LockedChapterScreen(
         if (url != null) {
             Button(
                 onClick = {
-                    runCatching {
-                        HubForeground.leavingApp()
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                        )
-                    }
+                    top.levitatemedia.renzo.hub.core.HubPlatform.openExternal(url)
                 },
                 shape = MaterialTheme.shapes.small,
                 colors = ButtonDefaults.buttonColors(

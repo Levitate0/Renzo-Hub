@@ -1,8 +1,5 @@
 package app.renzoshiori.client.ui.sources
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,12 +43,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.documentfile.provider.DocumentFile
 import app.renzoshiori.client.data.model.ExtensionInfoDto
 import app.renzoshiori.client.data.network.SourcesApi
 import app.renzoshiori.client.ui.theme.RenzoColors
@@ -69,7 +64,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
  */
 @Composable
 internal fun ExtensionVersionsPanel(api: SourcesApi?, snackbar: SnackbarHostState) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var open by remember { mutableStateOf(false) }
@@ -104,14 +98,13 @@ internal fun ExtensionVersionsPanel(api: SourcesApi?, snackbar: SnackbarHostStat
         if (i >= 0) extensions[i] = updated else extensions.add(updated)
     }
 
-    val apkPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val name = DocumentFile.fromSingleUri(context, uri)?.name ?: "extension.apk"
+    val apkPicker = app.renzoshiori.client.ui.util.rememberFileOpenPicker { bytes, pickedName ->
+        if (bytes == null) return@rememberFileOpenPicker
+        val name = pickedName ?: "extension.apk"
         scope.launch {
             sideloading = true
             busy = true
-            val bytes = runCatching { context.contentResolver.openInputStream(uri)?.readBytes() }.getOrNull()
-            if (bytes == null) {
+            if (false) {
                 snackbar.showSnackbar("Sideload failed — previous version remains active.")
             } else {
                 val part = MultipartBody.Part.createFormData(
@@ -197,7 +190,7 @@ internal fun ExtensionVersionsPanel(api: SourcesApi?, snackbar: SnackbarHostStat
                         .clip(RoundedCornerShape(50))
                         .background(RenzoColors.Primary.copy(alpha = 0.10f))
                         .border(1.dp, RenzoColors.Primary.copy(alpha = 0.40f), RoundedCornerShape(50))
-                        .clickable(enabled = !busy) { apkPicker.launch("*/*") }
+                        .clickable(enabled = !busy) { apkPicker() }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
                     if (sideloading) {

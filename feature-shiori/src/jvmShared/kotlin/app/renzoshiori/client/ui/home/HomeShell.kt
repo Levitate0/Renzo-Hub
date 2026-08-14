@@ -1,10 +1,7 @@
 package app.renzoshiori.client.ui.home
 
 import top.levitatemedia.renzo.hub.core.HubForeground
-import android.content.Intent
-import android.graphics.BitmapFactory
-import android.net.Uri
-import androidx.activity.compose.BackHandler
+import app.renzoshiori.client.ui.util.HubBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -94,9 +91,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
+import org.jetbrains.compose.resources.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -104,8 +100,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
-import app.renzoshiori.client.R
-import app.renzoshiori.client.RenzoApp
+import app.renzoshiori.client.resources.Res
+import app.renzoshiori.client.resources.*
+import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.DownloadsMetricsDto
 import app.renzoshiori.client.data.model.UserDto
 import app.renzoshiori.client.data.model.UserLevel
@@ -191,9 +188,8 @@ fun HomeShell(
     val current = Section.valueOf(section)
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val app = context.applicationContext as RenzoApp
+    val app = ShioriRuntime.app
 
     // Queue metrics drive the drawer's Queue badge/live dot and the footer
     // download-status row (web: useDownloadsMetrics).
@@ -230,7 +226,7 @@ fun HomeShell(
     // On a set-top box, Back from a section must land somewhere rather than
     // dropping out of the app; Library is home. Touch keeps its existing
     // behaviour untouched.
-    BackHandler(enabled = isTv && current != Section.Library) {
+    HubBackHandler(enabled = isTv && current != Section.Library) {
         section = Section.Library.name
     }
 
@@ -255,7 +251,7 @@ fun HomeShell(
                         }
                     }
                     Image(
-                        painter = painterResource(R.drawable.splash_icon),
+                        painter = painterResource(Res.drawable.splash_icon),
                         contentDescription = "Renzo Shiori home",
                         modifier = Modifier.size(28.dp),
                     )
@@ -467,7 +463,7 @@ private fun TvNavRail(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Image(
-            painter = painterResource(R.drawable.renzo_login_banner),
+            painter = painterResource(Res.drawable.renzo_login_banner),
             contentDescription = "Renzo Shiori",
             modifier = Modifier.height(30.dp).padding(start = 8.dp, bottom = 14.dp),
         )
@@ -634,14 +630,13 @@ private fun NavDrawerContent(
     onClose: () -> Unit,
     onSwitchApp: () -> Unit,
 ) {
-    val context = LocalContext.current
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
         ) {
             Image(
-                painter = painterResource(R.drawable.renzo_login_banner),
+                painter = painterResource(Res.drawable.renzo_login_banner),
                 contentDescription = "Renzo Shiori",
                 modifier = Modifier.height(32.dp),
             )
@@ -778,7 +773,7 @@ private fun NavDrawerContent(
                 StatChip(Icons.Filled.Schedule, metrics.queued.toString(), RenzoColors.Yellow)
                 StatChip(Icons.Filled.Warning, metrics.failed.toString(), RenzoColors.Red)
             }
-            ExternalLinksRow(context = context)
+            ExternalLinksRow()
         }
     }
 }
@@ -798,11 +793,11 @@ private fun StatChip(icon: ImageVector, value: String, color: Color) {
 
 /** external-links.tsx — GitHub / Discord / Website, verbatim hrefs. */
 @Composable
-private fun ExternalLinksRow(context: android.content.Context) {
+private fun ExternalLinksRow() {
     val links = listOf(
-        Triple("GitHub", "https://github.com/Levitate0/Renzo", R.drawable.ic_github),
-        Triple("Discord", "https://discord.gg/AvhtPPV8", R.drawable.ic_discord),
-        Triple("Website", "https://www.renzo.net", R.drawable.ic_globe),
+        Triple("GitHub", "https://github.com/Levitate0/Renzo", Res.drawable.ic_github),
+        Triple("Discord", "https://discord.gg/AvhtPPV8", Res.drawable.ic_discord),
+        Triple("Website", "https://www.renzo.net", Res.drawable.ic_globe),
     )
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
@@ -816,7 +811,7 @@ private fun ExternalLinksRow(context: android.content.Context) {
                     .size(32.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .dpadClickable(radius = 6.dp) {
-                        runCatching { HubForeground.leavingApp(); context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(href))) }
+                        top.levitatemedia.renzo.hub.core.HubPlatform.openExternal(href)
                     },
             ) {
                 Icon(
@@ -843,9 +838,9 @@ private fun UserAvatar(
     val avatar: Painter? = remember(user.avatarBase64) {
         user.avatarBase64?.takeIf { it.isNotBlank() }?.let { b64 ->
             runCatching {
-                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
-                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                androidx.compose.ui.graphics.painter.BitmapPainter(bmp.asImageBitmap())
+                val bytes = java.util.Base64.getMimeDecoder().decode(b64.trim())
+                val bmp = top.levitatemedia.renzo.hub.core.decodeImageBytes(bytes)!!
+                androidx.compose.ui.graphics.painter.BitmapPainter(bmp)
             }.getOrNull()
         }
     }
@@ -890,7 +885,6 @@ private fun BoxScope.AccountPanel(
     onDismiss: () -> Unit,
     onAction: (AccountAction) -> Unit,
 ) {
-    val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val hideAdult = rememberHideAdult()
     val isTv = LocalIsTv.current
@@ -907,7 +901,7 @@ private fun BoxScope.AccountPanel(
 
     // Back closes the panel rather than the app — and on TV it is the only way
     // out, because the scrim below is deliberately not a focus stop.
-    BackHandler(enabled = visible) { onDismiss() }
+    HubBackHandler(enabled = visible) { onDismiss() }
 
     AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
         Box(
@@ -1090,7 +1084,7 @@ private fun BoxScope.AccountPanel(
             MenuRow(Icons.AutoMirrored.Filled.Logout, "Sign out") { onAction(AccountAction.SignOut) }
             HorizontalDivider(color = RenzoColors.Border)
             Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-                ExternalLinksRow(context = context)
+                ExternalLinksRow()
             }
         }
     }

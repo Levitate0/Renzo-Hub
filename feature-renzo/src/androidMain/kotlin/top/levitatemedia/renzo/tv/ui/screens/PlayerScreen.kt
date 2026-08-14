@@ -65,6 +65,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.media3.common.TrackSelectionOverride
 import coil3.compose.AsyncImage
 import top.levitatemedia.renzo.hub.core.offline.AssetRole as OfflineAssetRole
+import top.levitatemedia.renzo.hub.core.offline.uriOf
 import top.levitatemedia.renzo.tv.offline.episodeKey
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders

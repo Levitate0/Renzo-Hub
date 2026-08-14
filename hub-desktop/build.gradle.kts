@@ -15,8 +15,11 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":feature-shiori"))
     implementation(compose.desktop.currentOs)
+    implementation(compose.material3)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.swing)
 }
 
 kotlin {

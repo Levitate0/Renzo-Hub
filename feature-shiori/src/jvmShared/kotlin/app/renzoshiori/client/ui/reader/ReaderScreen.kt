@@ -1,8 +1,7 @@
 package app.renzoshiori.client.ui.reader
 
-import android.app.Application
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
+import app.renzoshiori.client.ui.util.HubBackHandler
+import app.renzoshiori.client.ui.util.hubToast
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -75,8 +74,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
+import app.renzoshiori.client.ui.util.screenHeightDp
+import app.renzoshiori.client.ui.util.screenWidthDp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -128,7 +127,6 @@ fun ReaderScreen(
     val state by vm.state.collectAsState()
     val settings = state.settings
     val mode = state.resolvedMode()
-    val context = LocalContext.current
     // The app provides LocalIsTv; the device check is a fallback so the reader
     // is never left pointer-only if something above it forgets to. Read
     // unconditionally — a composable call behind `||` would appear and
@@ -148,7 +146,7 @@ fun ReaderScreen(
     LaunchedEffect(state.toast) {
         val message = state.toast
         if (message != null) {
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            hubToast(message)
             vm.consumeToast()
         }
     }
@@ -181,7 +179,7 @@ fun ReaderScreen(
             else if (dpadReading) contentFocus.requestFocus()
         }
     }
-    BackHandler(enabled = isTv && !overlayOpen) {
+    HubBackHandler(enabled = isTv && !overlayOpen) {
         if (chromeVisible) chromeVisible = false else onExit()
     }
 
@@ -619,7 +617,7 @@ private fun ContinuousReader(
     // cached failure).
     val loadFailed = remember { mutableStateMapOf<String, Boolean>() }
     val retryTick = remember { mutableStateMapOf<String, Int>() }
-    val placeholderHeight = (LocalConfiguration.current.screenHeightDp * 0.7f).dp
+    val placeholderHeight = screenHeightDp() * 0.7f
 
     val strip = remember(segments) {
         buildList {
@@ -730,7 +728,7 @@ private fun ContinuousReader(
     // to overflow — past 100% of the viewport the strip pans sideways instead
     // of being clipped, which is what reading at a distance actually needs.
     val scale = (settings.scalePct / 100f).coerceIn(0.5f, 3f)
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val screenWidth = screenWidthDp()
     val contentWidth = screenWidth * (widthFraction * scale)
     val overflowing = widthFraction * scale > 1.001f
     val hScroll = rememberScrollState()
@@ -1002,11 +1000,12 @@ private fun PagedReader(
     fun scrollFor(id: String): ScrollState = pageScrolls.getOrPut(id) { ScrollState(0) }
     val scale = (settings.scalePct / 100f).coerceIn(0.5f, 3f)
     val density = LocalDensity.current
-    val configuration = LocalConfiguration.current
+    val screenH = screenHeightDp()
     val vStepPx = with(density) {
-        (configuration.screenHeightDp.dp * (settings.tapAdvancePct / 100f)).toPx()
+        (screenH * (settings.tapAdvancePct / 100f)).toPx()
     }
-    val hStepPx = with(density) { (configuration.screenWidthDp.dp * 0.35f).toPx() }
+    val screenW = screenWidthDp()
+    val hStepPx = with(density) { (screenW * 0.35f).toPx() }
 
     // Whether the page on screen actually has a scroller in each axis — see
     // PageImage for which fit attaches what. This has to be decided from the
@@ -1182,10 +1181,10 @@ private fun PageImage(
     val h = hScroll ?: ownH
     val enlarged = scale > 1.001f
     val resized = enlarged || scale < 0.999f
-    val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val screenWidth = configuration.screenWidthDp.dp
-    val screenHeight = configuration.screenHeightDp.dp
+    val screenSize = app.renzoshiori.client.ui.util.screenSizeDp()
+    val screenWidth = screenSize.width
+    val screenHeight = screenSize.height
 
     var natural by remember(model) { mutableStateOf<Pair<Int, Int>?>(null) }
     val onSuccess: (AsyncImagePainter.State.Success) -> Unit = { success ->

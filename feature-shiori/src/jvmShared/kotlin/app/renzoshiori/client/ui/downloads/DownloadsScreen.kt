@@ -3,12 +3,6 @@ package app.renzoshiori.client.ui.downloads
 import app.renzoshiori.client.ui.tv.focusRing
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import androidx.compose.ui.focus.onFocusChanged
-import top.levitatemedia.renzo.hub.core.HubForeground
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,13 +43,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.renzoshiori.client.RenzoApp
+import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.offline.OfflineRepository
 import app.renzoshiori.client.ui.library.formatBytes
 import app.renzoshiori.client.ui.library.formatChapter
@@ -78,8 +71,7 @@ private data class ActiveSeriesProgress(val title: String, val done: Int, val to
  */
 @Composable
 fun DownloadsScreen() {
-    val context = LocalContext.current
-    val renzoApp = context.applicationContext as RenzoApp
+    val renzoApp = ShioriRuntime.app
     val scope = rememberCoroutineScope()
     val store = renzoApp.offlineStore
     val isTv = LocalIsTv.current
@@ -95,19 +87,10 @@ fun DownloadsScreen() {
     val activeSeries = remember { mutableStateMapOf<String, ActiveSeriesProgress>() }
     var downloading by remember { mutableStateOf(false) }
 
-    val folderPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree(),
-    ) { uri: Uri? ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                )
-            }
-            store.setFolder(uri)
-            folder = store.folderLabel()
-            toast = "Download folder set — ${folder ?: uri}"
+    val folderPicker = app.renzoshiori.client.ui.util.rememberOfflineFolderPicker { label ->
+        if (label != null) {
+            folder = label
+            toast = "Download folder set — $label"
         }
     }
 
@@ -326,7 +309,7 @@ fun DownloadsScreen() {
                             .height(32.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-                            .clickable { HubForeground.leavingApp(); folderPicker.launch(null) }
+                            .clickable { folderPicker() }
                             .padding(horizontal = 12.dp),
                     ) {
                         Text(

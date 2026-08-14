@@ -1,8 +1,5 @@
 package app.renzoshiori.client.ui.sources
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -69,13 +66,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.documentfile.provider.DocumentFile
-import app.renzoshiori.client.RenzoApp
+import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.ProviderDto
 import app.renzoshiori.client.data.network.SourcesApi
 import app.renzoshiori.client.ui.theme.RenzoColors
@@ -110,7 +105,7 @@ private const val NSFW_SHOW = "Show"
  */
 @Composable
 fun SourcesScreen() {
-    val app = LocalContext.current.applicationContext as RenzoApp
+    val app = ShioriRuntime.app
     val api = remember { app.network.currentServiceOf<SourcesApi>() }
     val baseUrl = app.tokenStore.serverUrl ?: ""
     val snackbar = remember { SnackbarHostState() }
@@ -207,7 +202,6 @@ private fun RowScope.TabTrigger(label: String, active: Boolean, onClick: () -> U
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHostState) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     val extensions = remember { mutableStateListOf<ProviderDto>() }
@@ -260,14 +254,12 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
     }
 
     // ── APK upload (Install from APK…) ───────────────────────────────────────
-    val apkPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val name = DocumentFile.fromSingleUri(context, uri)?.name ?: "extension.apk"
-        if (!name.endsWith(".apk")) return@rememberLauncherForActivityResult
+    val apkPicker = app.renzoshiori.client.ui.util.rememberFileOpenPicker { bytes, pickedName ->
+        val name = pickedName ?: "extension.apk"
+        if (bytes == null || !name.endsWith(".apk")) return@rememberFileOpenPicker
         scope.launch {
             isUploadingApk = true
-            val bytes = runCatching { context.contentResolver.openInputStream(uri)?.readBytes() }.getOrNull()
-            if (bytes == null) {
+            if (false) {
                 snackbar.showSnackbar("Failed to install APK")
             } else {
                 val part = MultipartBody.Part.createFormData(
@@ -430,7 +422,7 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
                 onSort = { sort = it },
                 nsfwVisibility = nsfwVisibility,
                 onOpenLanguages = { langSheetOpen = true },
-                onInstallFromApk = { apkPicker.launch("*/*") },
+                onInstallFromApk = { apkPicker() },
             )
             Spacer(Modifier.height(16.dp))
         }

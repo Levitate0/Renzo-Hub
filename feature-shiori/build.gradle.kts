@@ -73,6 +73,9 @@ kotlin {
         }
         val desktopMain by getting {
             dependsOn(jvmShared)
+            dependencies {
+                implementation(libs.kotlinx.coroutines.swing)
+            }
         }
     }
 }
