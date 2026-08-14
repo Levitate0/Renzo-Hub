@@ -1,0 +1,18 @@
+# Build outputs
+.gradle/
+build/
+*/build/
+.kotlin/
+
+# Machine-local configuration
+local.properties
+
+# Release signing secrets — key.properties points at the keystore and carries
+# its password; the keystore itself lives outside the tree entirely
+# (/export/Main/Renzo-Apps/signing/).
+key.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ONE app for all of Android: phones/tablets (LAUNCHER) and TV
+         (LEANBACK_LAUNCHER) — neither leanback nor touch is required. This is
+         the packaging tv-native already solved, and the reason the Hub is
+         hosted on that side rather than on the Shiori client. -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- The union of both halves, and deliberately no larger. Renzo needs only
+         the first two (its player uses Compose keepScreenOn, not a wake-lock);
+         the rest are the Shiori half's offline-download service. Every added
+         permission is another question on the Play data-safety form. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Package-visibility filtering (API 30+) makes resolveActivity return null
+         for the speech recogniser without this, so TV voice search would find no
+         handler and hide its microphone even on sets that have one. Added ahead
+         of the voice-search port so the failure cannot happen silently. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".HubApplication"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:banner="@drawable/renzo_tv_banner"
+        android:theme="@style/Theme.RenzoHub"
+        android:usesCleartextTraffic="true"
+        android:supportsRtl="true"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules">
+        <!-- usesCleartextTraffic: most self-hosted LAN servers have no TLS cert. -->
+
+        <activity
+            android:name=".HubActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode">
+            <!-- Free orientation on phones; the Renzo player locks itself to
+                 landscape while playback is up. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

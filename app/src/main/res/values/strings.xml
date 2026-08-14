@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Renzo Hub</string>
+    <string name="picker_title">Choose an app</string>
+    <string name="app_renzo">Renzo</string>
+    <string name="app_shiori">Renzo Shiori</string>
+</resources>

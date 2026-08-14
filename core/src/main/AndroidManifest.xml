@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The shared downloader. Permissions for it (FOREGROUND_SERVICE,
+         FOREGROUND_SERVICE_DATA_SYNC, POST_NOTIFICATIONS) are held in :app,
+         which owns the union for both halves. -->
+    <application>
+        <service
+            android:name=".offline.HubDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+    </application>
+</manifest>

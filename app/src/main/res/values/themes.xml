@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Platform theme, not AppCompat/Material-Components — neither half uses
+         appcompat; MaterialTheme (Kotlin) owns all real theming and this XML
+         theme only configures system chrome before Compose takes over.
+
+         Merged from tv-native's Theme.RenzoTv and the Shiori client's
+         Theme.Renzo. Transparent system bars come from the Renzo side (phones
+         must keep the status bar visible while the app draws edge-to-edge);
+         the Android 12+ splash configuration comes from the Shiori side.
+
+         @drawable/splash_icon and @color/splash_background resolve out of
+         :feature-shiori, which owns them — that torii mark is also drawn
+         in-app on three of its screens, so it is not purely branding. -->
+    <style name="Theme.RenzoHub" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B0C10</item>
+        <item name="android:colorBackground">#0B0C10</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <!-- Dark-only UI: keep the clock/icons light. -->
+        <item name="android:windowLightStatusBar">false</item>
+
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@drawable/splash_icon</item>
+        <item name="android:windowSplashScreenIconBackgroundColor" tools:targetApi="31">@color/splash_background</item>
+    </style>
+</resources>

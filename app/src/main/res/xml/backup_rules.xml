@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto Backup rules (API 30 and below).
+
+  Everything is backed up by default, which is what keeps the server URL and
+  settings across a reinstall or a new device. Two things are deliberately
+  excluded:
+
+  1. `renzo_secure` — the EncryptedSharedPreferences file. Its contents are
+     encrypted with a key held in the Android Keystore, and Keystore keys are
+     NEVER backed up. Restoring the file without its key produces a store that
+     cannot be decrypted, which the app then has to detect and wipe. Excluding
+     it means a restored install simply asks you to sign in, instead of
+     restoring a file that is guaranteed to be unreadable.
+
+  2. Downloaded chapters and episodes — potentially gigabytes, and all
+     re-downloadable from the user's own server.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="renzo_secure.xml" />
+    <exclude domain="sharedpref" path="renzo_secure_fallback.xml" />
+    <exclude domain="external" path="offline" />
+    <exclude domain="file" path="offline" />
+    <exclude domain="file" path="last-crash.txt" />
+</full-backup-content>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup and device-transfer rules (API 31+). Same reasoning as
+  backup_rules.xml: keep the connection details, never carry the encrypted
+  store, never carry downloaded media.
+
+  `device-transfer` matters as much as `cloud-backup` here — a direct
+  phone-to-phone transfer would otherwise move an encrypted file whose Keystore
+  key stays behind on the old device.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="renzo_secure.xml" />
+        <exclude domain="sharedpref" path="renzo_secure_fallback.xml" />
+        <exclude domain="external" path="offline" />
+        <exclude domain="file" path="offline" />
+        <exclude domain="file" path="last-crash.txt" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="renzo_secure.xml" />
+        <exclude domain="sharedpref" path="renzo_secure_fallback.xml" />
+        <exclude domain="external" path="offline" />
+        <exclude domain="file" path="offline" />
+        <exclude domain="file" path="last-crash.txt" />
+    </device-transfer>
+</data-extraction-rules>

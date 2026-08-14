@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Empty: this half no longer owns any component. Its downloader moved to
+         :core's HubDownloadService, shared with the anime half, and the
+         permissions it needs live in :app. -->
+</manifest>

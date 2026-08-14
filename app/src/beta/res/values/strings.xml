@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Side-by-side test build: a different launcher label so the two installs
+     are tellable apart on the home screen (the applicationId differs too —
+     see the `beta` build type). -->
+<resources>
+    <string name="app_name">Renzo Hub Beta</string>
+</resources>
