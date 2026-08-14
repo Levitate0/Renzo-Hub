@@ -4,12 +4,10 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.serialization.Serializable
 import okhttp3.Request
 
-/** The two halves of the Hub. */
-@Serializable
-enum class HubTarget { Renzo, Shiori }
+// HubTarget itself lives in commonMain (HubTarget.kt) — the offline models
+// reference it without touching OkHttp.
 
 /**
  * Signs an outbound request for one half of the Hub.
