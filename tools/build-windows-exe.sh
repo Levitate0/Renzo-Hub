@@ -41,11 +41,13 @@ cp -r "$WORK/jre" "$WORK/stage/jre"
 makensis -DOUTDIR="$WORK/stage" -DICON="$ICON" "$HUB/hub-desktop/windows/renzohub-launcher.nsi" >/dev/null
 
 echo "── 4/5 signing the launcher, building + signing the installer"
-PFX="$SIGN_DIR/codesign.pfx"
-PASS="$(cat "$SIGN_DIR/codesign-password.txt")"
+# The Hub's own identity (CN=Levitate Media), generated 2026-08-14 — the old
+# codesign.pfx signs as "Renzo Shiori", which is the app this exe replaces.
+PFX="$SIGN_DIR/hub-codesign.pfx"
+PASS="$(cat "$SIGN_DIR/hub-codesign-password.txt")"
 sign() {
   osslsigncode sign -pkcs12 "$PFX" -pass "$PASS" \
-    -n "Renzo Hub" -t http://timestamp.digicert.com \
+    -n "Renzo Hub" -i "https://www.renzo.net" -t http://timestamp.digicert.com \
     -in "$1" -out "$1.signed" && mv "$1.signed" "$1"
 }
 sign "$WORK/stage/RenzoHub.exe"
