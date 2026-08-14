@@ -423,7 +423,7 @@ private fun NewFolderDialog(
                     value = name,
                     onValueChange = { name = it },
                     singleLine = true,
-                    textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp),
+                    textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp, fontFamily = top.levitatemedia.renzo.hub.core.GeistFamily),
                     cursorBrush = SolidColor(RenzoColors.Primary),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { submit() }),

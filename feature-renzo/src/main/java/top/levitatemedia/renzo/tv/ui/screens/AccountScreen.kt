@@ -1373,7 +1373,7 @@ private fun WebInput(
             textStyle = TextStyle(
                 color = RenzoColors.Foreground,
                 fontSize = if (mono) 12.sp else 14.sp,
-                fontFamily = if (mono) FontFamily.Monospace else null,
+                fontFamily = if (mono) FontFamily.Monospace else top.levitatemedia.renzo.hub.core.GeistFamily,
             ),
             cursorBrush = SolidColor(RenzoColors.Primary),
             visualTransformation = if (masked && value.isNotEmpty()) PasswordVisualTransformation() else VisualTransformation.None,

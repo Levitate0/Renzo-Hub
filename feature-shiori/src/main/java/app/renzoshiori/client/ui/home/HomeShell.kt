@@ -407,6 +407,7 @@ fun HomeShell(
                 offline = libraryState.offlineMode,
                 onToggleOffline = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
                 onSelect = { s -> section = s.name },
+                onSwitchApp = { onAccountAction(AccountAction.SwitchApp) },
                 modifier = Modifier.tourAnchor(TourAnchors.NAV),
             )
             Box(modifier = Modifier.weight(1f)) { body() }
@@ -429,6 +430,7 @@ fun HomeShell(
                             scope.launch { drawerState.close() }
                         },
                         onClose = { scope.launch { drawerState.close() } },
+                        onSwitchApp = { onAccountAction(AccountAction.SwitchApp) },
                     )
                 }
             },
@@ -452,6 +454,7 @@ private fun TvNavRail(
     offline: Boolean,
     onToggleOffline: () -> Unit,
     onSelect: (Section) -> Unit,
+    onSwitchApp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -536,6 +539,36 @@ private fun TvNavRail(
             }
         }
         Spacer(Modifier.weight(1f))
+        // The rail is the TV's drawer, so the app switch lives here too —
+        // same placement contract as the phone drawer and the Renzo half.
+        run {
+            val focus = rememberFocusState()
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        if (focus.focused) RenzoColors.Card else Color.Transparent,
+                        RoundedCornerShape(10.dp),
+                    )
+                    .focusRing(focus.focused, 10.dp)
+                    .tvClickable(onFocused = focus::set, onClick = onSwitchApp)
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
+            ) {
+                Icon(
+                    Icons.Filled.SwapHoriz,
+                    contentDescription = null,
+                    tint = tvContentColor(false, focus.focused),
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    "Switch to Renzo",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tvContentColor(false, focus.focused),
+                    modifier = Modifier.padding(start = 12.dp),
+                )
+            }
+        }
         ShellOnlineOfflinePill(offline = offline, onToggle = onToggleOffline)
     }
 }
@@ -599,6 +632,7 @@ private fun NavDrawerContent(
     onToggleOffline: () -> Unit,
     onSelect: (Section) -> Unit,
     onClose: () -> Unit,
+    onSwitchApp: () -> Unit,
 ) {
     val context = LocalContext.current
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
@@ -692,6 +726,34 @@ private fun NavDrawerContent(
                         }
                     }
                 }
+            }
+        }
+
+        // "Switch to Renzo" lives here under the hamburger, mirroring where the
+        // Renzo half keeps its own switch (NavDrawer.kt) — hopping halves is
+        // navigation, not an account action, so it is NOT in the account panel.
+        HorizontalDivider(color = RenzoColors.Border)
+        Box(modifier = Modifier.padding(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onSwitchApp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Icon(
+                    Icons.Filled.SwapHoriz,
+                    contentDescription = null,
+                    tint = RenzoColors.MutedForeground,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    "Switch to Renzo",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = RenzoColors.MutedForeground,
+                    modifier = Modifier.padding(start = 12.dp),
+                )
             }
         }
 
@@ -1023,7 +1085,8 @@ private fun BoxScope.AccountPanel(
             ) { hideAdult.toggle() }
 
             HorizontalDivider(color = RenzoColors.Border)
-            MenuRow(Icons.Filled.SwapHoriz, "Switch to Renzo") { onAction(AccountAction.SwitchApp) }
+            // "Switch to Renzo" is in the nav drawer/rail, not here — the
+            // account panel matches the web's user-menu.tsx contents.
             MenuRow(Icons.AutoMirrored.Filled.Logout, "Sign out") { onAction(AccountAction.SignOut) }
             HorizontalDivider(color = RenzoColors.Border)
             Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {

@@ -150,7 +150,7 @@ private fun AdminField(
             value = value,
             onValueChange = onChange,
             singleLine = true,
-            textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp),
+            textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp, fontFamily = top.levitatemedia.renzo.hub.core.GeistFamily),
             cursorBrush = SolidColor(RenzoColors.Primary),
             visualTransformation = if (password && value.isNotEmpty()) PasswordVisualTransformation() else VisualTransformation.None,
             modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },

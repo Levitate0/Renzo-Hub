@@ -334,7 +334,7 @@ internal fun GateTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { focused = it.isFocused },
-            textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp),
+            textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp, fontFamily = top.levitatemedia.renzo.hub.core.GeistFamily),
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
             singleLine = true,

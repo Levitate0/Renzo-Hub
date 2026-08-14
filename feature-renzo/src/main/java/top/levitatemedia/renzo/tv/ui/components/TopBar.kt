@@ -170,7 +170,7 @@ private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier)
             value = text,
             onValueChange = { text = it },
             singleLine = true,
-            textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp),
+            textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp, fontFamily = top.levitatemedia.renzo.hub.core.GeistFamily),
             cursorBrush = SolidColor(RenzoColors.Primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = {

@@ -122,7 +122,7 @@ fun SearchScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
-                textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 15.sp),
+                textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 15.sp, fontFamily = top.levitatemedia.renzo.hub.core.GeistFamily),
                 cursorBrush = SolidColor(RenzoColors.Primary),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(

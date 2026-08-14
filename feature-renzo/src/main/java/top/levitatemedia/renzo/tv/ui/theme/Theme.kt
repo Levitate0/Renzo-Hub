@@ -3,7 +3,9 @@ package top.levitatemedia.renzo.tv.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Typography
 import androidx.tv.material3.darkColorScheme
+import top.levitatemedia.renzo.hub.core.GeistFamily
 
 // Renzo's dark theme — the web frontend's default `renzo` preset, resolved to
 // sRGB (frontend/src/styles/globals.css :root/.dark values, dark-only app).
@@ -76,9 +78,35 @@ fun logicalScreenSize(): Pair<Float, Float> {
     return (cfg.screenWidthDp / scale) to (cfg.screenHeightDp / scale)
 }
 
+/**
+ * Geist across every text style. Renzo's screens set size/weight per call and
+ * inherit the face from LocalTextStyle, so carrying the family in the theme
+ * typography is what flips the whole half from Roboto to the web's actual
+ * font — the same face the Shiori half has always bundled.
+ */
+private val base = Typography()
+private val RenzoTypography = Typography(
+    displayLarge = base.displayLarge.copy(fontFamily = GeistFamily),
+    displayMedium = base.displayMedium.copy(fontFamily = GeistFamily),
+    displaySmall = base.displaySmall.copy(fontFamily = GeistFamily),
+    headlineLarge = base.headlineLarge.copy(fontFamily = GeistFamily),
+    headlineMedium = base.headlineMedium.copy(fontFamily = GeistFamily),
+    headlineSmall = base.headlineSmall.copy(fontFamily = GeistFamily),
+    titleLarge = base.titleLarge.copy(fontFamily = GeistFamily),
+    titleMedium = base.titleMedium.copy(fontFamily = GeistFamily),
+    titleSmall = base.titleSmall.copy(fontFamily = GeistFamily),
+    bodyLarge = base.bodyLarge.copy(fontFamily = GeistFamily),
+    bodyMedium = base.bodyMedium.copy(fontFamily = GeistFamily),
+    bodySmall = base.bodySmall.copy(fontFamily = GeistFamily),
+    labelLarge = base.labelLarge.copy(fontFamily = GeistFamily),
+    labelMedium = base.labelMedium.copy(fontFamily = GeistFamily),
+    labelSmall = base.labelSmall.copy(fontFamily = GeistFamily),
+)
+
 @Composable
 fun RenzoTvTheme(content: @Composable () -> Unit) {
     MaterialTheme(
+        typography = RenzoTypography,
         colorScheme = darkColorScheme(
             primary = RenzoColors.Primary,
             onPrimary = RenzoColors.PrimaryForeground,
