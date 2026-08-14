@@ -1,8 +1,70 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+/*
+ * :feature-shiori as Kotlin Multiplatform (HANDOFF_renzo-hub_desktop-exe.md
+ * §2, step 3). Conversion strategy: ALL existing sources sit in androidMain —
+ * behaviourally identical to the old android-library — and files are hoisted
+ * to commonMain/jvmShared as their platform seams are cut, per the handoff's
+ * 25-file coupling table. Android must stay green at every hoist.
+ */
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.jetbrains.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+kotlin {
+    androidTarget {
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+    }
+    jvm("desktop") {
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+    }
+
+    sourceSets {
+        val commonMain by getting {
+            dependencies {
+                api(project(":core"))
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.ui)
+                implementation(compose.material3)
+                implementation(compose.materialIconsExtended)
+                implementation(libs.kotlinx.serialization.json)
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.coil.compose)
+            }
+        }
+        // JVM-family shared (Retrofit/OkHttp API layer as it hoists).
+        val jvmShared by creating {
+            dependsOn(commonMain)
+            dependencies {
+                implementation(libs.retrofit)
+                implementation(libs.retrofit.serialization)
+                implementation(libs.okhttp)
+                implementation(libs.okhttp.logging)
+                implementation(libs.coil.network.okhttp)
+            }
+        }
+        val androidMain by getting {
+            dependsOn(jvmShared)
+            dependencies {
+                implementation(libs.androidx.core.ktx)
+                // SAF folder picking for offline chapter downloads.
+                implementation(libs.androidx.documentfile)
+                implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.lifecycle.runtime.ktx)
+                implementation(libs.androidx.lifecycle.viewmodel.compose)
+                implementation(libs.androidx.navigation.compose)
+                implementation(libs.androidx.security.crypto)
+            }
+        }
+        val desktopMain by getting {
+            dependsOn(jvmShared)
+        }
+    }
 }
 
 android {
@@ -20,44 +82,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        }
-    }
     buildFeatures {
         compose = true
         buildConfig = true
     }
-}
-
-dependencies {
-    api(project(":core"))
-
-    implementation(libs.androidx.core.ktx)
-    // SAF folder picking for offline chapter downloads.
-    implementation(libs.androidx.documentfile)
-
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.ui)
-    implementation(libs.compose.ui.graphics)
-    implementation(libs.compose.ui.tooling.preview)
-    implementation(libs.compose.material3)
-    implementation(libs.compose.material.icons.extended)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.navigation.compose)
-    debugImplementation(libs.compose.ui.tooling)
-
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.serialization)
-    implementation(libs.okhttp)
-    implementation(libs.okhttp.logging)
-    implementation(libs.kotlinx.serialization.json)
-
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
-
-    implementation(libs.androidx.security.crypto)
 }

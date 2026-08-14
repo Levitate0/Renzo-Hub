@@ -1,8 +1,60 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+/*
+ * :feature-renzo as Kotlin Multiplatform (HANDOFF_renzo-hub_desktop-exe.md §2).
+ * Same strategy as :feature-shiori: everything starts in androidMain
+ * (identical to the old android-library), hoisted to commonMain as seams are
+ * cut. The desktop target exists but is empty until the tv.material3 →
+ * material3 mapping and the VideoPlayer seam (§6) land.
+ */
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.jetbrains.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+kotlin {
+    androidTarget {
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+    }
+    jvm("desktop") {
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+    }
+
+    sourceSets {
+        val commonMain by getting {
+            dependencies {
+                api(project(":core"))
+                implementation(compose.runtime)
+                implementation(compose.foundation)
+                implementation(compose.ui)
+                implementation(compose.materialIconsExtended)
+                implementation(libs.kotlinx.serialization.json)
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.coil.compose)
+            }
+        }
+        val androidMain by getting {
+            dependencies {
+                implementation(libs.tv.material)
+                implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.lifecycle.runtime.compose)
+                implementation(libs.androidx.core.ktx)
+                implementation(libs.coil.network.okhttp)
+                implementation(libs.okhttp)
+
+                // Renzo-only weight. Keeping the manga half out of a module that
+                // pulls four media3 artifacts is the concrete reason this is a
+                // feature module and not one flat :app.
+                implementation(libs.media3.exoplayer)
+                implementation(libs.media3.exoplayer.hls)
+                implementation(libs.media3.ui)
+                implementation(libs.media3.datasource.okhttp)
+            }
+        }
+    }
 }
 
 android {
@@ -40,36 +92,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        }
-    }
     buildFeatures { compose = true }
 }
 
-dependencies {
-    api(project(":core"))
-
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.ui)
-    implementation(libs.compose.foundation)
-    implementation(libs.compose.material.icons.extended)
-    implementation(libs.tv.material)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.core.ktx)
-
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
-    implementation(libs.okhttp)
-    implementation(libs.kotlinx.serialization.json)
-
-    // Renzo-only weight. Keeping the manga half out of a module that pulls four
-    // media3 artifacts is the concrete reason this is a feature module and not
-    // one flat :app.
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.exoplayer.hls)
-    implementation(libs.media3.ui)
-    implementation(libs.media3.datasource.okhttp)
-}
