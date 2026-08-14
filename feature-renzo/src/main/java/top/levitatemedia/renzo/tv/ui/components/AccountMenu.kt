@@ -9,7 +9,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,15 +27,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Image as ImageIcon
-import androidx.compose.material.icons.outlined.Logout
-import androidx.compose.material.icons.outlined.MilitaryTech
-import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.People
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Image as ImageIcon
+import androidx.compose.material.icons.filled.MilitaryTech
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import top.levitatemedia.renzo.tv.api.PublicUser
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
@@ -92,10 +93,12 @@ fun UserAvatar(user: PublicUser?, size: androidx.compose.ui.unit.Dp, modifier: M
 }
 
 /**
- * The account menu, on Shiori's system: a FULL-HEIGHT SHEET pinned to the
- * RIGHT edge (not a dropdown card under the avatar), with a header row
- * (avatar + "Account" + circular ✕), an identity row carrying the role pill,
- * and icon-led rows in divider-separated groups. Scrim tap or Back closes it.
+ * The account menu, matched metric-for-metric to the Shiori half's
+ * AccountPanel (HomeShell.kt): a 300dp full-height sheet pinned to the RIGHT
+ * edge on the Popover surface, header row (28dp avatar + "Account" titleSmall
+ * + circled Close icon), an identity row (bodyMedium username + small role
+ * pill), and MenuRow-style items — 16dp filled icon, bodyMedium label,
+ * 14/11 padding — in divider-separated groups. Scrim tap or Back closes it.
  */
 @Composable
 fun AccountMenu(
@@ -108,66 +111,61 @@ fun AccountMenu(
     onClose: () -> Unit,
 ) {
     BackHandler(enabled = true) { onClose() }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Shiori's sheet takes ~78% of a phone; capped so it stays a side panel
-        // on tablets and TV instead of swallowing the screen.
-        val sheetWidth = minOf(maxWidth * 0.78f, 400.dp)
+    Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color(0x99000000))
+                .background(Color.Black.copy(alpha = 0.55f))
                 .clickable(onClick = onClose),
         )
         Column(
             Modifier
                 .align(Alignment.CenterEnd)
-                .width(sheetWidth)
+                .width(300.dp)
                 .fillMaxHeight()
                 .background(RenzoColors.Popover)
-                .border(1.dp, RenzoColors.Border)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // --- header: avatar + "Account" + circular close ------------------
+            // --- header: avatar + "Account" + circled close ------------------
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                UserAvatar(user, 40.dp)
-                Spacer(Modifier.width(12.dp))
+                UserAvatar(user, 28.dp)
                 Text(
                     "Account",
+                    style = MaterialTheme.typography.titleSmall,
                     color = RenzoColors.Foreground,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.padding(start = 10.dp).weight(1f),
                 )
                 var closeFocused by remember { mutableStateOf(false) }
                 Box(
                     Modifier
-                        .size(40.dp)
                         .clip(CircleShape)
                         .focusRing(closeFocused, 999.dp)
-                        .background(if (closeFocused) RenzoColors.Secondary else Color.Transparent, CircleShape)
-                        .border(1.dp, RenzoColors.Border, CircleShape)
+                        .background(if (closeFocused) RenzoColors.Card else Color.Transparent, CircleShape)
                         .tvClickable(onFocused = { closeFocused = it }, onClick = onClose),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("✕", color = RenzoColors.MutedForeground, fontSize = 17.sp)
+                    Icon(
+                        Icons.Filled.Close, contentDescription = "Close",
+                        tint = RenzoColors.MutedForeground,
+                        modifier = Modifier.border(1.dp, RenzoColors.Border, CircleShape).padding(6.dp),
+                    )
                 }
             }
             SheetDivider()
 
-            // --- identity: username + role pill --------------------------------
+            // --- identity: username + role pill ------------------------------
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     user?.username ?: "…",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = RenzoColors.Foreground,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -176,60 +174,62 @@ fun AccountMenu(
             }
             SheetDivider()
 
-            // --- account actions ------------------------------------------------
-            SheetItem("Edit avatar…", Icons.Outlined.ImageIcon) { onOpenSection("account"); onClose() }
-            SheetItem("Change password…", Icons.Outlined.VpnKey) { onOpenSection("account"); onClose() }
+            // --- account actions ---------------------------------------------
+            SheetItem("Edit avatar…", Icons.Filled.ImageIcon) { onOpenSection("account"); onClose() }
+            SheetItem("Change password…", Icons.Filled.VpnKey) { onOpenSection("account"); onClose() }
             SheetDivider()
 
-            // --- navigation -------------------------------------------------------
+            // --- navigation --------------------------------------------------
             if (user?.role == "owner" || user?.role == "manager") {
-                SheetItem("Users", Icons.Outlined.People) { onOpenSection("users"); onClose() }
+                SheetItem("Users", Icons.Filled.People) { onOpenSection("users"); onClose() }
             }
-            SheetItem("Account", Icons.Outlined.VpnKey) { onOpenSection("account"); onClose() }
+            SheetItem("Account", Icons.Filled.VpnKey) { onOpenSection("account"); onClose() }
             if (user?.role == "owner") {
-                SheetItem("Settings", Icons.Outlined.Settings) { onOpenSection("settings"); onClose() }
+                SheetItem("Settings", Icons.Filled.Settings) { onOpenSection("settings"); onClose() }
             }
-            SheetItem("Change server", Icons.Outlined.Dns) { onChangeServer(); onClose() }
+            SheetItem("Change server", Icons.Filled.Dns) { onChangeServer(); onClose() }
             SheetDivider()
 
-            // --- personalization ---------------------------------------------------
-            SheetItem("Appearance", Icons.Outlined.Palette) { onOpenSection("appearance"); onClose() }
+            // --- personalization ---------------------------------------------
+            SheetItem("Appearance", Icons.Filled.Palette) { onOpenSection("appearance"); onClose() }
             SheetItem(
                 "Show up to: " + contentLevel.replaceFirstChar { it.uppercase() },
-                Icons.Outlined.Visibility,
+                Icons.Filled.Visibility,
                 onClick = onCycleContentLevel,
             )
             SheetDivider()
 
             // Log out stays destructive — a deliberate Renzo choice.
-            SheetItem("Log out", Icons.Outlined.Logout, destructive = true) { onLogout(); onClose() }
+            SheetItem("Log out", Icons.AutoMirrored.Filled.Logout, destructive = true) { onLogout(); onClose() }
             Spacer(Modifier.height(16.dp))
         }
     }
 }
 
-/** Role chip with Shiori's medal icon; owner = accent, manager = sky. */
+/**
+ * Role chip on Shiori's LEVEL_BADGE palette: owner = primary, manager =
+ * purple, user = blue; medal icon 12dp, labelSmall text, 8/2 padding.
+ */
 @Composable
 private fun RolePill(role: String) {
     val color = when (role) {
         "owner" -> RenzoColors.Primary
-        "manager" -> RenzoColors.Sky400
-        else -> RenzoColors.MutedForeground
+        "manager" -> Color(0xFFD8B4FE)
+        else -> Color(0xFF93C5FD)
     }
     Row(
         Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(color.copy(alpha = 0.15f), RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 8.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Icon(Icons.Outlined.MilitaryTech, contentDescription = null, tint = color, modifier = Modifier.size(13.dp))
+        Icon(Icons.Filled.MilitaryTech, contentDescription = null, tint = color, modifier = Modifier.size(12.dp))
         Text(
             role.replaceFirstChar { it.uppercase() },
+            style = MaterialTheme.typography.labelSmall,
             color = color,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -239,7 +239,7 @@ private fun SheetDivider() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(RenzoColors.Border))
 }
 
-/** One icon-led sheet row (Shiori: leading icon, 16sp label, tall touch row). */
+/** Shiori's MenuRow: 16dp filled icon, bodyMedium label, 14/11 padding. */
 @Composable
 private fun SheetItem(
     label: String,
@@ -252,19 +252,24 @@ private fun SheetItem(
     Row(
         Modifier
             .fillMaxWidth()
-            .focusRing(focused, 0.dp)
-            .background(if (focused) RenzoColors.Secondary else Color.Transparent)
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
+            .background(if (focused) RenzoColors.Card else Color.Transparent, RoundedCornerShape(8.dp))
             .tvClickable(onFocused = { focused = it }, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 15.dp),
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             icon,
             contentDescription = null,
-            tint = if (destructive) fg else RenzoColors.MutedForeground,
-            modifier = Modifier.size(22.dp),
+            tint = fg,
+            modifier = Modifier.size(16.dp),
         )
-        Spacer(Modifier.width(16.dp))
-        Text(label, color = fg, fontSize = 16.sp)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = fg,
+            modifier = Modifier.padding(start = 10.dp),
+        )
     }
 }

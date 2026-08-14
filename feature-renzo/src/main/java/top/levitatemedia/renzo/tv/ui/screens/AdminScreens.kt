@@ -3,6 +3,11 @@
 package top.levitatemedia.renzo.tv.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MilitaryTech
+import androidx.tv.material3.Icon
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -87,21 +92,26 @@ private fun SettingsPage(
                 Text(
                     subtitle,
                     color = RenzoColors.MutedForeground,
-                    fontSize = 14.sp,
+                    // Shiori PageHeading subtitle: bodySmall (12sp).
+                    fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
             var xFocused by remember { mutableStateOf(false) }
+            // Shiori's close affordance: the Close glyph in a 1dp circle.
             Box(
                 Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .focusRing(xFocused, 8.dp)
-                    .background(if (xFocused) RenzoColors.Secondary else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clip(CircleShape)
+                    .focusRing(xFocused, 999.dp)
+                    .background(if (xFocused) RenzoColors.Card else Color.Transparent, CircleShape)
                     .tvClickable(onFocused = { xFocused = it }, onClick = onClose),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("✕", color = RenzoColors.MutedForeground, fontSize = 16.sp)
+                Icon(
+                    Icons.Filled.Close, contentDescription = "Close",
+                    tint = RenzoColors.MutedForeground,
+                    modifier = Modifier.border(1.dp, RenzoColors.Border, CircleShape).padding(6.dp),
+                )
             }
         }
         Spacer(Modifier.height(18.dp))
@@ -123,7 +133,7 @@ private fun Section(title: String, sub: String? = null, content: @Composable () 
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(title, color = RenzoColors.Foreground, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, color = RenzoColors.Foreground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         if (sub != null) Text(sub, color = RenzoColors.MutedForeground, fontSize = 12.sp, lineHeight = 18.sp)
         content()
     }
@@ -140,11 +150,10 @@ private fun AdminField(
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier
-            .clip(RoundedCornerShape(10.dp))
-            .focusRing(focused, 10.dp)
-            .background(RenzoColors.Background, RoundedCornerShape(10.dp))
-            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Border, RoundedCornerShape(10.dp))
-            .padding(horizontal = 12.dp, vertical = 11.dp),
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
+            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Border, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 9.dp),
     ) {
         BasicTextField(
             value = value,
@@ -168,15 +177,18 @@ private fun AdminField(
 private fun RolePill(role: String) {
     val color = when (role) {
         "owner" -> RenzoColors.Primary
-        "manager" -> RenzoColors.Sky400
-        else -> RenzoColors.MutedForeground
+        "manager" -> Color(0xFFD8B4FE)
+        else -> Color(0xFF93C5FD)
     }
-    Box(
+    Row(
         Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(color.copy(alpha = 0.15f), RoundedCornerShape(999.dp))
             .padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(Icons.Filled.MilitaryTech, contentDescription = null, tint = color, modifier = Modifier.size(12.dp))
+        Spacer(Modifier.width(4.dp))
         Text(
             role.replaceFirstChar { it.uppercase() },
             color = color,

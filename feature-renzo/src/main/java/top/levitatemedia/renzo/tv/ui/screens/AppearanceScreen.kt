@@ -3,6 +3,9 @@
 package top.levitatemedia.renzo.tv.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.tv.material3.Icon
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,28 +101,33 @@ fun AppearanceScreen(app: AppServices, onClose: () -> Unit) {
                 Text(
                     "Theme and accent — saved on this device.",
                     color = RenzoColors.MutedForeground,
-                    fontSize = 14.sp,
+                    // Shiori PageHeading subtitle: bodySmall (12sp).
+                    fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
             var xFocused by remember { mutableStateOf(false) }
+            // Shiori's close affordance: the Close glyph in a 1dp circle.
             Box(
                 Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .focusRing(xFocused, 8.dp)
-                    .background(if (xFocused) RenzoColors.Secondary else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clip(CircleShape)
+                    .focusRing(xFocused, 999.dp)
+                    .background(if (xFocused) RenzoColors.Card else Color.Transparent, CircleShape)
                     .tvClickable(onFocused = { xFocused = it }, onClick = onClose),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("✕", color = RenzoColors.MutedForeground, fontSize = 16.sp)
+                Icon(
+                    Icons.Filled.Close, contentDescription = "Close",
+                    tint = RenzoColors.MutedForeground,
+                    modifier = Modifier.border(1.dp, RenzoColors.Border, CircleShape).padding(6.dp),
+                )
             }
         }
 
         Text(
             "Theme",
             color = RenzoColors.Foreground,
-            fontSize = 15.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 22.dp, bottom = 8.dp),
         )
@@ -136,7 +144,7 @@ fun AppearanceScreen(app: AppServices, onClose: () -> Unit) {
         Text(
             "Accent",
             color = RenzoColors.Foreground,
-            fontSize = 15.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 24.dp, bottom = 2.dp),
         )

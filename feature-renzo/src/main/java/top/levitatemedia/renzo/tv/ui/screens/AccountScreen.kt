@@ -40,10 +40,10 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Key
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MenuBook
-import androidx.compose.material.icons.outlined.MilitaryTech
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Power
 import androidx.compose.material.icons.outlined.Refresh
@@ -151,7 +151,8 @@ fun AccountScreen(
                     Text(
                         "Personal settings for ${user?.username ?: "your account"} — private to you.",
                         color = RenzoColors.MutedForeground,
-                        fontSize = 14.sp,
+                        // Shiori PageHeading subtitle: bodySmall (12sp).
+                        fontSize = 12.sp,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
@@ -295,8 +296,8 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(RenzoColors.Destructive.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(RenzoColors.Destructive.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                         .padding(12.dp),
                 ) {
                     Text(error ?: "", color = RenzoColors.Destructive, fontSize = 14.sp, lineHeight = 20.sp)
@@ -445,8 +446,8 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(RenzoColors.Destructive.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(RenzoColors.Destructive.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                         .padding(12.dp),
                 ) {
                     Text(passError ?: "", color = RenzoColors.Destructive, fontSize = 14.sp, lineHeight = 20.sp)
@@ -1114,8 +1115,8 @@ private fun roleLabel(r: String): String =
 private fun RoleBadge(role: String) {
     val (bg, fg) = when (role) {
         "owner" -> RenzoColors.Primary.copy(alpha = 0.15f) to RenzoColors.Primary
-        "manager" -> RenzoColors.Sky500.copy(alpha = 0.15f) to RenzoColors.Sky400
-        else -> RenzoColors.Muted to RenzoColors.MutedForeground
+        "manager" -> Color(0xFFD8B4FE).copy(alpha = 0.15f) to Color(0xFFD8B4FE)
+        else -> Color(0xFF93C5FD).copy(alpha = 0.15f) to Color(0xFF93C5FD)
     }
     Row(
         Modifier
@@ -1124,7 +1125,7 @@ private fun RoleBadge(role: String) {
             .padding(horizontal = 8.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Outlined.MilitaryTech, contentDescription = null, tint = fg, modifier = Modifier.size(12.dp))
+        Icon(Icons.Filled.MilitaryTech, contentDescription = null, tint = fg, modifier = Modifier.size(12.dp))
         Spacer(Modifier.width(4.dp))
         Text(roleLabel(role), color = fg, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     }
@@ -1159,8 +1160,8 @@ private fun PaneSection(
                     Text(
                         sub,
                         color = RenzoColors.MutedForeground,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
@@ -1186,8 +1187,8 @@ private fun PaneSection(
             Text(
                 sub,
                 color = RenzoColors.MutedForeground,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
                 modifier = Modifier.padding(bottom = 12.dp),
             )
         }
@@ -1307,10 +1308,10 @@ private fun WebButton(
     Row(
         Modifier
             .height(h)
-            .clip(RoundedCornerShape(6.dp))
-            .focusRing(focused, 6.dp)
-            .background(bg, RoundedCornerShape(6.dp))
-            .let { if (variant == BtnVariant.Outline) it.border(1.dp, RenzoColors.Input, RoundedCornerShape(6.dp)) else it }
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
+            .background(bg, RoundedCornerShape(8.dp))
+            .let { if (variant == BtnVariant.Outline) it.border(1.dp, RenzoColors.Input, RoundedCornerShape(8.dp)) else it }
             .let { m -> if (enabled) m.tvClickable(onFocused = { f -> focused = f }, onClick = onClick) else m.alpha(0.5f) }
             .padding(horizontal = px),
         verticalAlignment = Alignment.CenterVertically,
@@ -1331,9 +1332,9 @@ private fun GhostIconButton(icon: ImageVector, onClick: () -> Unit) {
     Box(
         Modifier
             .size(36.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .focusRing(focused, 6.dp)
-            .background(if (focused) RenzoColors.Accent else Color.Transparent, RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
+            .background(if (focused) RenzoColors.Accent else Color.Transparent, RoundedCornerShape(8.dp))
             .tvClickable(onFocused = { focused = it }, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -1357,9 +1358,9 @@ private fun WebInput(
     Box(
         modifier
             .height(36.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .focusRing(focused, 6.dp)
-            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Input, RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
+            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Input, RoundedCornerShape(8.dp))
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -1405,10 +1406,10 @@ private fun SelectBox(
             Modifier
                 .fillMaxWidth()
                 .height(36.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .focusRing(focused, 6.dp)
-                .background(if (focused) RenzoColors.Accent else Color.Transparent, RoundedCornerShape(6.dp))
-                .border(1.dp, RenzoColors.Input, RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(8.dp))
+                .focusRing(focused, 8.dp)
+                .background(if (focused) RenzoColors.Accent else Color.Transparent, RoundedCornerShape(8.dp))
+                .border(1.dp, RenzoColors.Input, RoundedCornerShape(8.dp))
                 .tvClickable(onFocused = { focused = it }, onClick = { open = !open })
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1427,9 +1428,9 @@ private fun SelectBox(
                 Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(RenzoColors.Popover, RoundedCornerShape(6.dp))
-                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(RenzoColors.Popover, RoundedCornerShape(8.dp))
+                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
                     .padding(4.dp),
             ) {
                 options.forEach { (v, label) ->
@@ -1473,8 +1474,8 @@ private fun CheckboxRow(checked: Boolean, label: String, onToggle: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .focusRing(focused, 6.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
             .tvClickable(onFocused = { focused = it }, onClick = onToggle)
             .padding(2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1588,10 +1589,10 @@ private fun SectionPickerTrigger(active: SectionDef, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .height(36.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .focusRing(focused, 6.dp)
-            .background(if (focused) RenzoColors.Accent else RenzoColors.Background, RoundedCornerShape(6.dp))
-            .border(1.dp, RenzoColors.Input, RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
+            .background(if (focused) RenzoColors.Accent else RenzoColors.Background, RoundedCornerShape(8.dp))
+            .border(1.dp, RenzoColors.Input, RoundedCornerShape(8.dp))
             .tvClickable(onFocused = { focused = it }, onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1606,11 +1607,11 @@ private fun SectionPickerTrigger(active: SectionDef, onClick: () -> Unit) {
             maxLines = 1,
             modifier = Modifier.weight(1f),
         )
-        // Web: static ChevronDown h-4 w-4 opacity-60 (account-view.tsx trigger).
+        // Shiori's SettingsSectionNav trigger ends in a Menu glyph.
         Icon(
-            Icons.Outlined.KeyboardArrowDown,
+            Icons.Filled.Menu,
             contentDescription = null,
-            tint = RenzoColors.Foreground.copy(alpha = 0.6f),
+            tint = RenzoColors.MutedForeground.copy(alpha = 0.6f),
             modifier = Modifier.size(16.dp),
         )
     }
