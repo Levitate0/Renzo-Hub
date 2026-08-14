@@ -13,10 +13,26 @@ plugins {
     alias(libs.plugins.jetbrains.compose)
 }
 
+/*
+ * The only OS-specific piece of a Compose Desktop app is the Skiko native
+ * runtime. jpackage cannot cross-build, but an uber JAR can: build with
+ * -PhubDesktopOs=windows on this Linux host and the jar carries the Windows
+ * natives — the NSIS pipeline (tools/build-windows-exe.sh) wraps it with a
+ * jlink'd Windows JRE.
+ */
+val hubDesktopOs = (findProperty("hubDesktopOs") as String?) ?: "current"
+
 dependencies {
     implementation(project(":core"))
     implementation(project(":feature-shiori"))
-    implementation(compose.desktop.currentOs)
+    implementation(
+        when (hubDesktopOs) {
+            "windows" -> compose.desktop.windows_x64
+            "linux" -> compose.desktop.linux_x64
+            "mac" -> compose.desktop.macos_arm64
+            else -> compose.desktop.currentOs
+        },
+    )
     implementation(compose.material3)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
