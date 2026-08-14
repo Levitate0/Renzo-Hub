@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,7 +40,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -63,10 +63,14 @@ import top.levitatemedia.renzo.tv.ui.components.tvClickable
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 
 /**
- * Sign-in gate — literal translation of the web login gate (login-gate.tsx +
- * gate-shell.tsx): banner, "Sign in to your account.", username/password,
- * "Remember me on this device", Sign in, error line, "Forgot password?".
- * Server is already known (Prefs.serverUrl); cookie is captured by ApiClient.
+ * Sign-in gate, matched to the Shiori half's login page (AuthUi.kt /
+ * LoginScreen.kt) so the two halves read as one app: a vertically-centred
+ * 8dp-radius card, the banner in the header with "Enter your credentials to
+ * log in" beneath it, LABELLED fields ("Username" / "Password" with
+ * Enter-your-… placeholders), a "Remember me" checkbox, a full-width primary
+ * "Log in" that says "Logging in..." while busy, and centred link rows. The
+ * banner stays Renzo's own wordmark, and the Renzo-specific pieces survive:
+ * first-run setup notice, generic forgot-password reply, server address line.
  */
 @Composable
 fun LoginScreen(app: AppServices, onLoggedIn: (PublicUser) -> Unit) {
@@ -139,60 +143,63 @@ fun LoginScreen(app: AppServices, onLoggedIn: (PublicUser) -> Unit) {
     }
 
     GateCard {
+        // ── header: banner + description (Shiori AuthCardHeader) ──
         GateBanner()
         Text(
-            "Sign in to your account.",
+            "Enter your credentials to log in",
             color = RenzoColors.MutedForeground,
             fontSize = 14.sp,
+            lineHeight = 20.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(Modifier.height(4.dp))
+
         if (setupRequired) {
-            Text(
+            GateNoticeBox(
                 "This server has no accounts yet — open it in a web browser to finish setup first.",
-                color = RenzoColors.MutedForeground,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp,
-                modifier = Modifier.fillMaxWidth(),
             )
         }
-        GateTextField(
-            value = username,
-            onValueChange = { username = it; error = null },
-            placeholder = "Username",
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Text,
-                imeAction = ImeAction.Next,
-            ),
-            keyboardActions = KeyboardActions.Default,
-        )
-        GateTextField(
-            value = password,
-            onValueChange = { password = it; error = null },
-            placeholder = "Password",
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Go,
-            ),
-            keyboardActions = KeyboardActions(onGo = { submit() }),
-            visualTransformation = PasswordVisualTransformation(),
-        )
-        RememberRow(rememberMe) { rememberMe = !rememberMe }
-        // Web keeps the label while busy — just disabled:opacity-50.
-        GateButton(label = "Sign in", enabled = !busy) { submit() }
-        // GateError — min-h-4 reserved line, text-sm text-destructive.
-        Box(Modifier.fillMaxWidth().heightIn(min = 16.dp)) {
-            when {
-                error != null -> Text(error ?: "", color = RenzoColors.Destructive, fontSize = 14.sp, lineHeight = 20.sp)
-                notice != null -> Text(
-                    notice ?: "",
-                    color = RenzoColors.MutedForeground,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                )
-            }
+        if (error != null) {
+            GateErrorBox(error ?: "")
+        } else if (notice != null) {
+            GateNoticeBox(notice ?: "")
         }
+
+        // ── labelled fields (Shiori AuthLabel + AuthInput) ──
+        Column(Modifier.fillMaxWidth()) {
+            GateLabel("Username")
+            Spacer(Modifier.height(8.dp))
+            GateTextField(
+                value = username,
+                onValueChange = { username = it; error = null },
+                placeholder = "Enter your username",
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Next,
+                ),
+                keyboardActions = KeyboardActions.Default,
+            )
+        }
+        Column(Modifier.fillMaxWidth()) {
+            GateLabel("Password")
+            Spacer(Modifier.height(8.dp))
+            GateTextField(
+                value = password,
+                onValueChange = { password = it; error = null },
+                placeholder = "Enter your password",
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Go,
+                ),
+                keyboardActions = KeyboardActions(onGo = { submit() }),
+                visualTransformation = PasswordVisualTransformation(),
+            )
+        }
+
+        RememberRow(rememberMe) { rememberMe = !rememberMe }
+        GateButton(label = if (busy) "Logging in..." else "Log in", enabled = !busy) { submit() }
+
         ForgotPasswordLink(enabled = !busy) { forgot() }
         app.prefs.serverUrl?.let {
             Text(
@@ -200,13 +207,13 @@ fun LoginScreen(app: AppServices, onLoggedIn: (PublicUser) -> Unit) {
                 color = RenzoColors.MutedForeground,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
 }
 
-/** "Forgot password?" — link-button, muted → underlined on focus. */
+/** "Forgot password?" — Shiori AuthLinkRow: centred, muted, underline on focus. */
 @Composable
 private fun ForgotPasswordLink(enabled: Boolean, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
@@ -217,33 +224,33 @@ private fun ForgotPasswordLink(enabled: Boolean, onClick: () -> Unit) {
             fontSize = 14.sp,
             textDecoration = if (focused) TextDecoration.Underline else null,
             modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .focusRing(focused, 4.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .focusRing(focused, 8.dp)
                 .let { m -> if (enabled) m.tvClickable(onFocused = { f -> focused = f }, onClick = onClick) else m.alpha(0.5f) }
                 .padding(horizontal = 4.dp, vertical = 2.dp),
         )
     }
 }
 
-/** "Remember me on this device" — the web gate's 16px accent-primary checkbox. */
+/** "Remember me" — Shiori AuthCheckboxRow: 16dp rounded-4 primary box + text-sm. */
 @Composable
 private fun RememberRow(checked: Boolean, onToggle: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Row(
         Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(4.dp))
-            .focusRing(focused, 4.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
             .tvClickable(onFocused = { focused = it }, onClick = onToggle)
-            .padding(2.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(
             Modifier
                 .size(16.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(if (checked) RenzoColors.Primary else Color.Transparent, RoundedCornerShape(3.dp))
-                .border(1.dp, if (checked) RenzoColors.Primary else RenzoColors.MutedForeground, RoundedCornerShape(3.dp)),
+                .clip(RoundedCornerShape(4.dp))
+                .background(if (checked) RenzoColors.Primary else Color.Transparent, RoundedCornerShape(4.dp))
+                .border(1.dp, if (checked) RenzoColors.Primary else RenzoColors.Border, RoundedCornerShape(4.dp)),
             contentAlignment = Alignment.Center,
         ) {
             if (checked) {
@@ -255,43 +262,48 @@ private fun RememberRow(checked: Boolean, onToggle: () -> Unit) {
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
-        Text("Remember me on this device", color = RenzoColors.MutedForeground, fontSize = 14.sp)
+        Text("Remember me", color = RenzoColors.Foreground, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
 
-// --- GateShell pieces (gate-shell.tsx), shared by the auth gates -------------
+// --- Gate pieces, matched to Shiori's AuthUi (shared with ConnectScreen) -----
 
 /**
- * The auth-gate card: top-aligned overlay (py-[8dvh]) holding a max-w-sm
- * rounded-xl bordered bg-card p-6 column with gap-3.
+ * The auth-gate card on Shiori's system: vertically CENTRED (AuthPageScaffold),
+ * max-w ~448 column, rounded-xl bordered bg-card with 24dp padding and 12dp
+ * spacing between children.
  */
 @Composable
-internal fun GateCard(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    val vPad = (LocalConfiguration.current.screenHeightDp * 0.08f).dp
-    Column(
+internal fun GateCard(content: @Composable ColumnScope.() -> Unit) {
+    Box(
         Modifier
             .fillMaxSize()
             .background(RenzoColors.Background)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = vPad),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(vertical = 24.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             Modifier
-                .widthIn(max = 384.dp)
+                .widthIn(max = 448.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(RenzoColors.Card, RoundedCornerShape(12.dp))
-                .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            content = content,
-        )
+                .padding(horizontal = 16.dp),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(RenzoColors.Card, RoundedCornerShape(12.dp))
+                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                content = content,
+            )
+        }
     }
 }
 
-/** GateBanner — Renzo's wordmark, w-48 centered (mb-1 via the card's gap). */
+/** GateBanner — Renzo's own wordmark (kept), sized like Shiori's login banner. */
 @Composable
 internal fun GateBanner() {
     val painter = painterResource(R.drawable.renzo_wordmark)
@@ -301,12 +313,51 @@ internal fun GateBanner() {
             painter = painter,
             contentDescription = "Renzo",
             contentScale = ContentScale.Fit,
-            modifier = Modifier.width(192.dp).height(192.dp / ratio),
+            modifier = Modifier.width(224.dp).height(224.dp / ratio),
         )
     }
 }
 
-/** Gate input: rounded-md border border-input bg-background px-3 py-2 text-sm. */
+/** Label — Shiori AuthLabel: `text-sm font-medium leading-none`. */
+@Composable
+internal fun GateLabel(text: String) {
+    Text(
+        text,
+        color = RenzoColors.Foreground,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Medium,
+    )
+}
+
+/** Error well — Shiori AuthErrorBox: rounded-md destructive surface, p-3. */
+@Composable
+internal fun GateErrorBox(message: String) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(RenzoColors.Destructive.copy(alpha = 0.15f))
+            .padding(12.dp),
+    ) {
+        Text(message, color = RenzoColors.Red400, fontSize = 14.sp, lineHeight = 20.sp)
+    }
+}
+
+/** Notice well — Shiori AuthNoticeBox: rounded-md bg-muted, p-3. */
+@Composable
+internal fun GateNoticeBox(message: String) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(RenzoColors.Muted)
+            .padding(12.dp),
+    ) {
+        Text(message, color = RenzoColors.MutedForeground, fontSize = 14.sp, lineHeight = 20.sp)
+    }
+}
+
+/** Gate input — Shiori AuthInput: min-h-36, rounded-8, transparent bg, 1dp border. */
 @Composable
 internal fun GateTextField(
     value: String,
@@ -320,12 +371,11 @@ internal fun GateTextField(
     Box(
         Modifier
             .fillMaxWidth()
-            .height(38.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .focusRing(focused, 6.dp)
-            .background(RenzoColors.Background, RoundedCornerShape(6.dp))
-            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Input, RoundedCornerShape(6.dp))
-            .padding(horizontal = 12.dp),
+            .heightIn(min = 36.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
+            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Border, RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         BasicTextField(
@@ -339,7 +389,7 @@ internal fun GateTextField(
             keyboardActions = keyboardActions,
             singleLine = true,
             visualTransformation = visualTransformation,
-            cursorBrush = SolidColor(RenzoColors.Primary),
+            cursorBrush = SolidColor(RenzoColors.Foreground),
             decorationBox = { inner ->
                 Box {
                     if (value.isEmpty()) {
@@ -352,24 +402,23 @@ internal fun GateTextField(
     }
 }
 
-/** Gate submit: w-full rounded-md bg-primary py-2 text-sm font-semibold —
- *  36dp (20px line + 2×8px pad, borderless; the inputs' extra 2dp is border). */
+/** Gate submit — Shiori AuthPrimaryButton: min-h-36, rounded-8, text-sm Medium. */
 @Composable
 internal fun GateButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxWidth()
-            .height(36.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .focusRing(focused, 6.dp)
+            .heightIn(min = 36.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
             .background(
                 if (focused) RenzoColors.Primary.copy(alpha = 0.9f) else RenzoColors.Primary,
-                RoundedCornerShape(6.dp),
+                RoundedCornerShape(8.dp),
             )
             .let { m -> if (enabled) m.tvClickable(onFocused = { f -> focused = f }, onClick = onClick) else m.alpha(0.5f) },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = RenzoColors.PrimaryForeground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = RenzoColors.PrimaryForeground, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
