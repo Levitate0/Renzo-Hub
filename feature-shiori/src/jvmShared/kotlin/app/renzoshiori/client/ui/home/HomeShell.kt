@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -127,6 +128,7 @@ import app.renzoshiori.client.ui.tv.tvClickable
 import app.renzoshiori.client.ui.tv.tvContentColor
 import app.renzoshiori.client.ui.updates.UpdatesScreen
 import app.renzoshiori.client.ui.util.rememberHideAdult
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -222,6 +224,10 @@ fun HomeShell(
     // composable below it — only the container differs (see ui/tv/TvFocus.kt on
     // why there is no second screen tree).
     val isTv = LocalIsTv.current
+    // The web's lg breakpoint: a wide window gets the DESKTOP chrome — inline
+    // section pills, an always-visible search input, download counters, and
+    // the account menu as an anchored dropdown. No hamburger, no sheet.
+    val wide = !isTv && screenWidthDp() >= 1024.dp
 
     // On a set-top box, Back from a section must land somewhere rather than
     // dropping out of the app; Library is home. Touch keeps its existing
@@ -238,7 +244,7 @@ fun HomeShell(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
                 ) {
-                    if (!isTv) {
+                    if (!isTv && !wide) {
                         IconButton(
                             onClick = { scope.launch { drawerState.open() } },
                             modifier = Modifier.tourAnchor(TourAnchors.NAV),
@@ -255,7 +261,7 @@ fun HomeShell(
                         contentDescription = "Renzo Shiori home",
                         modifier = Modifier.size(28.dp),
                     )
-                    if (!searchOpen) {
+                    if (!searchOpen || wide) {
                         Text(
                             "Renzo Shiori",
                             style = MaterialTheme.typography.titleSmall,
@@ -263,14 +269,20 @@ fun HomeShell(
                             modifier = Modifier.padding(start = 8.dp),
                         )
                     }
-                    Spacer(Modifier.weight(1f))
+                    if (wide) {
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            SectionPillsRow(current, metrics) { s -> section = s.name }
+                        }
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
                     // TV has ONE search, and it is the in-screen TvSearchBar on
                     // library/browse — the only one with a microphone. Keeping
                     // this field too would put two near-identical boxes on the
                     // same screen where only one accepts speech, which on a
                     // remote is the difference between talking and spelling a
                     // title out with a D-pad.
-                    if (searchOpen && !isTv) {
+                    if (searchOpen && !isTv && !wide) {
                         var searchFocused by remember { mutableStateOf(false) }
                         BasicTextField(
                             value = libraryState.searchTerm,
@@ -314,9 +326,16 @@ fun HomeShell(
                             },
                         )
                     }
+                    if (wide) {
+                        DesktopSearchField(
+                            value = libraryState.searchTerm,
+                            onValueChange = libraryVm::setSearch,
+                            placeholder = searchPlaceholder(current),
+                        )
+                    }
                     // …and the toggle goes with it, so the chrome has no dead
                     // affordance and D-pad traversal across the top bar stays short.
-                    if (!isTv) {
+                    if (!isTv && !wide) {
                         DpadIconButton(
                             icon = if (searchOpen) Icons.Filled.Close else Icons.Filled.Search,
                             contentDescription = if (searchOpen) "Close search" else "Open search",
@@ -330,18 +349,38 @@ fun HomeShell(
                     // The expanded search field needs the width: the pill
                     // steps aside (it's still in the drawer footer / rail), the
                     // avatar always stays.
-                    if (!searchOpen) {
+                    if (!searchOpen || wide) {
                         ShellOnlineOfflinePill(
                             offline = libraryState.offlineMode,
                             onToggle = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
                         )
                     }
-                    UserAvatar(
-                        user = user,
-                        size = 32.dp,
-                        modifier = Modifier.padding(start = 6.dp, end = 4.dp).tourAnchor(TourAnchors.ACCOUNT),
-                        onClick = { menuOpen = true },
-                    )
+                    if (wide) {
+                        DownloadStatusBar(metrics) { section = Section.Queue.name }
+                    }
+                    Box {
+                        UserAvatar(
+                            user = user,
+                            size = 32.dp,
+                            modifier = Modifier.padding(start = 6.dp, end = 4.dp).tourAnchor(TourAnchors.ACCOUNT),
+                            onClick = { menuOpen = true },
+                        )
+                        // Web ≥lg: the account menu is an anchored dropdown,
+                        // not the mobile right-slide sheet.
+                        if (wide) {
+                            AccountDropdown(
+                                expanded = menuOpen,
+                                user = user,
+                                externalDomain = externalDomain,
+                                importFolderConfigured = importFolder.isNotBlank(),
+                                onDismiss = { menuOpen = false },
+                                onAction = { action ->
+                                    menuOpen = false
+                                    onAccountAction(action)
+                                },
+                            )
+                        }
+                    }
                 }
                 HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
 
@@ -374,9 +413,9 @@ fun HomeShell(
                 }
             }
 
-            // ── Account panel — slides in from the RIGHT ─────────────────
+            // ── Account panel — slides in from the RIGHT (narrow only) ──
             AccountPanel(
-                visible = menuOpen,
+                visible = menuOpen && !wide,
                 user = user,
                 externalDomain = externalDomain,
                 importFolderConfigured = importFolder.isNotBlank(),
@@ -885,19 +924,8 @@ private fun BoxScope.AccountPanel(
     onDismiss: () -> Unit,
     onAction: (AccountAction) -> Unit,
 ) {
-    val clipboard = LocalClipboardManager.current
-    val hideAdult = rememberHideAdult()
     val isTv = LocalIsTv.current
     val scrimInteraction = remember { MutableInteractionSource() }
-    var copied by remember { mutableStateOf(false) }
-    var importPickerOpen by remember { mutableStateOf(false) }
-
-    LaunchedEffect(copied) {
-        if (copied) { delay(2000); copied = false }
-    }
-
-    val domain = externalDomain.ifBlank { "http://localhost:9833" }
-    val fullOpdsUrl = "${domain.trimEnd('/')}/${user.opdsPath}"
 
     // Back closes the panel rather than the app — and on TV it is the only way
     // out, because the scrim below is deliberately not a focus stop.
@@ -961,6 +989,42 @@ private fun BoxScope.AccountPanel(
                 )
             }
             HorizontalDivider(color = RenzoColors.Border)
+            AccountMenuBody(
+                user = user,
+                externalDomain = externalDomain,
+                importFolderConfigured = importFolderConfigured,
+                onAction = onAction,
+            )
+        }
+    }
+}
+
+/**
+ * The account menu's contents — user-menu.tsx transliterated. One body, two
+ * containers: the RIGHT-slide sheet on touch/TV, and the web's anchored
+ * dropdown under the avatar on a wide desktop window.
+ */
+@Composable
+private fun AccountMenuBody(
+    user: UserDto,
+    externalDomain: String,
+    importFolderConfigured: Boolean,
+    onAction: (AccountAction) -> Unit,
+) {
+    val clipboard = LocalClipboardManager.current
+    val hideAdult = rememberHideAdult()
+    val isTv = LocalIsTv.current
+    var copied by remember { mutableStateOf(false) }
+    var importPickerOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copied) {
+        if (copied) { delay(2000); copied = false }
+    }
+
+    val domain = externalDomain.ifBlank { "http://localhost:9833" }
+    val fullOpdsUrl = "${domain.trimEnd('/')}/${user.opdsPath}"
+
+    Column(modifier = Modifier.fillMaxWidth()) {
 
             // Username + role badge (LEVEL_LABEL / LEVEL_BADGE).
             Row(
@@ -1086,7 +1150,6 @@ private fun BoxScope.AccountPanel(
             Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                 ExternalLinksRow()
             }
-        }
     }
 
     if (importPickerOpen) {
@@ -1097,6 +1160,172 @@ private fun BoxScope.AccountPanel(
                 importPickerOpen = false
                 onAction(AccountAction.ImportSeries(titleOnly))
             },
+        )
+    }
+}
+
+/**
+ * The web's SectionPills (section-pills.tsx), desktop ≥lg only: rounded-full
+ * 32dp pills, active = filled primary, Queue carries the live dot + count.
+ */
+@Composable
+private fun SectionPillsRow(
+    current: Section,
+    metrics: DownloadsMetricsDto,
+    onSelect: (Section) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Section.entries.forEach { s ->
+            val active = s == current
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (active) RenzoColors.Primary else Color.Transparent)
+                    .clickable { onSelect(s) }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            ) {
+                Icon(
+                    s.icon, contentDescription = null,
+                    tint = if (active) RenzoColors.PrimaryForeground else RenzoColors.MutedForeground,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    s.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (active) RenzoColors.PrimaryForeground else RenzoColors.MutedForeground,
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+                if (s == Section.Queue) {
+                    if (metrics.downloads > 0) {
+                        Box(
+                            Modifier
+                                .padding(start = 4.dp)
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (active) RenzoColors.PrimaryForeground else RenzoColors.Primary),
+                        )
+                    }
+                    val badge = metrics.downloads + metrics.failed
+                    if (badge > 0) {
+                        Text(
+                            if (badge > 99) "99+" else badge.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (active) RenzoColors.PrimaryForeground else RenzoColors.Primary,
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The web's always-visible desktop search input (w-56, h-9, muted well). */
+@Composable
+private fun DesktopSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
+        cursorBrush = SolidColor(RenzoColors.Foreground),
+        decorationBox = { inner ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .width(224.dp)
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(RenzoColors.Muted.copy(alpha = 0.5f))
+                    .border(1.dp, RenzoColors.Border.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Search, contentDescription = null,
+                    tint = RenzoColors.MutedForeground, modifier = Modifier.size(16.dp),
+                )
+                Box(modifier = Modifier.padding(start = 8.dp).weight(1f)) {
+                    if (value.isEmpty()) {
+                        Text(
+                            placeholder,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = RenzoColors.MutedForeground,
+                            maxLines = 1,
+                        )
+                    }
+                    inner()
+                }
+                if (value.isNotEmpty()) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Clear search",
+                        tint = RenzoColors.MutedForeground,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .clickable { onValueChange("") },
+                    )
+                }
+            }
+        },
+    )
+}
+
+/**
+ * download-status.tsx `variant="bar"`: the at-a-glance active/queued/failed
+ * counters, one click from the queue.
+ */
+@Composable
+private fun DownloadStatusBar(metrics: DownloadsMetricsDto, onOpenQueue: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onOpenQueue)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+    ) {
+        StatChip(Icons.Filled.Download, metrics.downloads.toString(), RenzoColors.Blue)
+        StatChip(Icons.Filled.Schedule, metrics.queued.toString(), RenzoColors.Yellow)
+        StatChip(Icons.Filled.Warning, metrics.failed.toString(), RenzoColors.Red)
+    }
+}
+
+/**
+ * The web's UserAvatarDropdown: the account menu anchored under the avatar on
+ * a wide desktop window, instead of the mobile right-slide sheet.
+ */
+@Composable
+private fun AccountDropdown(
+    expanded: Boolean,
+    user: UserDto,
+    externalDomain: String,
+    importFolderConfigured: Boolean,
+    onDismiss: () -> Unit,
+    onAction: (AccountAction) -> Unit,
+) {
+    androidx.compose.material3.DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier
+            .width(300.dp)
+            .background(RenzoColors.Popover)
+            .heightIn(max = 620.dp),
+    ) {
+        AccountMenuBody(
+            user = user,
+            externalDomain = externalDomain,
+            importFolderConfigured = importFolderConfigured,
+            onAction = onAction,
         )
     }
 }
