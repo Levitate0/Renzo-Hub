@@ -344,7 +344,10 @@ private fun LibraryRibbon(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
+            // A weight spacer needs bounded width, so the scroll only exists
+            // below the breakpoint — at lg the row fits and the action cluster
+            // is pushed to the right edge, exactly like the web ribbon.
+            .then(if (ribbonWide) Modifier else Modifier.horizontalScroll(rememberScrollState()))
             // Web ribbon: `px-3 lg:px-5` — the filters share the page's edge zone.
             .padding(horizontal = if (ribbonWide) 20.dp else 8.dp, vertical = 6.dp),
     ) {
@@ -398,7 +401,9 @@ private fun LibraryRibbon(
             placeholder = "All Sources",
         )
 
-        // Right cluster: My library / sort / card size / Track all / Add Series.
+        // Right cluster: My library / sort / card size / Track all / Add Series —
+        // right-aligned on a wide window (the web pushes it with ml-auto).
+        if (ribbonWide) Spacer(Modifier.weight(1f))
         if (state.canOwner) {
             RibbonToggleChip(
                 label = if (state.viewAllLibraries) "All libraries" else "My library",
