@@ -198,7 +198,7 @@ fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onLogged
         }
 
         RememberRow(rememberMe) { rememberMe = !rememberMe }
-        GateButton(label = if (busy) "Logging in..." else "Log in", enabled = !busy) { submit() }
+        GateButton(label = if (busy) "Logging in…" else "Log in", enabled = !busy) { submit() }
 
         ForgotPasswordLink(enabled = !busy) { forgot() }
         if (onBackToPicker != null) {
@@ -284,32 +284,32 @@ private fun RememberRow(checked: Boolean, onToggle: () -> Unit) {
                 )
             }
         }
-        Text("Remember me", color = RenzoColors.Foreground, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text("Remember me", color = RenzoColors.MutedForeground, fontSize = 14.sp)
     }
 }
 
 // --- Gate pieces, matched to Shiori's AuthUi (shared with ConnectScreen) -----
 
 /**
- * The auth-gate card on Shiori's system: vertically CENTRED (AuthPageScaffold),
- * max-w ~448 column, rounded-xl bordered bg-card with 24dp padding and 12dp
- * spacing between children.
+ * The auth-gate card — gate-shell.tsx verbatim: a TOP-aligned overlay
+ * (items-start, py-[8dvh]) holding a max-w-md rounded-xl bordered bg-card
+ * p-6 column with gap-3.
  */
 @Composable
 internal fun GateCard(content: @Composable ColumnScope.() -> Unit) {
-    Box(
+    val vPad = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.08f).dp
+    Column(
         Modifier
             .fillMaxSize()
             .background(RenzoColors.Background)
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 24.dp),
-        contentAlignment = Alignment.Center,
+            .padding(horizontal = 16.dp, vertical = vPad),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(
             Modifier
                 .widthIn(max = 448.dp)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .fillMaxWidth(),
         ) {
             Column(
                 Modifier
@@ -325,7 +325,7 @@ internal fun GateCard(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-/** GateBanner — Renzo's own wordmark (kept), sized like Shiori's login banner. */
+/** GateBanner — gate-shell.tsx: Renzo's wordmark at ITS OWN size, w-48 mx-auto mb-1. */
 @Composable
 internal fun GateBanner() {
     val painter = painterResource(R.drawable.renzo_wordmark)
@@ -335,7 +335,7 @@ internal fun GateBanner() {
             painter = painter,
             contentDescription = "Renzo",
             contentScale = ContentScale.Fit,
-            modifier = Modifier.width(224.dp).height(224.dp / ratio),
+            modifier = Modifier.width(192.dp).height(192.dp / ratio),
         )
     }
 }
@@ -351,17 +351,17 @@ internal fun GateLabel(text: String) {
     )
 }
 
-/** Error well — Shiori AuthErrorBox: rounded-md destructive surface, p-3. */
+/** Error well — gate-shell.tsx GateError: `rounded-md bg-red-950 p-3 text-sm text-red-500`. */
 @Composable
 internal fun GateErrorBox(message: String) {
     Box(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(RenzoColors.Destructive.copy(alpha = 0.15f))
+            .background(Color(0xFF450A0A)) // red-950
             .padding(12.dp),
     ) {
-        Text(message, color = RenzoColors.Red400, fontSize = 14.sp, lineHeight = 20.sp)
+        Text(message, color = RenzoColors.Red500, fontSize = 14.sp, lineHeight = 20.sp)
     }
 }
 
