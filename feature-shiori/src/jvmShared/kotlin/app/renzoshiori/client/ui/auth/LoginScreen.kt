@@ -50,6 +50,8 @@ fun LoginScreen(
     onSelectUser: (String) -> Unit,
     /** Hub only: escape back to the app picker (one-service households). */
     onBackToPicker: (() -> Unit)? = null,
+    /** Return to the Connect step — the escape from a wrong server's login. */
+    onChangeServer: (() -> Unit)? = null,
 ) {
     // Same activity-scoped instance MainActivity holds (default ViewModel key),
     // so the password flows below share the connected server and can hand the
@@ -98,6 +100,7 @@ fun LoginScreen(
                 error = error,
                 onSelectUser = onSelectUser,
                 onBackToPicker = onBackToPicker,
+                onChangeServer = onChangeServer,
             )
         } else {
             LoginCard(
@@ -109,6 +112,7 @@ fun LoginScreen(
                 onForgotPassword = { vm.clearPasswordFlow(); route = AuthRoute.ForgotPassword },
                 onHaveInvite = { vm.clearPasswordFlow(); route = AuthRoute.SetPassword },
                 onBackToPicker = onBackToPicker,
+                onChangeServer = onChangeServer,
             )
         }
 
@@ -148,6 +152,7 @@ private fun LoginCard(
     onForgotPassword: () -> Unit,
     onHaveInvite: () -> Unit,
     onBackToPicker: (() -> Unit)? = null,
+    onChangeServer: (() -> Unit)? = null,
 ) {
     var username by remember { mutableStateOf(rememberedUsername.orEmpty()) }
     var password by remember { mutableStateOf("") }
@@ -240,6 +245,9 @@ private fun LoginCard(
                 // browser link does, so the invite (set-password) flow needs a
                 // door of its own here.
                 AuthLinkRow("Have an invite link? Set your password", onHaveInvite)
+                if (onChangeServer != null) {
+                    AuthLinkRow("Use a different server", onChangeServer)
+                }
                 if (onBackToPicker != null) {
                     AuthLinkRow("Back to app picker", onBackToPicker)
                 }

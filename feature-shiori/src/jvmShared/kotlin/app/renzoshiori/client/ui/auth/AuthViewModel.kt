@@ -168,6 +168,15 @@ class AuthViewModel : ViewModel() {
         hasPassword = true,
     )
 
+    /**
+     * Back to the Connect step by choice (wrong server, different server).
+     * Credentials are NOT cleared: reconnecting to the same address keeps the
+     * session, and connecting elsewhere replaces it through the normal flow.
+     */
+    fun changeServer() {
+        _state.value = AuthUiState(step = AuthStep.Connect)
+    }
+
     fun connect(rawAddress: String) {
         val trimmed = rawAddress.trim().trimEnd('/')
         if (trimmed.isEmpty()) return

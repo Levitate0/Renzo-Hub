@@ -116,6 +116,7 @@ fun ShioriRoot(onSwitchApp: (() -> Unit)? = null, onBackToPicker: (() -> Unit)? 
                     onLogin = authViewModel::login,
                     onSelectUser = authViewModel::selectUser,
                     onBackToPicker = onBackToPicker,
+                    onChangeServer = authViewModel::changeServer,
                 )
                 is AuthStep.SignedIn -> SignedInNavHost(
                     user = step.user,

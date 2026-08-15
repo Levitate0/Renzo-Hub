@@ -73,7 +73,7 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
  * first-run setup notice, generic forgot-password reply, server address line.
  */
 @Composable
-fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onLoggedIn: (PublicUser) -> Unit) {
+fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onChangeServer: (() -> Unit)? = null, onLoggedIn: (PublicUser) -> Unit) {
     val scope = rememberCoroutineScope()
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -201,6 +201,9 @@ fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onLogged
         GateButton(label = if (busy) "Logging in…" else "Log in", enabled = !busy) { submit() }
 
         ForgotPasswordLink(enabled = !busy) { forgot() }
+        if (onChangeServer != null) {
+            GateLinkRow("Use a different server", onClick = onChangeServer)
+        }
         if (onBackToPicker != null) {
             GateLinkRow("Back to app picker", onClick = onBackToPicker)
         }

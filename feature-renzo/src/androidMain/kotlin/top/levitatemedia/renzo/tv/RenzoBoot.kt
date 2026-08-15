@@ -84,7 +84,13 @@ internal fun RenzoBoot(app: AppServices, onSwitchApp: (() -> Unit)?, onBackToPic
             // Re-run the boot check against the newly saved server.
             app.user.value = null
         }
-        Boot.NeedLogin -> LoginScreen(app, onBackToPicker = onBackToPicker) { u ->
+        Boot.NeedLogin -> LoginScreen(
+            app,
+            onBackToPicker = onBackToPicker,
+            // The escape from a wrong server's login: back to the Connect
+            // screen by choice. Nothing is cleared until a new address saves.
+            onChangeServer = { boot = Boot.NeedServer },
+        ) { u ->
             app.user.value = u
             app.prefs.ccLang = u.ccLang
             app.prefs.lastUsername = u.username

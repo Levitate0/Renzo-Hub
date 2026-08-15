@@ -59,6 +59,8 @@ fun UserSelectScreen(
     onSelectUser: (String) -> Unit,
     /** Hub only: escape back to the app picker. */
     onBackToPicker: (() -> Unit)? = null,
+    /** Return to the Connect step — the escape from a wrong server. */
+    onChangeServer: (() -> Unit)? = null,
 ) {
     AuthPageScaffold {
         AuthCard {
@@ -103,8 +105,12 @@ fun UserSelectScreen(
                         }
                     }
                 }
-                if (onBackToPicker != null) {
+                if (onChangeServer != null) {
                     Spacer(Modifier.height(16.dp))
+                    AuthLinkRow("Use a different server", onChangeServer)
+                }
+                if (onBackToPicker != null) {
+                    if (onChangeServer == null) Spacer(Modifier.height(16.dp))
                     AuthLinkRow("Back to app picker", onBackToPicker)
                 }
             }
