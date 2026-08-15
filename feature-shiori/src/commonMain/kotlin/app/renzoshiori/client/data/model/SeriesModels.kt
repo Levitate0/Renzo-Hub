@@ -119,6 +119,23 @@ data class PreviewPagesDto(
     val locked: Boolean = false,
 )
 
+/** One chapter of a Browse item, straight from the source (nothing stored).
+ *  `index` is the SOURCE list position — the page endpoints key on it. */
+@Serializable
+data class PreviewChapterDto(
+    val index: Int = 0,
+    val name: String = "",
+    val number: Double? = null,
+    val dateUpload: String? = null,
+)
+
+@Serializable
+data class PreviewChaptersDto(
+    val mihonId: String = "",
+    val title: String = "",
+    val chapters: List<PreviewChapterDto> = emptyList(),
+)
+
 @Serializable
 data class ReaderProgressRequestDto(
     val seriesId: String,

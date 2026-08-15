@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -92,6 +93,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import org.jetbrains.compose.resources.painterResource
@@ -99,9 +101,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import kotlin.math.roundToInt
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.resources.Res
 import app.renzoshiori.client.resources.*
@@ -183,6 +187,8 @@ fun HomeShell(
     onOpenSeries: (String) -> Unit,
     onOpenOfflineSeries: (String) -> Unit,
     onAccountAction: (AccountAction) -> Unit,
+    /** Browse "Read": preview (mihonId, title) live from the source. */
+    onPreviewRead: (String, String) -> Unit = { _, _ -> },
     showTour: Boolean = false,
     onTourFinish: () -> Unit = {},
 ) {
@@ -242,24 +248,85 @@ fun HomeShell(
         Box(modifier = Modifier.fillMaxSize().background(RenzoColors.Background)) {
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                 // ── 56dp command bar ─────────────────────────────────────
-                Box(modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                if (wide) {
-                    // Web: the section pills are absolutely centred in the bar
-                    // (`absolute left-1/2 -translate-x-1/2`), so they sit dead
-                    // centre no matter how wide the logo or right cluster is.
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .widthIn(max = maxOf(screenWidthDp() * 0.6f, 0.dp)),
-                    ) {
-                        SectionPillsRow(current, metrics) { s -> section = s.name }
+                // The avatar and its wide-mode anchored dropdown appear in both
+                // bar variants; defined once so the menu wiring can't drift.
+                val avatarCluster: @Composable () -> Unit = {
+                    Box {
+                        UserAvatar(
+                            user = user,
+                            size = 32.dp,
+                            modifier = Modifier.padding(start = 6.dp, end = 4.dp).tourAnchor(TourAnchors.ACCOUNT),
+                            onClick = { menuOpen = true },
+                        )
+                        // Web ≥lg: the account menu is an anchored dropdown,
+                        // not the mobile right-slide sheet.
+                        if (wide) {
+                            AccountDropdown(
+                                expanded = menuOpen,
+                                user = user,
+                                externalDomain = externalDomain,
+                                importFolderConfigured = importFolder.isNotBlank(),
+                                onDismiss = { menuOpen = false },
+                                onAction = { action ->
+                                    menuOpen = false
+                                    onAccountAction(action)
+                                },
+                            )
+                        }
                     }
                 }
+                if (wide) {
+                    // Web: the section pills are absolutely centred in the bar
+                    // (`absolute left-1/2 -translate-x-1/2 max-w-[60vw]`), so
+                    // they sit at the bar's true centre no matter how wide the
+                    // logo or right cluster is. A window can be wide enough for
+                    // this chrome yet too narrow for 60vw of pills to clear the
+                    // right cluster, so the native bar measures both edge
+                    // clusters and clamps the pills to the space genuinely free
+                    // of them — scrolling inside it when squeezed (the web's
+                    // overflow-x-auto).
+                    CenterClampedBar(
+                        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
+                        left = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Image(
+                                    painter = painterResource(Res.drawable.splash_icon),
+                                    contentDescription = "Renzo Shiori home",
+                                    modifier = Modifier.size(28.dp),
+                                )
+                                Text(
+                                    "Renzo Shiori",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = RenzoColors.Foreground,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
+                        },
+                        center = {
+                            SectionPillsRow(current, metrics) { s -> section = s.name }
+                        },
+                        right = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                DesktopSearchField(
+                                    value = libraryState.searchTerm,
+                                    onValueChange = libraryVm::setSearch,
+                                    placeholder = searchPlaceholder(current),
+                                )
+                                ShellOnlineOfflinePill(
+                                    offline = libraryState.offlineMode,
+                                    onToggle = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
+                                )
+                                DownloadStatusBar(metrics) { section = Section.Queue.name }
+                                avatarCluster()
+                            }
+                        },
+                    )
+                } else {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
                 ) {
-                    if (!isTv && !wide) {
+                    if (!isTv) {
                         IconButton(
                             onClick = { scope.launch { drawerState.open() } },
                             modifier = Modifier.tourAnchor(TourAnchors.NAV),
@@ -276,7 +343,7 @@ fun HomeShell(
                         contentDescription = "Renzo Shiori home",
                         modifier = Modifier.size(28.dp),
                     )
-                    if (!searchOpen || wide) {
+                    if (!searchOpen) {
                         Text(
                             "Renzo Shiori",
                             style = MaterialTheme.typography.titleSmall,
@@ -291,7 +358,7 @@ fun HomeShell(
                     // same screen where only one accepts speech, which on a
                     // remote is the difference between talking and spelling a
                     // title out with a D-pad.
-                    if (searchOpen && !isTv && !wide) {
+                    if (searchOpen && !isTv) {
                         var searchFocused by remember { mutableStateOf(false) }
                         BasicTextField(
                             value = libraryState.searchTerm,
@@ -335,16 +402,9 @@ fun HomeShell(
                             },
                         )
                     }
-                    if (wide) {
-                        DesktopSearchField(
-                            value = libraryState.searchTerm,
-                            onValueChange = libraryVm::setSearch,
-                            placeholder = searchPlaceholder(current),
-                        )
-                    }
                     // …and the toggle goes with it, so the chrome has no dead
                     // affordance and D-pad traversal across the top bar stays short.
-                    if (!isTv && !wide) {
+                    if (!isTv) {
                         DpadIconButton(
                             icon = if (searchOpen) Icons.Filled.Close else Icons.Filled.Search,
                             contentDescription = if (searchOpen) "Close search" else "Open search",
@@ -358,38 +418,13 @@ fun HomeShell(
                     // The expanded search field needs the width: the pill
                     // steps aside (it's still in the drawer footer / rail), the
                     // avatar always stays.
-                    if (!searchOpen || wide) {
+                    if (!searchOpen) {
                         ShellOnlineOfflinePill(
                             offline = libraryState.offlineMode,
                             onToggle = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
                         )
                     }
-                    if (wide) {
-                        DownloadStatusBar(metrics) { section = Section.Queue.name }
-                    }
-                    Box {
-                        UserAvatar(
-                            user = user,
-                            size = 32.dp,
-                            modifier = Modifier.padding(start = 6.dp, end = 4.dp).tourAnchor(TourAnchors.ACCOUNT),
-                            onClick = { menuOpen = true },
-                        )
-                        // Web ≥lg: the account menu is an anchored dropdown,
-                        // not the mobile right-slide sheet.
-                        if (wide) {
-                            AccountDropdown(
-                                expanded = menuOpen,
-                                user = user,
-                                externalDomain = externalDomain,
-                                importFolderConfigured = importFolder.isNotBlank(),
-                                onDismiss = { menuOpen = false },
-                                onAction = { action ->
-                                    menuOpen = false
-                                    onAccountAction(action)
-                                },
-                            )
-                        }
-                    }
+                    avatarCluster()
                 }
                 }
                 HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
@@ -402,7 +437,7 @@ fun HomeShell(
                             onOpenOfflineSeries = onOpenOfflineSeries,
                         )
                         Section.Updates -> UpdatesScreen(onOpenSeries = onOpenSeries)
-                        Section.Browse -> BrowseScreen()
+                        Section.Browse -> BrowseScreen(onPreviewRead = onPreviewRead)
                         Section.Queue -> QueueScreen()
                         Section.Status -> StatusScreen(onOpenSeries = onOpenSeries)
                         // Sources is 36 clicks over extension-repository URLs —
@@ -1187,6 +1222,9 @@ private fun SectionPillsRow(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
+        // Web: overflow-x-auto scrollbar-hide — when CenterClampedBar squeezes
+        // the pills they scroll rather than clip or underlap the edge clusters.
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
     ) {
         Section.entries.forEach { s ->
             val active = s == current
@@ -1231,6 +1269,50 @@ private fun SectionPillsRow(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The wide command bar's skeleton: [left] hugs the start, [right] hugs the
+ * end, and [center] (the section pills) sits at the bar's TRUE horizontal
+ * centre — capped at 60% of the bar (web max-w-[60vw]) and at the free span
+ * between the edge clusters. When even a full-span centred block would
+ * underlap an edge cluster, the pills give up exact centring rather than
+ * overlap: they slide just far enough to stay clear, scrolling internally.
+ */
+@Composable
+private fun CenterClampedBar(
+    left: @Composable () -> Unit,
+    center: @Composable () -> Unit,
+    right: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Layout(
+        content = {
+            Box { left() }
+            Box { center() }
+            Box { right() }
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val loose = Constraints(maxHeight = height)
+        val leftBar = measurables[0].measure(loose)
+        val rightBar = measurables[2].measure(loose)
+        // Web gap-3: the minimum air between the pills and either cluster.
+        val gap = 12.dp.roundToPx()
+        val free = (width - leftBar.width - rightBar.width - 2 * gap).coerceAtLeast(0)
+        val centerMax = minOf((width * 0.6f).roundToInt(), free)
+        val pills = measurables[1].measure(Constraints(maxWidth = centerMax, maxHeight = height))
+        val minX = leftBar.width + gap
+        val maxX = width - rightBar.width - gap - pills.width
+        val pillsX = ((width - pills.width) / 2).coerceIn(minX, maxOf(minX, maxX))
+        layout(width, height) {
+            leftBar.placeRelative(0, (height - leftBar.height) / 2)
+            rightBar.placeRelative(width - rightBar.width, (height - rightBar.height) / 2)
+            pills.placeRelative(pillsX, (height - pills.height) / 2)
         }
     }
 }

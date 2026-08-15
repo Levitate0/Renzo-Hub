@@ -1,6 +1,7 @@
 package app.renzoshiori.client
 
 import app.renzoshiori.client.ShioriRuntime
+import app.renzoshiori.client.data.network.encodeFilename
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -195,6 +196,16 @@ private fun SignedInNavHost(
                 user = user,
                 onOpenSeries = { id -> nav.navigate("series/$id") },
                 onOpenOfflineSeries = { id -> nav.navigate("offline-series/$id") },
+                // Browse "Read": preview live from the source, nothing stored.
+                // The args ride the route; mihonIds and titles can contain
+                // anything (slashes, %, spaces), and nav does its own URI
+                // decoding — base64url (the encodeFilename trick) is the one
+                // encoding that survives both untouched.
+                onPreviewRead = { mihonId, title ->
+                    nav.navigate(
+                        "preview/${encodeFilename(mihonId)}/${encodeFilename(title.ifBlank { "Preview" })}",
+                    )
+                },
                 onAccountAction = { action ->
                     when (action) {
                         AccountAction.Account -> nav.navigate("account")
@@ -261,6 +272,28 @@ private fun SignedInNavHost(
                 seriesId = seriesId,
                 onBack = { nav.popBackStack() },
                 onReadChapter = { sid, ch -> nav.navigate("reader/$sid/$ch") },
+            )
+        }
+        composable(
+            "preview/{mihonId}/{title}",
+            arguments = listOf(
+                navArgument("mihonId") { type = NavType.StringType },
+                navArgument("title") { type = NavType.StringType },
+            ),
+        ) { entry ->
+            val decode = { s: String ->
+                String(java.util.Base64.getUrlDecoder().decode(s), Charsets.UTF_8)
+            }
+            val mihonId = decode(entry.arguments!!.read { getString("mihonId") })
+            val title = decode(entry.arguments!!.read { getString("title") })
+            ReaderScreen(
+                seriesId = "",
+                // -1 = "the first chapter" — the browse dialog can't know the
+                // source's chapter list; the reader resolves it after fetching.
+                chapterNumber = -1.0,
+                previewMihonId = mihonId,
+                previewTitle = title,
+                onExit = { nav.popBackStack() },
             )
         }
         composable(

@@ -119,9 +119,20 @@ fun ReaderScreen(
     seriesId: String,
     chapterNumber: Double,
     onExit: () -> Unit,
+    /** Non-null = preview a Browse item live from the source (nothing stored). */
+    previewMihonId: String? = null,
+    previewTitle: String = "",
     vm: ReaderViewModel = viewModel(
-        key = "reader-$seriesId-$chapterNumber",
-        factory = ReaderViewModel.factory(seriesId, chapterNumber),
+        key = if (previewMihonId != null) {
+            "preview-$previewMihonId-$chapterNumber"
+        } else {
+            "reader-$seriesId-$chapterNumber"
+        },
+        factory = if (previewMihonId != null) {
+            ReaderViewModel.previewFactory(previewMihonId, chapterNumber, previewTitle)
+        } else {
+            ReaderViewModel.factory(seriesId, chapterNumber)
+        },
     ),
 ) {
     val state by vm.state.collectAsState()
@@ -358,7 +369,8 @@ fun ReaderScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                val bookmarkable = state.activeChapter
+                // Preview reads store nothing, so there is nothing to bookmark.
+                val bookmarkable = state.activeChapter?.takeIf { !state.preview }
                 if (bookmarkable != null) {
                     ChromeIconButton(
                         icon = if (bookmarkable.bookmarked) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,

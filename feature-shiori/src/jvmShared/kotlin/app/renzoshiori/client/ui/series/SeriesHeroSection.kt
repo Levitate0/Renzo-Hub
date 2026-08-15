@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -68,6 +69,7 @@ import org.jetbrains.compose.resources.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -75,6 +77,8 @@ import app.renzoshiori.client.resources.Res
 import app.renzoshiori.client.resources.*
 import app.renzoshiori.client.data.network.absoluteUrl
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
 
 /**
@@ -158,40 +162,41 @@ fun SeriesHeroSection(
                 ),
         )
 
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // ── Cover (click to expand) ──
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .width(150.dp)
-                        .height(225.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(RenzoColors.Card)
-                        .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
-                        .clickable { coverExpanded = true },
-                ) {
-                    // Renzō logo shows through whenever the cover is missing or
-                    // fails to load — the web's /renzo.png onError fallback.
-                    Image(
-                        painter = painterResource(Res.drawable.splash_icon),
-                        contentDescription = null,
-                        modifier = Modifier.size(72.dp).alpha(0.5f),
+        // Web sm+: cover-BESIDE-info inside the centred max-w-7xl container
+        // (the old exe's hero); narrow keeps the stacked mobile form. The info
+        // stack is written once and placed by whichever container applies.
+        val heroWide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
+
+        val coverBox: @Composable (Dp, Dp) -> Unit = { coverW, coverH ->
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .width(coverW)
+                    .height(coverH)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(RenzoColors.Card)
+                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                    .clickable { coverExpanded = true },
+            ) {
+                // Renzō logo shows through whenever the cover is missing or
+                // fails to load — the web's /renzo.png onError fallback.
+                Image(
+                    painter = painterResource(Res.drawable.splash_icon),
+                    contentDescription = null,
+                    modifier = Modifier.size(72.dp).alpha(0.5f),
+                )
+                if (coverUrl != null) {
+                    AsyncImage(
+                        model = coverUrl,
+                        contentDescription = state.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
                     )
-                    if (coverUrl != null) {
-                        AsyncImage(
-                            model = coverUrl,
-                            contentDescription = state.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
                 }
             }
+        }
 
+        val heroInfo: @Composable () -> Unit = {
             // ── Status pill ──
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -222,11 +227,11 @@ fun SeriesHeroSection(
                 )
             }
 
-            // ── Title ──
+            // ── Title (web: text-2xl → md:text-[34px]) ──
             Text(
                 state.title,
-                fontSize = 26.sp,
-                lineHeight = 30.sp,
+                fontSize = if (heroWide) 34.sp else 26.sp,
+                lineHeight = if (heroWide) 40.sp else 30.sp,
                 fontWeight = FontWeight.Bold,
                 color = RenzoColors.Foreground,
                 maxLines = 3,
@@ -294,7 +299,8 @@ fun SeriesHeroSection(
 
             // ── Description + Read more (expanded scrolls in its own box) ──
             if (series.description.isNotBlank()) {
-                Column {
+                // Web: max-w-[70ch] so desktop lines stay readable.
+                Column(modifier = if (heroWide) Modifier.widthIn(max = 640.dp) else Modifier) {
                     Text(
                         series.description,
                         style = MaterialTheme.typography.bodySmall,
@@ -374,6 +380,7 @@ fun SeriesHeroSection(
                     HeroActionButton(
                         icon = Icons.Filled.MenuBook,
                         contentDescription = "${readTarget.label} — chapter ${formatNumber(readTarget.number)}",
+                        label = if (heroWide) readTarget.label else null,
                         primary = true,
                         onClick = { onOpenChapter(readTarget.number) },
                     )
@@ -382,6 +389,7 @@ fun SeriesHeroSection(
                 HeroActionButton(
                     icon = if (state.isFavorited) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                     contentDescription = if (state.isFavorited) "In your favourites — manage lists" else "Add to favourites",
+                    label = if (!heroWide) null else if (state.isFavorited) "Favourited" else "Favourite",
                     tint = if (state.isFavorited) Pink500 else RenzoColors.Foreground,
                     borderColor = if (state.isFavorited) Pink500.copy(alpha = 0.6f) else Border60,
                     background = if (state.isFavorited) Pink500.copy(alpha = 0.15f) else Color.Transparent,
@@ -392,6 +400,7 @@ fun SeriesHeroSection(
                     HeroActionButton(
                         icon = Icons.Filled.Podcasts,
                         contentDescription = "Track this series",
+                        label = if (heroWide) "Track" else null,
                         tint = if (state.tracked) MaterialTheme.colorScheme.primary else RenzoColors.Foreground,
                         borderColor = if (state.tracked) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Border60,
                         onClick = { trackerOpen = true },
@@ -402,6 +411,7 @@ fun SeriesHeroSection(
                     HeroActionButton(
                         icon = Icons.Filled.Pause,
                         contentDescription = "Pause Downloads",
+                        label = if (heroWide) "Pause Downloads" else null,
                         primary = true,
                         onClick = { vm.togglePausedDownloads() },
                     )
@@ -412,6 +422,7 @@ fun SeriesHeroSection(
                         HeroActionButton(
                             icon = Icons.Filled.MoreHoriz,
                             contentDescription = "More actions",
+                            label = if (heroWide) "More" else null,
                             onClick = { moreOpen = true },
                         )
                         DropdownMenu(
@@ -531,6 +542,38 @@ fun SeriesHeroSection(
                 }
             }
         }
+
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            if (heroWide) {
+                // Web sm+: mx-auto max-w-7xl, cover 210×315 left, info right.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(32.dp),
+                    modifier = Modifier
+                        .widthIn(max = 1280.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 40.dp),
+                ) {
+                    coverBox(210.dp, 315.dp)
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        heroInfo()
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    // ── Cover (click to expand) ──
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        coverBox(150.dp, 225.dp)
+                    }
+                    heroInfo()
+                }
+            }
+        }
     }
 
     // ── Cover lightbox ──
@@ -599,27 +642,45 @@ fun SeriesHeroSection(
     }
 }
 
-/** `px-0 w-9` icon button from the hero toolbar (default or outline variant). */
+/**
+ * The hero toolbar button. The web renders `px-0 w-9` icon-only on mobile and
+ * `sm:w-auto sm:px-4` icon-plus-label on desktop — [label] non-null is the
+ * desktop form.
+ */
 @Composable
 private fun HeroActionButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
+    label: String? = null,
     primary: Boolean = false,
     tint: Color = if (primary) RenzoColors.PrimaryForeground else RenzoColors.Foreground,
     borderColor: Color = Border60,
     background: Color = if (primary) MaterialTheme.colorScheme.primary else Color.Transparent,
 ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(36.dp)
-            .clip(MaterialTheme.shapes.small)
-            .background(background)
-            .border(1.dp, if (primary) Color.Transparent else borderColor, MaterialTheme.shapes.small)
-            .clickable(onClick = onClick),
-    ) {
-        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(16.dp))
+    val shell = Modifier
+        .clip(MaterialTheme.shapes.small)
+        .background(background)
+        .border(1.dp, if (primary) Color.Transparent else borderColor, MaterialTheme.shapes.small)
+        .clickable(onClick = onClick)
+    if (label == null) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(36.dp).then(shell)) {
+            Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(16.dp))
+        }
+    } else {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.height(36.dp).then(shell).padding(horizontal = 16.dp),
+        ) {
+            Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(16.dp))
+            Text(
+                label,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = tint,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
     }
 }
 

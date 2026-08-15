@@ -2,21 +2,29 @@ package app.renzoshiori.client.ui.series
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 
 /**
  * Native port of RenzoFrontend/src/app/library/series/page.tsx.
@@ -80,29 +90,71 @@ fun SeriesDetailScreen(
         }
     }
 
+    val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
+
     Scaffold(
         containerColor = RenzoColors.Background,
         topBar = {
-            TopAppBar(
-                title = {
+            if (wide) {
+                // The old exe's ribbon: "‹ Back to Library" hugging the left
+                // edge, series title dead centre.
+                Box(Modifier.fillMaxWidth().height(48.dp).background(RenzoColors.Background)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 8.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable(onClick = onBack)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.ChevronLeft,
+                            contentDescription = null,
+                            tint = RenzoColors.MutedForeground,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            "Back to Library",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RenzoColors.MutedForeground,
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                    }
                     Text(
                         state.title.ifEmpty { "Series" },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium,
+                        color = RenzoColors.Foreground,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .widthIn(max = maxOf(screenWidthDp() * 0.5f, 0.dp)),
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = RenzoColors.Background,
-                    titleContentColor = RenzoColors.Foreground,
-                    navigationIconContentColor = RenzoColors.Foreground,
-                ),
-            )
+                }
+            } else {
+                TopAppBar(
+                    title = {
+                        Text(
+                            state.title.ifEmpty { "Series" },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = RenzoColors.Background,
+                        titleContentColor = RenzoColors.Foreground,
+                        navigationIconContentColor = RenzoColors.Foreground,
+                    ),
+                )
+            }
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -135,6 +187,51 @@ fun SeriesDetailScreen(
                     }
                 }
 
+                // Web lg: fixed hero over a centred two-column grid (sources +
+                // downloads left, chapters right), each column scrolling
+                // internally so the page itself never does. Narrow keeps the
+                // web's mobile order: hero, chapters, sources, downloads.
+                wide -> Column(Modifier.fillMaxSize()) {
+                    SeriesHeroSection(
+                        state = state,
+                        baseUrl = vm.baseUrl,
+                        vm = vm,
+                        onOpenChapter = { number -> onReadChapter(seriesId, number) },
+                        onRequestDeleteSeries = { showDeleteDialog = true },
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .widthIn(max = 1280.dp)
+                            .fillMaxWidth()
+                            .align(Alignment.CenterHorizontally)
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                    ) {
+                        // Left rail — source management + latest downloads
+                        // (the sections carry their own 16dp inset).
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier
+                                .width(380.dp)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            SeriesSourcesSection(state = state, baseUrl = vm.baseUrl, vm = vm)
+                            SeriesDownloadsPanel(state = state, baseUrl = vm.baseUrl)
+                            Spacer(Modifier.height(16.dp))
+                        }
+                        // Right column — the always-visible chapters list.
+                        LazyColumn(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            contentPadding = PaddingValues(bottom = 24.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            chapterListItems(state, vm, seriesId, onReadChapter)
+                        }
+                    }
+                }
+
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 32.dp),
@@ -152,49 +249,7 @@ fun SeriesDetailScreen(
                     }
 
                     // ── Chapters (leads on mobile, like the web's order-1) ──
-                    item(key = "chapters-header") {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .clip(MaterialTheme.shapes.large)
-                                .background(RenzoColors.Card.copy(alpha = 0.4f))
-                                .border(1.dp, Border60, MaterialTheme.shapes.large),
-                        ) {
-                            ChaptersSectionHeader(state, vm)
-                        }
-                    }
-
-                    if (state.chaptersLoading && state.chapters.isEmpty()) {
-                        item(key = "chapters-loading") {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
-                            ) {
-                                Spacer(Modifier.weight(1f))
-                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                                Text(
-                                    "Loading chapters…",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Muted,
-                                )
-                                Spacer(Modifier.weight(1f))
-                            }
-                        }
-                    } else if (state.filteredChapters.isEmpty()) {
-                        item(key = "chapters-empty") { ChaptersEmptyState(state) }
-                    } else {
-                        items(state.filteredChapters, key = { "ch-${it.number}" }) { chapter ->
-                            ChapterRow(
-                                chapter = chapter,
-                                state = state,
-                                isOffline = chapterKey(seriesId, chapter.number) in state.offlineKeys,
-                                vm = vm,
-                                onOpenChapter = { number -> onReadChapter(seriesId, number) },
-                            )
-                        }
-                    }
+                    chapterListItems(state, vm, seriesId, onReadChapter)
 
                     // ── Sources ──
                     item(key = "sources") {
@@ -367,4 +422,59 @@ fun SeriesDetailScreen(
 
     // ── Delete-downloads confirmation (chapters toolbar) ──
     DeleteDownloadsDialog(state, vm)
+}
+
+/**
+ * The chapters card (header + loading/empty/rows), written once and mounted
+ * either in the mobile page stream or the desktop right column.
+ */
+private fun LazyListScope.chapterListItems(
+    state: SeriesDetailUiState,
+    vm: SeriesDetailViewModel,
+    seriesId: String,
+    onReadChapter: (seriesId: String, chapterNumber: Double) -> Unit,
+) {
+    item(key = "chapters-header") {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(MaterialTheme.shapes.large)
+                .background(RenzoColors.Card.copy(alpha = 0.4f))
+                .border(1.dp, Border60, MaterialTheme.shapes.large),
+        ) {
+            ChaptersSectionHeader(state, vm)
+        }
+    }
+
+    if (state.chaptersLoading && state.chapters.isEmpty()) {
+        item(key = "chapters-loading") {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
+            ) {
+                Spacer(Modifier.weight(1f))
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text(
+                    "Loading chapters…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Muted,
+                )
+                Spacer(Modifier.weight(1f))
+            }
+        }
+    } else if (state.filteredChapters.isEmpty()) {
+        item(key = "chapters-empty") { ChaptersEmptyState(state) }
+    } else {
+        items(state.filteredChapters, key = { "ch-${it.number}" }) { chapter ->
+            ChapterRow(
+                chapter = chapter,
+                state = state,
+                isOffline = chapterKey(seriesId, chapter.number) in state.offlineKeys,
+                vm = vm,
+                onOpenChapter = { number -> onReadChapter(seriesId, number) },
+            )
+        }
+    }
 }

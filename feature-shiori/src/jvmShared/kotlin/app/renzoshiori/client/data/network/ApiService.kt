@@ -4,6 +4,7 @@ import app.renzoshiori.client.data.model.AuthStatusDto
 import app.renzoshiori.client.data.model.ChapterDetailDto
 import app.renzoshiori.client.data.model.LoginRequestDto
 import app.renzoshiori.client.data.model.LoginResponseDto
+import app.renzoshiori.client.data.model.PreviewChaptersDto
 import app.renzoshiori.client.data.model.PreviewPagesDto
 import app.renzoshiori.client.data.model.ReaderChapterInfoDto
 import app.renzoshiori.client.data.model.ReaderChaptersDto
@@ -113,6 +114,19 @@ interface ApiService {
         @Query("refresh") refresh: Boolean = false,
     ): PreviewPagesDto
 
+    // ── Preview (Browse items — pages come live from the source, nothing
+    //    is stored server- or client-side) ─────────────────────────────────
+    @retrofit2.http.Headers("$TIMEOUT_HEADER: 180")
+    @GET("api/reader/preview/chapters")
+    suspend fun previewChapters(@Query("mihonId") mihonId: String): PreviewChaptersDto
+
+    @retrofit2.http.Headers("$TIMEOUT_HEADER: 180")
+    @GET("api/reader/preview/pages")
+    suspend fun previewPages(
+        @Query("mihonId") mihonId: String,
+        @Query("chapter") chapter: Int,
+    ): PreviewPagesDto
+
     @POST("api/reader/progress")
     suspend fun setProgress(@Body body: ReaderProgressRequestDto)
 
@@ -133,6 +147,13 @@ fun pageUrl(baseUrl: String, seriesId: String, filename: String, page: Int): Str
 /** Absolute page-image URL for a not-yet-downloaded chapter, streamed live from the source. */
 fun streamPageUrl(baseUrl: String, seriesId: String, chapter: Double, page: Int): String =
     "$baseUrl/api/reader/stream/page?seriesId=$seriesId&chapter=$chapter&page=$page"
+
+/** Absolute page-image URL for a PREVIEW read of a Browse item (live from the
+ *  source; nothing stored). `chapter` is the source-list index. */
+fun previewPageUrl(baseUrl: String, mihonId: String, chapter: Int, page: Int): String =
+    "$baseUrl/api/reader/preview/page?mihonId=${
+        java.net.URLEncoder.encode(mihonId, Charsets.UTF_8.name())
+    }&chapter=$chapter&page=$page"
 
 /** thumbnailUrl fields arrive server-relative ("/api/image/{key}") — make them absolute. */
 fun absoluteUrl(baseUrl: String, pathOrUrl: String): String =

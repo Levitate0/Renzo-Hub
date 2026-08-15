@@ -555,8 +555,8 @@ private fun ReaderSettingsBody(
         }
     }
 
-    // ── Read state ──
-    if (activeChapter != null) {
+    // ── Read state ── (preview stores nothing, so there's no state to mark)
+    if (activeChapter != null && !state.preview) {
         HorizontalDivider(color = ReaderPalette.Hairline, modifier = Modifier.padding(vertical = 12.dp))
         val readLabel = if (activeChapter.isCompleted) "Mark chapter unread" else "Mark chapter read"
         if (isTv) {

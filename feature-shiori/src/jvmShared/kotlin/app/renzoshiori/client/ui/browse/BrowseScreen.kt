@@ -7,6 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Search
@@ -94,6 +97,7 @@ import app.renzoshiori.client.ui.tv.tvClickable
 import app.renzoshiori.client.ui.tv.tvContentColor
 import app.renzoshiori.client.ui.util.AdultFilter
 import app.renzoshiori.client.ui.util.rememberHideAdult
+import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
 
 // ---------------------------------------------------------------------------
@@ -128,7 +132,10 @@ private const val ITEMS_PER_PAGE = 40
  * card opens the details sheet with Add to Library / View Source.
  */
 @Composable
-fun BrowseScreen() {
+fun BrowseScreen(
+    /** "Read" in the details view: preview (mihonId, title) live from the source. */
+    onPreviewRead: (String, String) -> Unit = { _, _ -> },
+) {
     val renzoApp = ShioriRuntime.app
     val uriHandler = LocalUriHandler.current
 
@@ -620,6 +627,14 @@ fun BrowseScreen() {
             canAddSeries = libraryState.canAddSeries,
             onDismiss = { detailsItem = null },
             onViewSource = { url -> runCatching { uriHandler.openUri(url) } },
+            onRead = if (details.mihonId.isNotBlank()) {
+                {
+                    detailsItem = null
+                    onPreviewRead(details.mihonId, details.title)
+                }
+            } else {
+                null
+            },
             onAddSeries = {
                 detailsItem = null
                 addSeriesTitle = details.title
@@ -993,6 +1008,8 @@ private fun CloudLatestDetailsSheet(
     canAddSeries: Boolean,
     onDismiss: () -> Unit,
     onViewSource: (String) -> Unit,
+    /** Preview-read the item live from the source; null hides the button. */
+    onRead: (() -> Unit)?,
     onAddSeries: () -> Unit,
 ) {
     val statusDisplay = getStatusDisplay(item.status)
@@ -1005,6 +1022,26 @@ private fun CloudLatestDetailsSheet(
     val chapters = item.chapterCount ?: item.latestChapter?.toInt()
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // Web md+: a landscape dialog card — cover left, metadata right, one
+        // footer bar of actions. Below md (and on TV) the portrait drawer
+        // stack below serves.
+        if (!isTv && screenWidthDp() >= 768.dp) {
+            CloudLatestDetailsDialog(
+                item = item,
+                baseUrl = baseUrl,
+                statusText = statusDisplay.text,
+                statusColor = statusDisplay.color,
+                sourceUrl = sourceUrl,
+                byline = byline,
+                chapters = chapters,
+                canAddSeries = canAddSeries,
+                onDismiss = onDismiss,
+                onViewSource = onViewSource,
+                onRead = onRead,
+                onAddSeries = onAddSeries,
+            )
+            return@Dialog
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
@@ -1182,6 +1219,15 @@ private fun CloudLatestDetailsSheet(
                     )
                     Spacer(Modifier.height(6.dp))
                 }
+                if (onRead != null) {
+                    SheetButton(
+                        label = "Read",
+                        icon = Icons.Filled.MenuBook,
+                        primary = false,
+                        onClick = onRead,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
                 if (!item.url.isNullOrBlank()) {
                     SheetButton(
                         label = "View Source",
@@ -1200,6 +1246,287 @@ private fun CloudLatestDetailsSheet(
             }
         }
     }
+}
+
+/**
+ * cloud-latest-details-modal.tsx, the md+ Dialog variant — deliberately scaled
+ * up from the web's 660px card (780dp, 200dp cover, one extra description
+ * line) so a desktop window uses its room: cover left with the source badge
+ * beneath it, metadata right, and a footer bar with the actions on the right.
+ */
+@Composable
+private fun CloudLatestDetailsDialog(
+    item: LatestSeriesRowDto,
+    baseUrl: String,
+    statusText: String,
+    statusColor: Color,
+    sourceUrl: String?,
+    byline: String,
+    chapters: Int?,
+    canAddSeries: Boolean,
+    onDismiss: () -> Unit,
+    onViewSource: (String) -> Unit,
+    onRead: (() -> Unit)?,
+    onAddSeries: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth(0.94f)
+            .widthIn(max = 780.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
+            .background(RenzoColors.Card),
+    ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+                // ── Cover + source badge ──
+                Column(modifier = Modifier.width(200.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .width(200.dp)
+                            .aspectRatio(2f / 3f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
+                            .background(RenzoColors.Muted),
+                    ) {
+                        if (!item.thumbnailUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = absoluteUrl(baseUrl, item.thumbnailUrl),
+                                contentDescription = item.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .border(1.dp, RenzoColors.Border, RoundedCornerShape(4.dp))
+                                .background(RenzoColors.Secondary)
+                                .then(
+                                    if (sourceUrl != null) {
+                                        Modifier.clickable { onViewSource(sourceUrl) }
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        ) {
+                            Text(
+                                item.language.uppercase(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = RenzoColors.MutedForeground,
+                            )
+                            Text(
+                                item.provider,
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                color = RenzoColors.Foreground,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = 6.dp),
+                            )
+                            if (sourceUrl != null) {
+                                Icon(
+                                    Icons.Filled.OpenInNew,
+                                    contentDescription = null,
+                                    tint = RenzoColors.MutedForeground,
+                                    modifier = Modifier.padding(start = 6.dp).size(12.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Metadata ──
+                Column(modifier = Modifier.weight(1f).padding(start = 22.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            item.title,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 26.sp,
+                            color = RenzoColors.Foreground,
+                        )
+                        Text(
+                            statusText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(statusColor)
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                    if (byline.isNotEmpty()) {
+                        Text(
+                            byline,
+                            fontSize = 13.sp,
+                            color = RenzoColors.MutedForeground,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    if (item.genre.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(top = 10.dp),
+                        ) {
+                            item.genre.forEach { g ->
+                                Text(
+                                    g,
+                                    fontSize = 11.sp,
+                                    color = RenzoColors.MutedForeground,
+                                    maxLines = 1,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .border(1.dp, RenzoColors.Border, RoundedCornerShape(50))
+                                        .background(RenzoColors.Muted)
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        item.description?.takeIf { it.isNotBlank() } ?: "No description available",
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        color = RenzoColors.MutedForeground,
+                        maxLines = 5,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    val meta = listOfNotNull(
+                        chapters?.let { "$it chapters" },
+                        formatFetchDate(item.fetchDate),
+                    ).joinToString(" · ")
+                    if (meta.isNotEmpty()) {
+                        Text(
+                            meta,
+                            fontSize = 12.sp,
+                            color = RenzoColors.MutedForeground.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                    }
+                }
+            }
+            // Web DialogContent's built-in top-right close.
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Close",
+                tint = RenzoColors.MutedForeground,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .clip(RoundedCornerShape(50))
+                    .clickable(onClick = onDismiss)
+                    .padding(6.dp)
+                    .size(18.dp),
+            )
+        }
+
+        // ── Footer ──
+        HorizontalDivider(color = RenzoColors.Border)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(RenzoColors.Muted.copy(alpha = 0.25f))
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+        ) {
+            Text(
+                item.provider,
+                fontSize = 12.sp,
+                color = RenzoColors.MutedForeground.copy(alpha = 0.6f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Spacer(Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (sourceUrl != null) {
+                    DialogActionButton(
+                        label = "View Source",
+                        icon = Icons.Filled.OpenInNew,
+                        primary = false,
+                        onClick = { onViewSource(sourceUrl) },
+                    )
+                }
+                if (onRead != null) {
+                    DialogActionButton(
+                        label = "Read",
+                        icon = Icons.Filled.MenuBook,
+                        primary = false,
+                        onClick = onRead,
+                    )
+                }
+                if (item.inLibrary == InLibraryStatus.NOT_IN_LIBRARY) {
+                    DialogActionButton(
+                        label = if (canAddSeries) "Add to Library" else "Request Series",
+                        icon = Icons.Filled.Add,
+                        primary = true,
+                        onClick = onAddSeries,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The dialog footer's compact button (web Button size default, h-9-ish). */
+@Composable
+private fun DialogActionButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    primary: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(38.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .then(
+                if (primary) {
+                    Modifier.background(RenzoColors.Primary)
+                } else {
+                    Modifier.border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
+                },
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (primary) RenzoColors.PrimaryForeground else RenzoColors.Foreground,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (primary) RenzoColors.PrimaryForeground else RenzoColors.Foreground,
+            modifier = Modifier.padding(start = 6.dp),
+        )
+    }
+}
+
+/** "2026-08-05…" → "Updated Aug 2026" (the web's formatUpdatedDate). */
+private fun formatFetchDate(iso: String?): String? {
+    if (iso.isNullOrBlank() || iso.length < 7) return null
+    val year = iso.substring(0, 4)
+    val month = iso.substring(5, 7).toIntOrNull() ?: return null
+    val names = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    val name = names.getOrNull(month - 1) ?: return null
+    return "Updated $name $year"
 }
 
 @Composable

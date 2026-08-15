@@ -13,6 +13,7 @@ import app.renzoshiori.client.data.network.ReaderApi
 import app.renzoshiori.client.data.network.ReaderBookmarkRequestDto
 import app.renzoshiori.client.data.network.encodeFilename
 import app.renzoshiori.client.data.network.pageUrl
+import app.renzoshiori.client.data.network.previewPageUrl
 import app.renzoshiori.client.data.network.streamPageUrl
 import app.renzoshiori.client.ui.series.chapterKey
 import kotlinx.coroutines.CoroutineScope
@@ -78,6 +79,12 @@ data class ReaderUiState(
     val toast: String? = null,
     val settings: ReaderSettings = ReaderSettings(),
     val seriesModeOverride: ReaderMode? = null,
+    /**
+     * Preview reading of a Browse item (web `/reader?preview=1`): pages come
+     * live from the source and NOTHING is stored — no downloads, no progress,
+     * no marks, no bookmarks. Chapter numbers are reading-order positions.
+     */
+    val preview: Boolean = false,
 ) {
     val activeSegment: ReaderSegment? get() = segments.getOrNull(activeSegIndex)
     val activeChapterNumber: Double get() = activeSegment?.chapterNumber ?: chapterNumber
@@ -147,16 +154,24 @@ fun trimNumber(n: Double): String =
 class ReaderViewModel(
     private val seriesId: String,
     initialChapter: Double,
+    /** Non-null = preview mode: read this Browse item live from the source. */
+    private val previewMihonId: String? = null,
+    private val previewTitle: String = "",
 ) : ViewModel() {
     private val app = ShioriRuntime.app
     private val offlineStore = ShioriRuntime.app.offlineStore
     private val prefs = ReaderPrefs()
+
+    /** Preview: reading-order chapter number → the SOURCE list index the
+     *  preview endpoints key on (source lists are usually newest-first). */
+    private var previewIndexByNumber: Map<Double, Int> = emptyMap()
 
     private val _state = MutableStateFlow(
         ReaderUiState(
             chapterNumber = initialChapter,
             settings = prefs.load(),
             seriesModeOverride = prefs.seriesMode(seriesId),
+            preview = previewMihonId != null,
         ),
     )
     val state: StateFlow<ReaderUiState> = _state.asStateFlow()
@@ -205,28 +220,79 @@ class ReaderViewModel(
 
         viewModelScope.launch {
             if (_state.value.chapters.isEmpty()) {
-                val api = app.network.currentApi()
-                val list = runCatching { api?.readerChapters(seriesId) }.getOrNull()
-                if (list != null) {
+                val previewId = previewMihonId
+                if (previewId != null) {
+                    // Preview: the chapter list comes from the source, live.
+                    val api = app.network.currentApi()
+                    val attempt = runCatching { api?.previewChapters(previewId) }
+                    val list = attempt.getOrNull()
+                    if (list == null) {
+                        _state.update {
+                            it.copy(loading = false, error = describeFailure(attempt.exceptionOrNull()))
+                        }
+                        return@launch
+                    }
+                    if (list.chapters.isEmpty()) {
+                        _state.update {
+                            it.copy(loading = false, error = "The source returned no chapters for this series.")
+                        }
+                        return@launch
+                    }
+                    // Reading order, web-verbatim: numbered chapters sort by
+                    // their number; unnumbered source lists are newest-first,
+                    // so reversed IS reading order.
+                    val hasNumbers = list.chapters.any { it.number != null }
+                    val order = if (hasNumbers) {
+                        list.chapters.sortedBy { it.number ?: 0.0 }
+                    } else {
+                        list.chapters.reversed()
+                    }
+                    previewIndexByNumber = order.mapIndexed { pos, c -> pos.toDouble() to c.index }.toMap()
                     _state.update {
                         it.copy(
-                            chapters = list.chapters,
-                            seriesTitle = list.title,
-                            seriesType = list.type ?: "",
+                            chapters = order.mapIndexed { pos, c ->
+                                ReaderChapterDto(
+                                    number = pos.toDouble(),
+                                    name = c.name.ifBlank { "Chapter ${pos + 1}" },
+                                )
+                            },
+                            seriesTitle = list.title.ifBlank { previewTitle },
+                            seriesType = "",
                         )
+                    }
+                } else {
+                    val api = app.network.currentApi()
+                    val list = runCatching { api?.readerChapters(seriesId) }.getOrNull()
+                    if (list != null) {
+                        _state.update {
+                            it.copy(
+                                chapters = list.chapters,
+                                seriesTitle = list.title,
+                                seriesType = list.type ?: "",
+                            )
+                        }
                     }
                 }
             }
-            val known = _state.value.chapters.firstOrNull { it.number == number }
+            // Preview opens on "-1" — the browse dialog has no way to know the
+            // first chapter before the list exists. Resolve it now it does.
+            val target = if (previewMihonId != null && number < 0) {
+                _state.value.chapters.firstOrNull()?.number.also { first ->
+                    if (first != null) _state.update { it.copy(chapterNumber = first) }
+                } ?: 0.0
+            } else {
+                number
+            }
+            val known = _state.value.chapters.firstOrNull { it.number == target }
             if (known == null && _state.value.chapters.isNotEmpty()) {
                 _state.update { it.copy(loading = false, error = "Chapter not found.") }
                 return@launch
             }
             // No server metadata (offline, server unreachable): a bare chapter is
             // enough for buildSegment to find on-device pages.
-            val chapter = known ?: ReaderChapterDto(number = number)
+            val chapter = known ?: ReaderChapterDto(number = target)
 
-            val cached = prefetched?.takeIf { it.first == number }?.second
+            val cached = prefetched?.takeIf { it.first == target }?.second
             prefetched = null
             when (val result = cached ?: buildSegment(chapter)) {
                 is SegResult.Ok -> {
@@ -273,6 +339,35 @@ class ReaderViewModel(
     private suspend fun buildSegment(chapter: ReaderChapterDto): SegResult {
         val number = chapter.number
         val name = chapter.name.ifBlank { "Chapter ${trimNumber(number)}" }
+
+        // Preview: one path only — the source, live. Nothing on disk to check
+        // and nothing may be written.
+        val mihonId = previewMihonId
+        if (mihonId != null) {
+            val api = app.network.currentApi()
+            val base = app.tokenStore.serverUrl
+            if (api == null || base == null) return SegResult.Failed("Can't reach the server.")
+            val sourceIndex = previewIndexByNumber[number]
+                ?: return SegResult.Failed("Chapter not found.")
+            val attempt = runCatching { api.previewPages(mihonId, sourceIndex) }
+            val pages = attempt.getOrNull() ?: return SegResult.Failed(describeFailure(attempt.exceptionOrNull()))
+            if (pages.locked || pages.pageCount <= 0) {
+                return SegResult.Failed("This chapter is locked on the source, so it can't be previewed.")
+            }
+            return SegResult.Ok(
+                ReaderSegment(
+                    key = "pv:$sourceIndex",
+                    chapterNumber = number,
+                    name = name,
+                    pageCount = pages.pageCount,
+                    pages = (0 until pages.pageCount).map { previewPageUrl(base, mihonId, sourceIndex, it) },
+                    dims = List(pages.pageCount) { null },
+                    streaming = true,
+                ),
+                suggestedMode = null, // smart-detect measures the decoded images
+                source = PageSource.STREAM,
+            )
+        }
 
         val offline = withContext(Dispatchers.IO) { loadOfflinePages(chapterKey(seriesId, number)) }
         if (offline != null) {
@@ -512,6 +607,8 @@ class ReaderViewModel(
     }
 
     private fun reportProgress(seg: ReaderSegment, page0: Int) {
+        // Preview reads leave no trace — no progress, no auto-mark-read.
+        if (previewMihonId != null) return
         val total = seg.pageCount
         if (total == 0) return
         if (System.currentTimeMillis() < progressArmedAt) return
@@ -615,6 +712,7 @@ class ReaderViewModel(
     // ── Actions ───────────────────────────────────────────────────────────
 
     fun toggleBookmark() {
+        if (previewMihonId != null) return
         val s = _state.value
         val chapter = s.activeChapter ?: return
         val number = chapter.number
@@ -643,6 +741,7 @@ class ReaderViewModel(
 
     /** The settings sheet's "Mark chapter read / unread" button. */
     fun toggleChapterRead() {
+        if (previewMihonId != null) return
         val s = _state.value
         val chapter = s.activeChapter ?: return
         val number = chapter.number
@@ -754,6 +853,19 @@ class ReaderViewModel(
         fun factory(seriesId: String, chapter: Double) =
             viewModelFactory {
                 initializer { ReaderViewModel(seriesId, chapter) }
+            }
+
+        /** Preview a Browse item live from the source. `chapter` -1 = first. */
+        fun previewFactory(mihonId: String, chapter: Double, title: String) =
+            viewModelFactory {
+                initializer {
+                    ReaderViewModel(
+                        seriesId = "",
+                        initialChapter = chapter,
+                        previewMihonId = mihonId,
+                        previewTitle = title,
+                    )
+                }
             }
     }
 }

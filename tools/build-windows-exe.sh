@@ -15,6 +15,14 @@ SIGN_DIR="/export/Main/Renzo-Apps/signing"
 JDK_ZIP_URL="https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
 ICON="$HUB/hub-desktop/windows/renzohub.ico"
 
+# The Windows jmods are Java 21 (class 65) — a 17 jlink can't read them, and
+# which JDK is first on PATH varies by shell. Pin to a 21 jlink explicitly.
+if [ -x /opt/jdk21/bin/jlink ]; then
+  JLINK=/opt/jdk21/bin/jlink
+else
+  JLINK=jlink
+fi
+
 echo "── 1/5 uber jar (windows natives)"
 (cd "$HUB" && ./gradlew -q :hub-desktop:packageUberJarForCurrentOS -PhubDesktopOs=windows)
 JAR="$(ls "$HUB"/hub-desktop/build/compose/jars/*.jar | head -1)"
@@ -29,7 +37,7 @@ if [ ! -d "$WORK/win-jdk" ]; then
   (cd "$WORK" && unzip -q win-jdk.zip && mv jdk-* win-jdk)
 fi
 rm -rf "$WORK/jre"
-jlink --module-path "$WORK/win-jdk/jmods" \
+"$JLINK" --module-path "$WORK/win-jdk/jmods" \
       --add-modules java.se,jdk.unsupported,jdk.crypto.ec,jdk.accessibility \
       --output "$WORK/jre" --no-header-files --no-man-pages --compress zip-6
 
