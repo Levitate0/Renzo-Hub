@@ -99,8 +99,12 @@ private val CARD_SIZES = listOf(
     CardSize("w-70", "XL", 280.dp, 18.sp, 16.sp, 28.dp, 14.dp),
 )
 
-/** getResponsiveCardDefault() — anything under 1024px wide defaults to "S". */
-private const val DEFAULT_CARD_SIZE = "w-32"
+/** Default card size: M (user direction 2026-08-14, overriding the web's S). */
+private const val DEFAULT_CARD_SIZE = "w-45"
+
+/** The persisted card-size choice — survives restarts on every platform. */
+private const val CARD_WIDTH_PREFS = "renzo_prefs"
+private const val CARD_WIDTH_KEY = "renzo_card_width"
 
 /** Couch distance: a television opens on L, not the phone's S. */
 private const val TV_CARD_SIZE = "w-58"
@@ -135,9 +139,14 @@ fun LibraryContent(
     var selectedCategory by rememberSaveable { mutableStateOf("__ALL__") }
     var selectedFavList by rememberSaveable { mutableStateOf("__ALL__") }
     var orderBy by rememberSaveable { mutableStateOf("title") }
-    // A phone default (S = 128dp) is unreadable across a room, so a television
-    // starts at L. It's still the same ribbon control, so it can be changed.
-    var cardWidth by rememberSaveable { mutableStateOf(if (isTv) TV_CARD_SIZE else DEFAULT_CARD_SIZE) }
+    // Default M; a television starts at L (an M card is unreadable across a
+    // room). Whatever the user picks is persisted and wins on the next launch.
+    var cardWidth by rememberSaveable {
+        mutableStateOf(
+            top.levitatemedia.renzo.hub.core.keyValuePrefs(CARD_WIDTH_PREFS).getString(CARD_WIDTH_KEY, null)
+                ?: if (isTv) TV_CARD_SIZE else DEFAULT_CARD_SIZE,
+        )
+    }
     var addSeriesOpen by rememberSaveable { mutableStateOf(false) }
 
     val hideAdult = AdultFilter.isHidden()
@@ -183,7 +192,10 @@ fun LibraryContent(
                 orderBy = orderBy,
                 onOrderBy = { orderBy = it },
                 cardWidth = cardWidth,
-                onCardWidth = { cardWidth = it },
+                onCardWidth = {
+                    cardWidth = it
+                    top.levitatemedia.renzo.hub.core.keyValuePrefs(CARD_WIDTH_PREFS).putString(CARD_WIDTH_KEY, it)
+                },
                 onToggleViewAll = { vm.setViewAllLibraries(!state.viewAllLibraries) },
                 onTrackAll = vm::trackAll,
                 onAddSeries = { addSeriesOpen = true },
