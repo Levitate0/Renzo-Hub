@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ShioriRuntime
+import app.renzoshiori.client.ui.util.screenWidthDp
 import app.renzoshiori.client.data.model.SeriesStatus
 import app.renzoshiori.client.data.network.absoluteUrl
 import app.renzoshiori.client.data.offline.OfflineRepository
@@ -337,7 +338,7 @@ private fun LibraryRibbon(
         out
     }
 
-    val ribbonWide = app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp
+    val ribbonWide = screenWidthDp() >= 1024.dp
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -530,7 +531,7 @@ private fun OnlineGrid(
         return
     }
 
-    val wide = app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp
+    val wide = screenWidthDp() >= 1024.dp
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = size.width),
         // Web library page: `p-2 pb-16 sm:px-6 sm:py-4` with a gap-4 grid —
@@ -647,7 +648,7 @@ private fun OfflineGrid(
         return
     }
 
-    val wide = app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp
+    val wide = screenWidthDp() >= 1024.dp
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = size.width),
         // Web library page: `p-2 pb-16 sm:px-6 sm:py-4` with a gap-4 grid —
@@ -718,7 +719,7 @@ private fun OfflineSeriesCard(
                 color = Color.White,
                 // The web card never clamps its title (see the old exe): the
                 // overlay grows with the name. Phones keep the 2-line clamp.
-                maxLines = if (app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp) Int.MAX_VALUE else 2,
+                maxLines = if (screenWidthDp() >= 1024.dp) Int.MAX_VALUE else 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier

@@ -133,7 +133,11 @@ fun DownloadsScreen() {
     val activeList = activeSeries.entries.filter { it.value.total > 0 }
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 64.dp),
+        contentPadding = if (app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp) {
+            PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 64.dp)
+        } else {
+            PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 64.dp)
+        },
         modifier = Modifier.fillMaxSize(),
     ) {
         // ── Header ───────────────────────────────────────────────────────

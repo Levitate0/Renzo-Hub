@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ShioriRuntime
+import app.renzoshiori.client.ui.util.screenWidthDp
 import app.renzoshiori.client.data.model.ClearAlertRequestDto
 import app.renzoshiori.client.data.model.HealthStatusLevel
 import app.renzoshiori.client.data.model.HealthStatusTargetType
@@ -164,10 +165,15 @@ fun StatusScreen(onOpenSeries: (String) -> Unit = {}) {
     val sourceWarnings = providers?.count { it.level == HealthStatusLevel.YELLOW } ?: 0
     val sourceCritical = providers?.count { it.level == HealthStatusLevel.RED } ?: 0
 
+    val statusWide = screenWidthDp() >= 1024.dp
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+            contentPadding = if (statusWide) {
+                PaddingValues(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 28.dp)
+            } else {
+                PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp)
+            },
         ) {
             // ── Ribbon: Status · Health of your sources and series ────────────
             item(key = "ribbon") {
@@ -205,13 +211,23 @@ fun StatusScreen(onOpenSeries: (String) -> Unit = {}) {
                 Spacer(Modifier.height(24.dp))
             }
 
-            // ── Summary tiles (grid → vertical stack) ─────────────────────────
+            // ── Summary tiles — web: `grid gap-3 lg:grid-cols-4`; a wide window
+            // gets the four-across row, phones keep the vertical stack.
             item(key = "tiles") {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatTile("Series Warnings", seriesWarnings, tone = TONE_WARNING)
-                    StatTile("Series Critical", seriesCritical, tone = TONE_CRITICAL)
-                    StatTile("Source Warnings", sourceWarnings, tone = TONE_WARNING)
-                    StatTile("Source Critical", sourceCritical, tone = TONE_CRITICAL)
+                if (statusWide) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.weight(1f)) { StatTile("Series Warnings", seriesWarnings, tone = TONE_WARNING) }
+                        Box(Modifier.weight(1f)) { StatTile("Series Critical", seriesCritical, tone = TONE_CRITICAL) }
+                        Box(Modifier.weight(1f)) { StatTile("Source Warnings", sourceWarnings, tone = TONE_WARNING) }
+                        Box(Modifier.weight(1f)) { StatTile("Source Critical", sourceCritical, tone = TONE_CRITICAL) }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatTile("Series Warnings", seriesWarnings, tone = TONE_WARNING)
+                        StatTile("Series Critical", seriesCritical, tone = TONE_CRITICAL)
+                        StatTile("Source Warnings", sourceWarnings, tone = TONE_WARNING)
+                        StatTile("Source Critical", sourceCritical, tone = TONE_CRITICAL)
+                    }
                 }
                 Spacer(Modifier.height(24.dp))
             }

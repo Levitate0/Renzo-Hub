@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
@@ -71,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ShioriRuntime
+import app.renzoshiori.client.ui.util.screenWidthDp
 import app.renzoshiori.client.data.model.ProviderDto
 import app.renzoshiori.client.data.network.SourcesApi
 import app.renzoshiori.client.ui.theme.RenzoColors
@@ -173,11 +175,10 @@ fun SourcesScreen() {
 }
 
 @Composable
-private fun RowScope.TabTrigger(label: String, active: Boolean, onClick: () -> Unit) {
+private fun TabTrigger(label: String, active: Boolean, onClick: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .weight(1f)
             .fillMaxHeight()
             .clip(RoundedCornerShape(6.dp))
             .background(if (active) RenzoColors.Background else Color.Transparent)
@@ -368,7 +369,11 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
+        contentPadding = if (screenWidthDp() >= 1024.dp) {
+            PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
+        } else {
+            PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp)
+        },
     ) {
         // The web takes its search term from the global command bar; there is no
         // command-bar search on a phone, so this renders the very same search
@@ -824,7 +829,11 @@ private fun InstallButton(isLoading: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** The web's below-md treatment: one ⋮ button with Settings… / Uninstall. */
+/**
+ * Installed-row actions. Desktop (≥lg, per row-actions-installed.tsx): a gear
+ * settings button plus the "✓ Installed" chip whose menu holds Uninstall.
+ * Below the breakpoint: the web's one-⋮ mobile treatment.
+ */
 @Composable
 private fun InstalledRowActions(
     extensionName: String,
@@ -832,6 +841,71 @@ private fun InstalledRowActions(
     onSettings: () -> Unit,
     onUninstall: () -> Unit,
 ) {
+    if (screenWidthDp() >= 1024.dp) {
+        var menuOpen by remember { mutableStateOf(false) }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(enabled = !isLoading) { onSettings() },
+            ) {
+                Icon(
+                    Icons.Filled.Settings,
+                    contentDescription = "$extensionName settings",
+                    tint = RenzoColors.MutedForeground,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Box {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(RenzoColors.Green.copy(alpha = 0.12f))
+                        .border(1.dp, RenzoColors.Green.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                        .clickable(enabled = !isLoading) { menuOpen = true }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            color = RenzoColors.Green,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = RenzoColors.Green,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                    Text(
+                        "Installed",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RenzoColors.Green,
+                        modifier = Modifier.padding(start = 5.dp),
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                    containerColor = RenzoColors.Popover,
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Uninstall", color = RenzoColors.Red) },
+                        leadingIcon = {
+                            Icon(Icons.Filled.Delete, contentDescription = null, tint = RenzoColors.Red)
+                        },
+                        onClick = { menuOpen = false; onUninstall() },
+                    )
+                }
+            }
+        }
+        return
+    }
     var open by remember { mutableStateOf(false) }
     Box {
         Box(

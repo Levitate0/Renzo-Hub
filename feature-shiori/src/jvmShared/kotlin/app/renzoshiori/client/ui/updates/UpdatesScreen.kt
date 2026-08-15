@@ -2,6 +2,7 @@ package app.renzoshiori.client.ui.updates
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.ShioriRuntime
+import app.renzoshiori.client.ui.util.screenWidthDp
 import app.renzoshiori.client.data.model.UpdateFeedItemDto
 import app.renzoshiori.client.data.network.UpdatesApi
 import app.renzoshiori.client.data.network.absoluteUrl
@@ -178,7 +180,15 @@ fun UpdatesScreen(onOpenSeries: (String) -> Unit) {
     val buckets = remember(rows) { rows.groupBy { getDateBucket(it.sortTime) } }
     val baseUrl = renzoApp.tokenStore.serverUrl ?: ""
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    // Web page container: `mx-auto max-w-[1100px] py-6 sm:py-10` — the feed
+    // sits in a centred column instead of stretching across a wide window.
+    val wide = screenWidthDp() >= 1024.dp
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    Column(
+        modifier = Modifier
+            .then(if (wide) Modifier.widthIn(max = 1100.dp).padding(top = 24.dp) else Modifier)
+            .fillMaxSize(),
+    ) {
         // ── Header ───────────────────────────────────────────────────────
         Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -336,6 +346,7 @@ fun UpdatesScreen(onOpenSeries: (String) -> Unit) {
                 }
             }
         }
+    }
     }
 }
 

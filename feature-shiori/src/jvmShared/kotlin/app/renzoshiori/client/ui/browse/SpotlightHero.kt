@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,6 +50,7 @@ import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.tv.focusRing
 import app.renzoshiori.client.ui.tv.rememberFocusState
 import app.renzoshiori.client.ui.tv.tvClickable
+import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 
@@ -73,13 +76,14 @@ private val PINK_BRIGHT = Color(0xFFF06A8B) // hsl(346.8 90% 70%)
 
 /**
  * SpotlightHero — the cinematic hero at the top of Browse, transliterated from
- * spotlight-hero.tsx at its `<lg` (stacked) breakpoint, which is the only one a
- * phone ever renders: blurred cover backdrop with the pink radial + dark veil,
- * the 200×280 floating cover with its status-colored top strip, the eyebrow,
- * the display title, the status pill + meta strip, the gradient-faded
- * description with Read more, up to four tag chips, the pink CTA, and the row
- * of spotlight thumbnails underneath. Auto-advances every 8s, pausing for 12s
- * after the user taps a thumbnail.
+ * spotlight-hero.tsx at BOTH breakpoints: `<lg` stacks a centred column (the
+ * phone layout) and `lg` lays the cover beside a LEFT-aligned text block
+ * (h-420, px-10, gap-10, text max-w-2xl) with the thumbnail rail standing
+ * vertically at the right edge. Blurred cover backdrop with the pink radial +
+ * dark veil, the 200×280 floating cover with its status-colored top strip,
+ * eyebrow, display title, status pill + meta strip, description with Read
+ * more, up to four tag chips, the pink CTA. Auto-advances every 8s, pausing
+ * for 12s after the user taps a thumbnail.
  */
 @Composable
 fun SpotlightHero(
@@ -92,6 +96,7 @@ fun SpotlightHero(
     if (safeItems.isEmpty()) return
 
     val isTv = LocalIsTv.current
+    val wide = !isTv && screenWidthDp() >= 1024.dp
     var active by remember(safeItems) { mutableStateOf(0) }
     var pauseUntil by remember { mutableStateOf(0L) }
     var descExpanded by remember(active) { mutableStateOf(false) }
@@ -114,6 +119,346 @@ fun SpotlightHero(
     val statusInfo = getStatusDisplay(current.status)
     val stripColor = spotlightStripColor(current.status)
     val tags = current.genres.take(4)
+
+    // ── Shared content blocks, aligned per breakpoint ────────────────────
+
+    val coverBox: @Composable () -> Unit = {
+        Box(
+            modifier = Modifier
+                .width(200.dp)
+                .height(280.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(RenzoColors.Muted),
+        ) {
+            if (current.thumbnailUrl != null) {
+                AsyncImage(
+                    model = current.thumbnailUrl,
+                    contentDescription = current.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            // Status-colored top strip.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(stripColor),
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Transparent,
+                            0.65f to Color.Black.copy(alpha = 0.25f),
+                            1.0f to Color.Black.copy(alpha = 0.85f),
+                        ),
+                    ),
+            )
+            Column(modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)) {
+                Text(
+                    current.title.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    color = Color.White.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!current.author.isNullOrBlank()) {
+                    Text(
+                        current.author,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = Color.White.copy(alpha = 0.55f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+
+    val eyebrowRow: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.Explore,
+                contentDescription = null,
+                tint = PINK_BRIGHT,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                // Desktop shows the whole eyebrow; the phone keeps only the
+                // segment before the "·" (spotlight-hero.tsx ctx-hide).
+                if (wide) eyebrow else eyebrow.substringBefore("·").trim(),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                color = PINK_BRIGHT,
+                letterSpacing = 2.8.sp,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+    }
+
+    val titleText: @Composable () -> Unit = {
+        Text(
+            current.title,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                // lg:text-5xl on the desktop row layout.
+                fontSize = if (wide) 44.sp else 30.sp,
+                fontWeight = FontWeight.ExtraBold,
+            ),
+            color = Color.White,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = if (wide) TextAlign.Start else TextAlign.Center,
+        )
+    }
+
+    val metaRow: @Composable () -> Unit = {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(
+                10.dp,
+                if (wide) Alignment.Start else Alignment.CenterHorizontally,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(stripColor),
+                )
+                Text(
+                    statusInfo.text,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = Color.White,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+            if (current.availableChapters != null) {
+                Text(
+                    "${current.availableChapters} chapters available",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                    color = Color.White.copy(alpha = 0.55f),
+                )
+            }
+            if (!current.sourceName.isNullOrBlank()) {
+                Text(
+                    "Source: ${current.sourceName}",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                    color = Color.White.copy(alpha = 0.55f),
+                )
+            }
+        }
+    }
+
+    val descriptionBlock: @Composable () -> Unit = {
+        if (!current.description.isNullOrBlank()) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                current.description,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                color = Color.White.copy(alpha = 0.65f),
+                maxLines = if (descExpanded) Int.MAX_VALUE else 3,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = if (wide) TextAlign.Start else TextAlign.Center,
+            )
+            val moreFocus = rememberFocusState()
+            Text(
+                if (descExpanded) "READ LESS" else "READ MORE",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                color = PINK_BRIGHT,
+                letterSpacing = 1.2.sp,
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .then(
+                        if (isTv) {
+                            Modifier
+                                .focusRing(moreFocus.focused, 4.dp)
+                                .tvClickable(
+                                    onFocused = {
+                                        moreFocus.set(it)
+                                        if (it) holdCarousel()
+                                    },
+                                    onClick = { descExpanded = !descExpanded },
+                                )
+                        } else {
+                            Modifier.clickable { descExpanded = !descExpanded }
+                        },
+                    )
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+        }
+    }
+
+    val tagsRow: @Composable () -> Unit = {
+        if (tags.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(
+                    8.dp,
+                    if (wide) Alignment.Start else Alignment.CenterHorizontally,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                tags.forEachIndexed { index, tag ->
+                    Text(
+                        tag,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                        color = if (index == 0) Color(0xFFF490AA) else Color.White.copy(alpha = 0.65f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .border(
+                                1.dp,
+                                if (index == 0) PINK.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.10f),
+                                RoundedCornerShape(50),
+                            )
+                            .background(
+                                if (index == 0) PINK.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.06f),
+                            )
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    val ctaButton: @Composable () -> Unit = {
+        val ctaFocus = rememberFocusState()
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .height(if (isTv) 48.dp else 40.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(PINK)
+                .then(
+                    if (isTv) {
+                        Modifier
+                            .focusRing(ctaFocus.focused, 8.dp)
+                            .tvClickable(
+                                onFocused = {
+                                    ctaFocus.set(it)
+                                    if (it) holdCarousel()
+                                },
+                                onClick = { onCtaClick(current) },
+                            )
+                    } else {
+                        Modifier.clickable { onCtaClick(current) }
+                    },
+                )
+                .padding(horizontal = 20.dp),
+        ) {
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                ctaLabel,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                color = Color.White,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+    }
+
+    val thumbTile: @Composable (Int, SpotlightItem) -> Unit = { index, item ->
+        val isActive = index == active
+        // Selection is the un-dimmed thumbnail plus the pink outline drawn
+        // *over* the cover below; the accent ring sits outside the whole tile
+        // and is focus alone. Both are legible at the same time.
+        val thumbFocus = rememberFocusState()
+        Box(
+            modifier = Modifier
+                .then(
+                    if (isTv) {
+                        Modifier.focusRing(thumbFocus.focused, 8.dp).padding(3.dp)
+                    } else {
+                        Modifier
+                    },
+                )
+                // lg: 36×52 in the vertical rail; phone strip stays 28×40.
+                .width(if (isTv) 40.dp else if (wide) 36.dp else 28.dp)
+                .height(if (isTv) 56.dp else if (wide) 52.dp else 40.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .border(
+                    1.dp,
+                    if (isActive) PINK else Color.White.copy(alpha = 0.10f),
+                    RoundedCornerShape(6.dp),
+                )
+                .background(RenzoColors.Muted)
+                .then(
+                    if (isTv) {
+                        Modifier.tvClickable(
+                            onFocused = {
+                                thumbFocus.set(it)
+                                if (it) holdCarousel()
+                            },
+                            onClick = {
+                                active = index
+                                pauseUntil = System.currentTimeMillis() + PAUSE_AFTER_MANUAL_MS
+                            },
+                        )
+                    } else {
+                        Modifier.clickable {
+                            active = index
+                            pauseUntil = System.currentTimeMillis() + PAUSE_AFTER_MANUAL_MS
+                        }
+                    },
+                ),
+        ) {
+            if (item.thumbnailUrl != null) {
+                AsyncImage(
+                    model = item.thumbnailUrl,
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (!isActive) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.45f)),
+                )
+            } else if (isTv) {
+                // Drawn as a child so it lands on top of the cover — a border
+                // in the modifier chain paints before the image and would be
+                // invisible.
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .border(2.dp, PINK, RoundedCornerShape(6.dp)),
+                )
+            }
+        }
+    }
+
+    // ── Container: backdrop + one of the two breakpoint layouts ──────────
 
     Box(
         modifier = Modifier
@@ -153,343 +498,69 @@ fun SpotlightHero(
                 ),
         )
 
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
-        ) {
-            // Floating cover.
-            Box(
-                modifier = Modifier
-                    .width(200.dp)
-                    .height(280.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(RenzoColors.Muted),
-            ) {
-                if (current.thumbnailUrl != null) {
-                    AsyncImage(
-                        model = current.thumbnailUrl,
-                        contentDescription = current.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-                // Status-colored top strip.
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .background(stripColor),
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0.0f to Color.Transparent,
-                                0.65f to Color.Black.copy(alpha = 0.25f),
-                                1.0f to Color.Black.copy(alpha = 0.85f),
-                            ),
-                        ),
-                )
-                Column(modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)) {
-                    Text(
-                        current.title.uppercase(),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                        color = Color.White.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (!current.author.isNullOrBlank()) {
-                        Text(
-                            current.author,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = Color.White.copy(alpha = 0.55f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            // Eyebrow — the phone shows only the segment before the "·".
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.Explore,
-                    contentDescription = null,
-                    tint = PINK_BRIGHT,
-                    modifier = Modifier.size(12.dp),
-                )
-                Text(
-                    eyebrow.substringBefore("·").trim(),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    color = PINK_BRIGHT,
-                    letterSpacing = 2.8.sp,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Title.
-            Text(
-                current.title,
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                ),
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            // Meta strip: status pill · N chapters available · Source: X.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(50))
-                        .background(Color.White.copy(alpha = 0.06f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(stripColor),
-                    )
-                    Text(
-                        statusInfo.text,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        color = Color.White,
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
-                }
-                if (current.availableChapters != null) {
-                    Text(
-                        "${current.availableChapters} chapters available",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                        color = Color.White.copy(alpha = 0.55f),
-                    )
-                }
-                if (!current.sourceName.isNullOrBlank()) {
-                    Text(
-                        "Source: ${current.sourceName}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                        color = Color.White.copy(alpha = 0.55f),
-                    )
-                }
-            }
-
-            // Description with Read more / Read less.
-            if (!current.description.isNullOrBlank()) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    current.description,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                    color = Color.White.copy(alpha = 0.65f),
-                    maxLines = if (descExpanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
-                val moreFocus = rememberFocusState()
-                Text(
-                    if (descExpanded) "READ LESS" else "READ MORE",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    color = PINK_BRIGHT,
-                    letterSpacing = 1.2.sp,
-                    modifier = Modifier
-                        .padding(top = 6.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .then(
-                            if (isTv) {
-                                Modifier
-                                    .focusRing(moreFocus.focused, 4.dp)
-                                    .tvClickable(
-                                        onFocused = {
-                                            moreFocus.set(it)
-                                            if (it) holdCarousel()
-                                        },
-                                        onClick = { descExpanded = !descExpanded },
-                                    )
-                            } else {
-                                Modifier.clickable { descExpanded = !descExpanded }
-                            },
-                        )
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                )
-            }
-
-            // Tags — the first one gets the pink treatment.
-            if (tags.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    tags.forEachIndexed { index, tag ->
-                        Text(
-                            tag,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
-                            color = if (index == 0) Color(0xFFF490AA) else Color.White.copy(alpha = 0.65f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .border(
-                                    1.dp,
-                                    if (index == 0) PINK.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.10f),
-                                    RoundedCornerShape(50),
-                                )
-                                .background(
-                                    if (index == 0) PINK.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.06f),
-                                )
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
-                }
-            }
-
-            // CTA.
-            Spacer(Modifier.height(20.dp))
-            val ctaFocus = rememberFocusState()
+        if (wide) {
+            // ── lg: cover beside a left-aligned text block (h-420 px-10
+            // gap-10), thumbnail rail standing at the right edge. ──
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .height(if (isTv) 48.dp else 40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(PINK)
-                    .then(
-                        if (isTv) {
-                            Modifier
-                                .focusRing(ctaFocus.focused, 8.dp)
-                                .tvClickable(
-                                    onFocused = {
-                                        ctaFocus.set(it)
-                                        if (it) holdCarousel()
-                                    },
-                                    onClick = { onCtaClick(current) },
-                                )
-                        } else {
-                            Modifier.clickable { onCtaClick(current) }
-                        },
-                    )
-                    .padding(horizontal = 20.dp),
+                    .fillMaxWidth()
+                    .heightIn(min = 420.dp)
+                    .padding(start = 40.dp, top = 24.dp, bottom = 24.dp)
+                    // Clearance for the vertical rail (lg:right-6).
+                    .padding(end = if (safeItems.size > 1) 88.dp else 40.dp),
             ) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp),
-                )
-                Text(
-                    ctaLabel,
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    color = Color.White,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
+                coverBox()
+                Spacer(Modifier.width(40.dp))
+                Column(
+                    horizontalAlignment = Alignment.Start,
+                    modifier = Modifier.weight(1f).widthIn(max = 672.dp), // lg:max-w-2xl
+                ) {
+                    eyebrowRow()
+                    Spacer(Modifier.height(8.dp))
+                    titleText()
+                    Spacer(Modifier.height(16.dp))
+                    metaRow()
+                    descriptionBlock()
+                    tagsRow()
+                    Spacer(Modifier.height(20.dp))
+                    ctaButton()
+                }
             }
-
-            // Thumbnail strip.
             if (safeItems.size > 1) {
-                Spacer(Modifier.height(20.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                    modifier = Modifier.fillMaxWidth(),
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 24.dp),
                 ) {
-                    safeItems.forEachIndexed { index, item ->
-                        val isActive = index == active
-                        // Selection is the un-dimmed thumbnail plus the pink
-                        // outline drawn *over* the cover below; the accent ring
-                        // sits outside the whole tile and is focus alone. Both
-                        // are legible at the same time.
-                        val thumbFocus = rememberFocusState()
-                        Box(
-                            modifier = Modifier
-                                .then(
-                                    if (isTv) {
-                                        Modifier.focusRing(thumbFocus.focused, 8.dp).padding(3.dp)
-                                    } else {
-                                        Modifier
-                                    },
-                                )
-                                .width(if (isTv) 40.dp else 28.dp)
-                                .height(if (isTv) 56.dp else 40.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .border(
-                                    1.dp,
-                                    if (isActive) PINK else Color.White.copy(alpha = 0.10f),
-                                    RoundedCornerShape(6.dp),
-                                )
-                                .background(RenzoColors.Muted)
-                                .then(
-                                    if (isTv) {
-                                        Modifier.tvClickable(
-                                            onFocused = {
-                                                thumbFocus.set(it)
-                                                if (it) holdCarousel()
-                                            },
-                                            onClick = {
-                                                active = index
-                                                pauseUntil =
-                                                    System.currentTimeMillis() + PAUSE_AFTER_MANUAL_MS
-                                            },
-                                        )
-                                    } else {
-                                        Modifier.clickable {
-                                            active = index
-                                            pauseUntil = System.currentTimeMillis() + PAUSE_AFTER_MANUAL_MS
-                                        }
-                                    },
-                                ),
-                        ) {
-                            if (item.thumbnailUrl != null) {
-                                AsyncImage(
-                                    model = item.thumbnailUrl,
-                                    contentDescription = item.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                            if (!isActive) {
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .background(Color.Black.copy(alpha = 0.45f)),
-                                )
-                            } else if (isTv) {
-                                // Drawn as a child so it lands on top of the
-                                // cover — a border in the modifier chain paints
-                                // before the image and would be invisible.
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .border(2.dp, PINK, RoundedCornerShape(6.dp)),
-                                )
-                            }
-                        }
+                    safeItems.forEachIndexed { index, item -> thumbTile(index, item) }
+                }
+            }
+        } else {
+            // ── <lg: the stacked, centred phone/TV layout. ──
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
+            ) {
+                coverBox()
+                Spacer(Modifier.height(20.dp))
+                eyebrowRow()
+                Spacer(Modifier.height(8.dp))
+                titleText()
+                Spacer(Modifier.height(16.dp))
+                metaRow()
+                descriptionBlock()
+                tagsRow()
+                Spacer(Modifier.height(20.dp))
+                ctaButton()
+                if (safeItems.size > 1) {
+                    Spacer(Modifier.height(20.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        safeItems.forEachIndexed { index, item -> thumbTile(index, item) }
                     }
                 }
             }

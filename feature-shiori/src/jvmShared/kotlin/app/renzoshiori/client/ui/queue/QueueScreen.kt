@@ -2,6 +2,7 @@ package app.renzoshiori.client.ui.queue
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.ShioriRuntime
+import app.renzoshiori.client.ui.util.screenWidthDp
 import app.renzoshiori.client.data.model.DownloadInfoDto
 import app.renzoshiori.client.data.model.QueueStatus
 import app.renzoshiori.client.data.network.ErrorDownloadAction
@@ -262,7 +264,15 @@ fun QueueScreen() {
     val totalAfterFilter = sortedItems.size
     val buckets = visibleItems.groupBy { getDateBucket(it.sortTime) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    // Web page container: `mx-auto max-w-[1100px] py-6 sm:py-10` — the feed
+    // sits in a centred column instead of stretching across a wide window.
+    val wide = screenWidthDp() >= 1024.dp
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    Column(
+        modifier = Modifier
+            .then(if (wide) Modifier.widthIn(max = 1100.dp).padding(top = 24.dp) else Modifier)
+            .fillMaxSize(),
+    ) {
         // ── Ribbon: filter pills ─────────────────────────────────────────
         Box(
             contentAlignment = Alignment.Center,
@@ -390,6 +400,7 @@ fun QueueScreen() {
                 }
             }
         }
+    }
     }
 
     if (jobsOpen) {
