@@ -17,6 +17,8 @@ actual object HubPlatform {
 
     actual val isTv: Boolean get() = isTvDevice(HubContextHolder.context)
 
+    actual val isDesktop: Boolean = false
+
     actual val deviceName: String
         get() = android.os.Build.MODEL?.takeIf { it.isNotBlank() } ?: "Android device"
 

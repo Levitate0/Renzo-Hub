@@ -3,6 +3,7 @@ package app.renzoshiori.client.ui.reader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -64,6 +66,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -556,6 +561,12 @@ private fun ReaderSettingsBody(
         onChange = { v -> onSettingsChange { it.copy(autoMarkRead = v) } },
     )
 
+    // ── Keyboard shortcuts (web: the rebindable hotkey editor) ──
+    // A remote has no keyboard, so the section is keyboard-clients only.
+    if (!isTv) {
+        HotkeyEditor(settings = settings, onSettingsChange = onSettingsChange)
+    }
+
     // ── Cache ──
     HorizontalDivider(color = ReaderPalette.Hairline, modifier = Modifier.padding(vertical = 8.dp))
     SettingsLabel("Streamed image cache")
@@ -624,6 +635,134 @@ private fun ReaderSettingsBody(
     }
     // Room to scroll the last row clear of the panel edge.
     Spacer(Modifier.height(24.dp))
+}
+
+/**
+ * The web reader's "Keyboard shortcuts" section: one chip per action,
+ * click-then-press to rebind (Esc while rebinding cancels), a key serves one
+ * action at a time (binding it elsewhere clears its old owner), and Reset
+ * defaults restores the web's map.
+ */
+@Composable
+private fun HotkeyEditor(
+    settings: ReaderSettings,
+    onSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
+) {
+    var capturing by remember { mutableStateOf<HotkeyAction?>(null) }
+    val captureFocus = remember { FocusRequester() }
+
+    HorizontalDivider(color = ReaderPalette.Hairline, modifier = Modifier.padding(vertical = 8.dp))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+    ) {
+        Text(
+            "Keyboard shortcuts",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = ReaderPalette.Text,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Reset defaults",
+            fontSize = 11.sp,
+            color = ReaderPalette.Text50,
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .clickable {
+                    capturing = null
+                    onSettingsChange { it.copy(hotkeys = defaultHotkeys()) }
+                }
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+        )
+    }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            // While rebinding, the section holds focus and eats the next key.
+            .then(
+                if (capturing != null) {
+                    Modifier
+                        .focusRequester(captureFocus)
+                        .focusable()
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            val pending = capturing ?: return@onPreviewKeyEvent false
+                            val token = hotkeyToken(event) ?: return@onPreviewKeyEvent true
+                            if (token == "Escape") {
+                                capturing = null // cancel
+                            } else {
+                                onSettingsChange { s ->
+                                    // Clear this key from any other action so
+                                    // bindings stay unique (web behaviour).
+                                    val next = s.hotkeys.toMutableMap()
+                                    HotkeyAction.entries.forEach { a ->
+                                        if (next[a] == token) next[a] = ""
+                                    }
+                                    next[pending] = token
+                                    s.copy(hotkeys = next)
+                                }
+                                capturing = null
+                            }
+                            true
+                        }
+                } else {
+                    Modifier
+                },
+            ),
+    ) {
+        HotkeyAction.entries.forEach { action ->
+            val active = capturing == action
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    action.label,
+                    fontSize = 13.sp,
+                    color = ReaderPalette.Text80,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .widthIn(min = 64.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .border(
+                            1.dp,
+                            if (active) ReaderPalette.Pink400 else ReaderPalette.Hairline,
+                            RoundedCornerShape(4.dp),
+                        )
+                        .background(
+                            if (active) ReaderPalette.Pink400.copy(alpha = 0.2f) else ReaderPalette.Field,
+                        )
+                        .clickable { capturing = if (active) null else action }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                ) {
+                    Text(
+                        if (active) "Press a key…" else hotkeyLabel(settings.hotkeys[action] ?: ""),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (active) ReaderPalette.Pink400 else ReaderPalette.Text,
+                    )
+                }
+            }
+        }
+    }
+    LaunchedEffect(capturing) {
+        if (capturing != null) {
+            withFrameNanos { }
+            runCatching { captureFocus.requestFocus() }
+        }
+    }
+    Text(
+        "Click a key, then press the new one. Esc while rebinding cancels. Arrow keys turn " +
+            "pages / scroll — they never skip chapters. In right-to-left mode ← reads forward.",
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+        color = ReaderPalette.Text50,
+        modifier = Modifier.padding(top = 6.dp),
+    )
 }
 
 // ── One control, two input models ─────────────────────────────────────────

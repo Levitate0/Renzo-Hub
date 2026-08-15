@@ -13,6 +13,10 @@ expect object HubPlatform {
     /** Leanback/TV device. Always false on desktop. */
     val isTv: Boolean
 
+    /** The desktop (JVM window) build. Memory-generous: full-size image
+     *  decodes are fine here where a phone would OOM. */
+    val isDesktop: Boolean
+
     /** A human-usable name for this device (TV pairing, device lists). */
     val deviceName: String
 

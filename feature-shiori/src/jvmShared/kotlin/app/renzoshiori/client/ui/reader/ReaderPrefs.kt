@@ -1,5 +1,9 @@
 package app.renzoshiori.client.ui.reader
 
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.utf16CodePoint
 import top.levitatemedia.renzo.hub.core.HubPlatform
 import top.levitatemedia.renzo.hub.core.keyValuePrefs
 
@@ -10,10 +14,10 @@ import top.levitatemedia.renzo.hub.core.keyValuePrefs
  * the web stores the blob under "renzo_reader_settings" and the per-series mode
  * override under "renzo_reader_mode_<seriesId>" — both mirrored here.
  *
- * The web's `hotkeys` map is deliberately absent: it rebinds physical keyboard
- * keys, which a touch client has no equivalent for (its actions — page turn,
- * chapter skip, chrome/settings/chapter-list toggles, bookmark, exit — are all
- * reachable from the chrome and tap zones instead).
+ * The web's `hotkeys` map is here too (it used to be omitted as touch-only —
+ * the desktop exe ended that): the same 13 rebindable actions, the same
+ * default keys, stored one pref per action so a partial map still gets
+ * defaults for anything missing, exactly like the web's key-by-key merge.
  */
 enum class ReaderMode(val value: String, val label: String) {
     AUTO("auto", "Auto (smart detect)"),
@@ -70,6 +74,66 @@ enum class ResolvedMode {
     }
 }
 
+/**
+ * Rebindable reader actions — the web's `HotkeyAction`, same ids, labels,
+ * defaults and display order. `nextPage`/`prevPage` navigate WITHIN a chapter
+ * and never skip chapters — chapter skipping is its own pair.
+ */
+enum class HotkeyAction(val id: String, val label: String, val defaultKey: String) {
+    NEXT_PAGE("nextPage", "Next page / scroll forward", "ArrowRight"),
+    PREV_PAGE("prevPage", "Previous page / scroll back", "ArrowLeft"),
+    SCROLL_DOWN("scrollDown", "Scroll down", "ArrowDown"),
+    SCROLL_UP("scrollUp", "Scroll up", "ArrowUp"),
+    NEXT_CHAPTER("nextChapter", "Next chapter", "]"),
+    PREV_CHAPTER("prevChapter", "Previous chapter", "["),
+    FIRST_PAGE("firstPage", "Jump to first page", "Home"),
+    LAST_PAGE("lastPage", "Jump to last page", "End"),
+    TOGGLE_CHROME("toggleChrome", "Show / hide controls", "Escape"),
+    TOGGLE_CHAPTERS("toggleChapters", "Chapter list", "l"),
+    TOGGLE_SETTINGS("toggleSettings", "Settings panel", "s"),
+    BOOKMARK("bookmark", "Bookmark chapter", "b"),
+    EXIT("exit", "Exit reader", "c"),
+}
+
+fun defaultHotkeys(): Map<HotkeyAction, String> =
+    HotkeyAction.entries.associateWith { it.defaultKey }
+
+/** The web's keyLabel: pretty-print a stored key token for the editor. */
+fun hotkeyLabel(token: String): String = when (token) {
+    "ArrowRight" -> "→"
+    "ArrowLeft" -> "←"
+    "ArrowUp" -> "↑"
+    "ArrowDown" -> "↓"
+    "Space" -> "Space"
+    "Escape" -> "Esc"
+    "" -> "—"
+    else -> if (token.length == 1) token.uppercase() else token
+}
+
+/**
+ * The web's eventKeyToken: normalize a key event to the stored/compared token.
+ * Named keys keep their DOM `e.key` names so a map written by either client
+ * reads identically; printable keys store their lowercase character.
+ */
+fun hotkeyToken(event: KeyEvent): String? {
+    return when (event.key) {
+        Key.DirectionRight -> "ArrowRight"
+        Key.DirectionLeft -> "ArrowLeft"
+        Key.DirectionUp -> "ArrowUp"
+        Key.DirectionDown -> "ArrowDown"
+        Key.MoveHome -> "Home"
+        Key.MoveEnd -> "End"
+        Key.Escape -> "Escape"
+        Key.Spacebar -> "Space"
+        Key.PageDown -> "PageDown"
+        Key.PageUp -> "PageUp"
+        else -> {
+            val cp = event.utf16CodePoint
+            if (cp in 33..126) cp.toChar().lowercaseChar().toString() else null
+        }
+    }
+}
+
 data class ReaderSettings(
     val mode: ReaderMode = ReaderMode.AUTO,
     val fit: FitMode = FitMode.WIDTH,
@@ -100,6 +164,8 @@ data class ReaderSettings(
     val autoMarkRead: Boolean = true,
     /** Clear the streamed-page cache when leaving the reader. */
     val autoClearCache: Boolean = true,
+    /** Rebindable key map — action → stored key token ("" = unbound). */
+    val hotkeys: Map<HotkeyAction, String> = defaultHotkeys(),
 )
 
 /** KeyValuePrefs-backed store for [ReaderSettings] + the per-series mode override. */
@@ -133,6 +199,11 @@ class ReaderPrefs {
             chapterTransition = prefs.getBoolean(KEY_CHAPTER_TRANSITION, d.chapterTransition),
             autoMarkRead = prefs.getBoolean(KEY_AUTO_MARK_READ, d.autoMarkRead),
             autoClearCache = prefs.getBoolean(KEY_AUTO_CLEAR_CACHE, d.autoClearCache),
+            // One pref per action: anything never written falls back to its
+            // default, which is the web's key-by-key merge behaviour.
+            hotkeys = HotkeyAction.entries.associateWith { a ->
+                prefs.getString(HOTKEY_PREFIX + a.id, null) ?: a.defaultKey
+            },
         )
     }
 
@@ -151,6 +222,9 @@ class ReaderPrefs {
         prefs.putBoolean(KEY_CHAPTER_TRANSITION, s.chapterTransition)
         prefs.putBoolean(KEY_AUTO_MARK_READ, s.autoMarkRead)
         prefs.putBoolean(KEY_AUTO_CLEAR_CACHE, s.autoClearCache)
+        HotkeyAction.entries.forEach { a ->
+            prefs.putString(HOTKEY_PREFIX + a.id, s.hotkeys[a] ?: a.defaultKey)
+        }
     }
 
     /** Per-series mode override ("auto" is stored as absence, exactly like the web). */
@@ -187,5 +261,6 @@ class ReaderPrefs {
         private const val KEY_CHAPTER_TRANSITION = "chapterTransition"
         private const val KEY_AUTO_MARK_READ = "autoMarkRead"
         private const val KEY_AUTO_CLEAR_CACHE = "autoClearCache"
+        private const val HOTKEY_PREFIX = "hotkey_"
     }
 }

@@ -73,6 +73,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.vector.ImageVector
+import top.levitatemedia.renzo.hub.core.HubPlatform
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import app.renzoshiori.client.ui.util.screenHeightDp
@@ -177,6 +181,90 @@ fun ReaderScreen(
     // unreachable, which is the exact failure this is meant to prevent.
     val dpadReading = !state.loading && !state.locked && state.error == null
 
+    // ── Rebindable hotkeys (web parity; keyboards, not the TV remote) ──────
+    // TV keeps its own D-pad key sink above — this path is real keyboards on
+    // desktop (or one plugged into a phone). Actions run through the same
+    // seams the chrome uses: the nav handle for page/scroll, the scrubber's
+    // seekTarget for first/last, the VM for chapters and bookmark.
+    val runHotkey: (HotkeyAction) -> Unit = { action ->
+        when (action) {
+            // Logical forward/back: the nav handle takes PHYSICAL directions
+            // and resolves RTL itself, so forward is LEFT in paged-RTL.
+            HotkeyAction.NEXT_PAGE, HotkeyAction.SCROLL_DOWN ->
+                nav.onDpad?.invoke(
+                    when {
+                        mode.continuous -> DpadDir.DOWN
+                        mode.rtl -> DpadDir.LEFT
+                        else -> DpadDir.RIGHT
+                    },
+                )
+            HotkeyAction.PREV_PAGE, HotkeyAction.SCROLL_UP ->
+                nav.onDpad?.invoke(
+                    when {
+                        mode.continuous -> DpadDir.UP
+                        mode.rtl -> DpadDir.RIGHT
+                        else -> DpadDir.LEFT
+                    },
+                )
+            HotkeyAction.NEXT_CHAPTER -> vm.goToChapter(1)
+            HotkeyAction.PREV_CHAPTER -> vm.goToChapter(-1)
+            HotkeyAction.FIRST_PAGE -> seekTarget = 0
+            HotkeyAction.LAST_PAGE -> seekTarget = (state.activePageCount - 1).coerceAtLeast(0)
+            HotkeyAction.TOGGLE_CHROME -> chromeVisible = !chromeVisible
+            HotkeyAction.TOGGLE_CHAPTERS -> chaptersOpen = !chaptersOpen
+            HotkeyAction.TOGGLE_SETTINGS -> settingsOpen = !settingsOpen
+            HotkeyAction.BOOKMARK -> vm.toggleBookmark()
+            HotkeyAction.EXIT -> onExit()
+        }
+    }
+    val hotkeyFocus = remember { FocusRequester() }
+    val hotkeyModifier = if (isTv) {
+        Modifier
+    } else {
+        Modifier
+            .focusRequester(hotkeyFocus)
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                val token = hotkeyToken(event) ?: return@onKeyEvent false
+                // Web: physical arrows swap in RTL paged mode so ← always
+                // reads forward (manga convention); custom bindings are
+                // taken literally.
+                val lookup = if (!mode.continuous && mode.rtl) {
+                    when (token) {
+                        "ArrowLeft" -> "ArrowRight"
+                        "ArrowRight" -> "ArrowLeft"
+                        else -> token
+                    }
+                } else {
+                    token
+                }
+                val hk = state.settings.hotkeys
+                // Space / PageDown / PageUp keep paging even when unbound, so
+                // clearing the arrows never loses basic navigation.
+                val action = HotkeyAction.entries.firstOrNull { hk[it] == lookup }
+                    ?: when (token) {
+                        "Space", "PageDown" -> HotkeyAction.NEXT_PAGE
+                        "PageUp" -> HotkeyAction.PREV_PAGE
+                        else -> null
+                    }
+                if (action == null) {
+                    false
+                } else {
+                    runHotkey(action)
+                    true
+                }
+            }
+    }
+    LaunchedEffect(isTv, overlayOpen, state.loading) {
+        // The panels are focusable popups/sheets; take the keys back when
+        // they close (and once loading settles on entry).
+        if (!isTv && !overlayOpen) {
+            withFrameNanos { }
+            runCatching { hotkeyFocus.requestFocus() }
+        }
+    }
+
     // On a television, chrome visible ⇔ the chrome holds focus. That is how
     // every TV video player behaves and it keeps the arrows unambiguous: while
     // the controls are up they move between controls, and while they are down
@@ -195,7 +283,7 @@ fun ReaderScreen(
         if (chromeVisible) chromeVisible = false else onExit()
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(settings.background.argb))) {
+    Box(modifier = Modifier.fillMaxSize().background(Color(settings.background.argb)).then(hotkeyModifier)) {
         if (isTv) {
             // A key sink rather than a focusable wrapper around the content: it
             // has no children, so it can never swallow the chrome's focus, and
@@ -834,11 +922,13 @@ private fun ContinuousReader(
                         ) {
                             val rawModel = seg.pages.getOrNull(item.pageIndex)
                             AsyncImage(
-                                model = if (attempt > 0 && rawModel is String) {
-                                    rawModel + (if (rawModel.contains('?')) "&" else "?") + "retry=" + attempt
-                                } else {
-                                    rawModel
-                                },
+                                model = pageModel(
+                                    if (attempt > 0 && rawModel is String) {
+                                        rawModel + (if (rawModel.contains('?')) "&" else "?") + "retry=" + attempt
+                                    } else {
+                                        rawModel
+                                    },
+                                ),
                                 contentDescription = "Page ${item.pageIndex + 1}",
                                 contentScale = ContentScale.FillWidth,
                                 // Web-parity sharpness: Skia's default Low
@@ -1167,6 +1257,22 @@ private fun PagedReader(
 }
 
 /**
+ * Reader pages decode at ORIGINAL resolution on desktop. Coil sizes decodes to
+ * the layout bounds, and that resized bitmap is what pixelated pages next to
+ * the webgui — the browser keeps the original and only scales at draw time.
+ * Desktop has the memory for the same; phones keep the sized decode (a full
+ * webtoon strip page can be 40MB+ decoded, an OOM on Android).
+ */
+@Composable
+private fun pageModel(model: Any?): Any? {
+    if (model == null || !HubPlatform.isDesktop) return model
+    val ctx = LocalPlatformContext.current
+    return remember(model) {
+        ImageRequest.Builder(ctx).data(model).size(coil3.size.Size.ORIGINAL).build()
+    }
+}
+
+/**
  * One page honouring the Page fit setting (fit width / fit height / original
  * size) and the page scale.
  *
@@ -1218,7 +1324,7 @@ private fun PageImage(
     when (fit) {
         FitMode.HEIGHT -> if (!resized) {
             AsyncImage(
-                model = model,
+                model = pageModel(model),
                 contentDescription = "Page ${index + 1}",
                 contentScale = ContentScale.Fit,
                 filterQuality = FilterQuality.High,
@@ -1234,7 +1340,7 @@ private fun PageImage(
                 contentAlignment = Alignment.Center,
             ) {
                 AsyncImage(
-                    model = model,
+                    model = pageModel(model),
                     contentDescription = "Page ${index + 1}",
                     contentScale = ContentScale.Fit,
                     filterQuality = FilterQuality.High,
@@ -1252,7 +1358,7 @@ private fun PageImage(
             contentAlignment = Alignment.Center,
         ) {
             AsyncImage(
-                model = model,
+                model = pageModel(model),
                 contentDescription = "Page ${index + 1}",
                 contentScale = ContentScale.FillWidth,
                 filterQuality = FilterQuality.High,
@@ -1274,7 +1380,7 @@ private fun PageImage(
             val dims = natural
             val sized = resized && dims != null
             AsyncImage(
-                model = model,
+                model = pageModel(model),
                 contentDescription = "Page ${index + 1}",
                 contentScale = if (sized) ContentScale.Fit else ContentScale.None,
                 filterQuality = FilterQuality.High,

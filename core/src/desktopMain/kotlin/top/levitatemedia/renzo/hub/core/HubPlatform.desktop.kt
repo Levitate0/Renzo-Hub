@@ -10,6 +10,8 @@ actual object HubPlatform {
 
     actual val isTv: Boolean = false
 
+    actual val isDesktop: Boolean = true
+
     actual val deviceName: String =
         runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()
             ?.takeIf { it.isNotBlank() } ?: "Desktop"
