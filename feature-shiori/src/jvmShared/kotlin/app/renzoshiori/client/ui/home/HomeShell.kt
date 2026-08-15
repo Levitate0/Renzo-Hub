@@ -99,6 +99,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.resources.Res
@@ -1274,6 +1275,21 @@ private fun DesktopSearchField(
                             .clip(CircleShape)
                             .clickable { onValueChange("") },
                     )
+                } else {
+                    // The web's ⌘K hint chip (xl:inline-flex kbd).
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(RenzoColors.Muted.copy(alpha = 0.6f))
+                            .border(1.dp, RenzoColors.Border.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp),
+                    ) {
+                        Text(
+                            "⌘K",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = RenzoColors.MutedForeground,
+                        )
+                    }
                 }
             }
         },

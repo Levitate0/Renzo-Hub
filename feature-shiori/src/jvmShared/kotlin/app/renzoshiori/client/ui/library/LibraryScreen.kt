@@ -337,13 +337,15 @@ private fun LibraryRibbon(
         out
     }
 
+    val ribbonWide = app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            // Web ribbon: `px-3 lg:px-5` — the filters share the page's edge zone.
+            .padding(horizontal = if (ribbonWide) 20.dp else 8.dp, vertical = 6.dp),
     ) {
         // Status filter — status-colored dots + live count badges.
         RibbonSelect(
@@ -528,11 +530,19 @@ private fun OnlineGrid(
         return
     }
 
+    val wide = app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = size.width),
-        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 64.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        // Web library page: `p-2 pb-16 sm:px-6 sm:py-4` with a gap-4 grid —
+        // desktop gets real edge zones and air between cards, phones keep the
+        // tight packing.
+        contentPadding = if (wide) {
+            PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 24.dp)
+        } else {
+            PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 64.dp)
+        },
+        horizontalArrangement = Arrangement.spacedBy(if (wide) 16.dp else 8.dp),
+        verticalArrangement = Arrangement.spacedBy(if (wide) 16.dp else 8.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         items(filtered, key = { it.id }) { series ->
@@ -637,11 +647,19 @@ private fun OfflineGrid(
         return
     }
 
+    val wide = app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = size.width),
-        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 64.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        // Web library page: `p-2 pb-16 sm:px-6 sm:py-4` with a gap-4 grid —
+        // desktop gets real edge zones and air between cards, phones keep the
+        // tight packing.
+        contentPadding = if (wide) {
+            PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 24.dp)
+        } else {
+            PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 64.dp)
+        },
+        horizontalArrangement = Arrangement.spacedBy(if (wide) 16.dp else 8.dp),
+        verticalArrangement = Arrangement.spacedBy(if (wide) 16.dp else 8.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         items(filtered, key = { it.seriesId }) { series ->
@@ -698,7 +716,9 @@ private fun OfflineSeriesCard(
                     fontWeight = FontWeight.SemiBold,
                 ),
                 color = Color.White,
-                maxLines = 2,
+                // The web card never clamps its title (see the old exe): the
+                // overlay grows with the name. Phones keep the 2-line clamp.
+                maxLines = if (app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp) Int.MAX_VALUE else 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
