@@ -291,20 +291,21 @@ private fun RememberRow(checked: Boolean, onToggle: () -> Unit) {
 // --- Gate pieces, matched to Shiori's AuthUi (shared with ConnectScreen) -----
 
 /**
- * The auth-gate card — gate-shell.tsx verbatim: a TOP-aligned overlay
- * (items-start, py-[8dvh]) holding a max-w-md rounded-xl bordered bg-card
- * p-6 column with gap-3.
+ * The auth-gate card — gate-shell.tsx verbatim (as of 2026-08-14): CENTRED on
+ * both axes, scroll on the outer layer so a card taller than the viewport
+ * keeps its top edge reachable; max-w-md rounded-xl bordered bg-card p-6
+ * column with gap-3.
  */
 @Composable
 internal fun GateCard(content: @Composable ColumnScope.() -> Unit) {
-    val vPad = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.08f).dp
     Column(
         Modifier
             .fillMaxSize()
             .background(RenzoColors.Background)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = vPad),
+            .padding(horizontal = 16.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
         Column(
             Modifier

@@ -1,6 +1,7 @@
 package app.renzoshiori.client.ui.auth
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -176,12 +178,14 @@ private fun LoginCard(
     AuthPageScaffold {
         AuthCard {
             AuthCardHeader(spacing = 12.dp) {
-                Image(
-                    painter = painterResource(Res.drawable.renzo_login_banner),
-                    contentDescription = "Renzo Shiori",
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier.widthIn(max = 256.dp).fillMaxWidth(),
-                )
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Image(
+                        painter = painterResource(Res.drawable.renzo_login_banner),
+                        contentDescription = "Renzo Shiori",
+                        contentScale = ContentScale.FillWidth,
+                        modifier = Modifier.widthIn(max = 256.dp).fillMaxWidth(),
+                    )
+                }
                 AuthCardDescription("Enter your credentials to log in")
             }
             AuthCardContent {
