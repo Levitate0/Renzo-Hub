@@ -50,16 +50,16 @@ object ShioriDesktop {
         HubSession.setActive(HubTarget.Shiori)
         DownloadSources.register(HubTarget.Shiori, StaticDownloadSource)
 
-        // The process-wide image loader, authenticating exactly like the REST
-        // client (RenzoApp.newImageLoader's desktop twin).
+        // The process-wide image loader (RenzoApp.newImageLoader's desktop
+        // twin). Signs via HubSession's ACTIVE target, not a hard-coded Shiori
+        // bearer — the same loader serves Renzo posters (fsa_session cookie)
+        // once the anime half is on screen.
         SingletonImageLoader.setSafe { context ->
             val authedClient = OkHttpClient.Builder()
                 .addInterceptor { chain ->
-                    val token = tokenStore.accessToken
-                    val req = chain.request().newBuilder().apply {
-                        if (token != null) addHeader("Authorization", "Bearer $token")
-                    }.build()
-                    chain.proceed(req)
+                    val b = chain.request().newBuilder()
+                    HubSession.signActive(b)
+                    chain.proceed(b.build())
                 }
                 .build()
             ImageLoader.Builder(context)

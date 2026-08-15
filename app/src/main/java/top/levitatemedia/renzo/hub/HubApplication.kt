@@ -26,7 +26,7 @@ class HubApplication : RenzoApp() {
         // source; this adds the anime half's. Both must exist before the
         // downloader runs, and it can run with no UI at all.
         super.onCreate()
-        RenzoOfflineWiring.install(this)
+        RenzoOfflineWiring.install()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

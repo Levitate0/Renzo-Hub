@@ -35,7 +35,15 @@ class RenzoHost(activity: ComponentActivity) {
         top.levitatemedia.renzo.tv.demo.DemoMode.install(activity.applicationContext)
         top.levitatemedia.renzo.tv.demo.DemoMode.readIntent(activity.intent)
         top.levitatemedia.renzo.tv.demo.DemoMode.applyWindow(activity)
-        services = AppServices(activity.applicationContext)
+        val ctx = activity.applicationContext
+        services = AppServices(
+            isTv = top.levitatemedia.renzo.tv.demo.DemoMode.forceTv ||
+                ctx.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
+                ctx.packageManager.hasSystemFeature("android.hardware.type.television"),
+            offlineStore = top.levitatemedia.renzo.hub.core.offline.OfflineStore(ctx),
+            demoOverlayDrawer = top.levitatemedia.renzo.tv.demo.DemoMode.overlayDrawer,
+            demoOverlayAccount = top.levitatemedia.renzo.tv.demo.DemoMode.overlayAccount,
+        )
         top.levitatemedia.renzo.tv.demo.DemoMode.applyNav(services)
     }
 

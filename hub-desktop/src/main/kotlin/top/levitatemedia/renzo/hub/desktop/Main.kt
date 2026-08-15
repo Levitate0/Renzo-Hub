@@ -3,7 +3,11 @@ package top.levitatemedia.renzo.hub.desktop
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.res.loadImageBitmap
@@ -14,17 +18,23 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import app.renzoshiori.client.ShioriDesktop
 import app.renzoshiori.client.ShioriRoot
+import top.levitatemedia.renzo.hub.core.HubSession
+import top.levitatemedia.renzo.hub.core.HubTarget
+import top.levitatemedia.renzo.tv.RenzoDesktop
+import top.levitatemedia.renzo.tv.RenzoDesktopRoot
 
 /**
- * Renzo Hub for desktop. The Shiori (manga) half ships first
- * (docs/HANDOFF_renzo-hub_desktop-exe.md §6); the Renzo half joins behind the
- * VideoPlayer seam, at which point this grows the same picker the APK has.
- *
- * ShioriRoot is the SAME composable the Android app ships — Connect, Login,
- * shell, library, reader, settings, downloads. Nothing here but the window.
+ * Renzo Hub for desktop — the APK's HubActivity, as a window. Both halves are
+ * the SAME composables the Android app ships; this module holds only the
+ * window, the picker and the wiring (docs/HANDOFF_renzo-hub_desktop-exe.md §2:
+ * do not fork screens).
  */
 fun main() {
+    // Both halves' signers and download sources exist before any UI, so a
+    // restart with a pending download queue fetches authenticated — the
+    // mirror of RenzoApp.onCreate + HubApplication on Android.
     ShioriDesktop.install(debugHttp = System.getenv("RENZO_HTTP_DEBUG") == "1")
+    RenzoDesktop.install()
     application {
         // Without an explicit icon Windows shows javaw's default coffee cup on
         // the taskbar — the process is javaw.exe, so the window must brand itself.
@@ -45,8 +55,25 @@ fun main() {
                 autoScroll.install()
                 onDispose { autoScroll.uninstall() }
             }
+
+            // HubActivity's picker state, verbatim: null = picker, and the
+            // active target drives which credentials sign shared fetches
+            // (images, downloads). Not persisted — same as the APK.
+            var target by remember { mutableStateOf<HubTarget?>(null) }
+            LaunchedEffect(target) { target?.let { HubSession.setActive(it) } }
+
             Box(Modifier.fillMaxSize()) {
-                ShioriRoot(onSwitchApp = null)
+                when (target) {
+                    null -> DesktopPicker(onPick = { target = it })
+                    HubTarget.Renzo -> RenzoDesktopRoot(
+                        onSwitchApp = { target = HubTarget.Shiori },
+                        onBackToPicker = { target = null },
+                    )
+                    HubTarget.Shiori -> ShioriRoot(
+                        onSwitchApp = { target = HubTarget.Renzo },
+                        onBackToPicker = { target = null },
+                    )
+                }
                 autoScroll.anchor.value?.let { AutoScrollAnchorBadge(it) }
             }
         }

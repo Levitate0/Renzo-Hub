@@ -16,6 +16,7 @@ plugins {
 }
 
 compose.resources {
+    publicResClass = true
     // Keeps the generated accessor out of the default `<module>.generated` spot
     // and inside the app package the screens already import from.
     packageOfResClass = "app.renzoshiori.client.resources"

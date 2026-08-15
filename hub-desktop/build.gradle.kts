@@ -25,6 +25,7 @@ val hubDesktopOs = (findProperty("hubDesktopOs") as String?) ?: "current"
 dependencies {
     implementation(project(":core"))
     implementation(project(":feature-shiori"))
+    implementation(project(":feature-renzo"))
     implementation(
         when (hubDesktopOs) {
             "windows" -> compose.desktop.windows_x64
@@ -34,6 +35,9 @@ dependencies {
         },
     )
     implementation(compose.material3)
+    // For painterResource(DrawableResource) — the picker tiles pull each
+    // half's wordmark straight from the feature modules' compose resources.
+    implementation(compose.components.resources)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
 }

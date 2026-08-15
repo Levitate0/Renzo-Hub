@@ -15,6 +15,11 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "top.levitatemedia.renzo.tv.resources"
+}
+
 kotlin {
     androidTarget {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
@@ -34,16 +39,27 @@ kotlin {
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.coil.compose)
+                implementation(compose.components.resources)
+            }
+        }
+        // Both targets are JVM-family, so JVM-only libraries (OkHttp, Coil's
+        // OkHttp fetcher, material3) are legal in a shared intermediate —
+        // the same trick :feature-shiori uses for its whole UI.
+        val jvmShared by creating {
+            dependsOn(commonMain)
+            dependencies {
+                implementation(compose.material3)
+                implementation(libs.okhttp)
+                implementation(libs.coil.network.okhttp)
             }
         }
         val androidMain by getting {
+            dependsOn(jvmShared)
             dependencies {
                 implementation(libs.tv.material)
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.androidx.lifecycle.runtime.compose)
                 implementation(libs.androidx.core.ktx)
-                implementation(libs.coil.network.okhttp)
-                implementation(libs.okhttp)
 
                 // Renzo-only weight. Keeping the manga half out of a module that
                 // pulls four media3 artifacts is the concrete reason this is a
@@ -52,6 +68,12 @@ kotlin {
                 implementation(libs.media3.exoplayer.hls)
                 implementation(libs.media3.ui)
                 implementation(libs.media3.datasource.okhttp)
+            }
+        }
+        val desktopMain by getting {
+            dependsOn(jvmShared)
+            dependencies {
+                implementation(libs.kotlinx.coroutines.swing)
             }
         }
     }
