@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -66,9 +67,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ui.library.formatChapter
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.tv.focusRing
 import app.renzoshiori.client.ui.tv.rememberFocusState
 import app.renzoshiori.client.ui.tv.tvClickable
+import app.renzoshiori.client.ui.util.screenWidthDp
 
 /**
  * The chapters section header + toolbar from chapters-section.tsx: the
@@ -112,11 +115,13 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
         HairLine()
 
         // ── Filter + action chips ──
+        // chapters-section.tsx: `flex flex-col gap-2 sm:flex-row sm:items-center
+        // sm:justify-between` — stacked below the sm breakpoint, a single row
+        // above it. Geometry-only branch: the field and chip cluster are
+        // defined once and slotted into either shell. TV keeps the stacked form.
         val focusManager = LocalFocusManager.current
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        val smRow = !LocalIsTv.current && screenWidthDp() >= 640.dp
+        val filterField: @Composable (Modifier) -> Unit = { fieldModifier ->
             OutlinedTextField(
                 value = state.query,
                 onValueChange = { vm.setQuery(it) },
@@ -142,12 +147,14 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
                     focusedTextColor = RenzoColors.Foreground,
                     unfocusedTextColor = RenzoColors.Foreground,
                 ),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = fieldModifier,
             )
-
+        }
+        val actionChips: @Composable (Modifier, Alignment.Horizontal) -> Unit = { chipsModifier, chipsAlign ->
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, chipsAlign),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = chipsModifier,
             ) {
                 if (state.canManageDownloads && state.missingCount > 0) {
                     RenzoChip(
@@ -201,6 +208,24 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
                     active = state.missingOnly,
                     onClick = { vm.toggleMissingOnly() },
                 )
+            }
+        }
+        if (smRow) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                filterField(Modifier.widthIn(max = 320.dp)) // web `max-w-xs`
+                actionChips(Modifier.weight(1f), Alignment.End) // web `sm:justify-end`
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                filterField(Modifier.fillMaxWidth())
+                actionChips(Modifier, Alignment.Start)
             }
         }
 
@@ -499,12 +524,16 @@ fun ChapterRow(
 
             // (Re-)download split button.
             if (state.canManageDownloads && !chapter.locked) {
+                // chapter-row.tsx: the button text is `hidden sm:inline` —
+                // icon-only below sm, icon + "Download"/"Re-download" above it.
+                // TV keeps the icon-only box.
+                val smLabel = !LocalIsTv.current && screenWidthDp() >= 640.dp
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .height(32.dp)
-                            .width(36.dp)
+                            .then(if (smLabel) Modifier else Modifier.width(36.dp))
                             .clip(RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp))
                             .background(RenzoColors.Foreground.copy(alpha = 0.03f))
                             .border(
@@ -519,12 +548,26 @@ fun ChapterRow(
                             ) { vm.redownload(chapter.number) }
                             .then(if (disabledReason == null && !isPending) Modifier else Modifier.alphaHalf()),
                     ) {
-                        Icon(
-                            if (chapter.downloaded) Icons.Filled.Refresh else Icons.Filled.Download,
-                            contentDescription = disabledReason ?: label,
-                            tint = RenzoColors.Foreground,
-                            modifier = Modifier.size(14.dp),
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = if (smLabel) Modifier.padding(horizontal = 10.dp) else Modifier,
+                        ) {
+                            Icon(
+                                if (chapter.downloaded) Icons.Filled.Refresh else Icons.Filled.Download,
+                                contentDescription = disabledReason ?: label,
+                                tint = RenzoColors.Foreground,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            if (smLabel) {
+                                Text(
+                                    label,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = RenzoColors.Foreground,
+                                    modifier = Modifier.padding(start = 6.dp),
+                                )
+                            }
+                        }
                     }
                     Box {
                         Box(

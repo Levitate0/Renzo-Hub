@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,6 +56,9 @@ import androidx.compose.ui.window.DialogProperties
 import app.renzoshiori.client.data.model.WizardSearchSourceDto
 import app.renzoshiori.client.data.network.SetupWizardApi
 import app.renzoshiori.client.data.network.absoluteUrl
+import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -85,10 +90,11 @@ private fun JsonObject.toSearchHit(): SearchHit = SearchHit(
 )
 
 /**
- * Re-match dialog — setup-wizard/search-series-requester.tsx, in its ≤640px
- * full-screen form. Type a keyword (search fires at 3 characters, 300ms
- * debounced), narrow it by source, pick one or more results, then Apply Match
- * to POST them to /api/setup/augment for this import's path.
+ * Re-match dialog — setup-wizard/search-series-requester.tsx: full-screen
+ * below 640dp, the centred 560×680 card above. Type a keyword (search fires
+ * at 3 characters, 300ms debounced), narrow it by source, pick one or more
+ * results, then Apply Match to POST them to /api/setup/augment for this
+ * import's path.
  */
 @Composable
 fun SearchSeriesRequester(
@@ -150,16 +156,11 @@ fun SearchSeriesRequester(
     val hasQuery = searchValue.isNotEmpty()
     val canSubmit = selectedSeries.isNotEmpty() && !isSubmitting
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(WizardColors.Shell)
-                .statusBarsPadding(),
-        ) {
+    // Web ≥640px: sm:w-[560px] max-h-[680px] rounded-2xl, vertically centred
+    // (sm:top-[50%] -translate-y-1/2); ≤640px keeps the full-screen sheet.
+    val deskCard = !LocalIsTv.current && screenWidthDp() >= 640.dp
+
+    val sheetContent: @Composable ColumnScope.() -> Unit = {
             // ── Header ───────────────────────────────────────────────────
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
                 Text(
@@ -529,6 +530,35 @@ fun SearchSeriesRequester(
                         )
                     }
                 }
+            }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        if (deskCard) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 560.dp)
+                        .fillMaxWidth(0.94f)
+                        .heightIn(max = 680.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(1.dp, RenzoColors.Border, RoundedCornerShape(16.dp))
+                        .background(WizardColors.Shell),
+                ) {
+                    sheetContent()
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(WizardColors.Shell)
+                    .statusBarsPadding(),
+            ) {
+                sheetContent()
             }
         }
     }

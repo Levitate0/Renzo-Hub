@@ -1,11 +1,13 @@
 package app.renzoshiori.client.ui.series
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -32,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.offline.OfflineRepository
 import app.renzoshiori.client.ui.library.formatChapter
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,7 +78,18 @@ fun OfflineSeriesScreen(
             )
         },
     ) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+        // downloads/page.tsx: `mx-auto max-w-3xl` — centre the chapter list in
+        // a 768dp column on desktop widths. TV keeps the full-bleed list.
+        val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
+        Box(
+            contentAlignment = Alignment.TopCenter,
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
+        LazyColumn(
+            modifier = Modifier
+                .then(if (wide) Modifier.widthIn(max = 768.dp) else Modifier) // max-w-3xl
+                .fillMaxSize(),
+        ) {
             items(chapters, key = { it.chapterKey }) { ch ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -107,6 +122,7 @@ fun OfflineSeriesScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f))
             }
         }
+        } // Box (centred max-w-3xl column)
     }
 }
 

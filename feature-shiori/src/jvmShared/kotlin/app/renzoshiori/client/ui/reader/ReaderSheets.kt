@@ -6,9 +6,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -67,11 +69,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import app.renzoshiori.client.data.model.ReaderChapterDto
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.rememberFocusState
 import app.renzoshiori.client.ui.tv.tvContentColor
 import app.renzoshiori.client.ui.tv.tvFocusable
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlin.math.roundToInt
 
 /**
@@ -264,6 +269,38 @@ private fun SheetHeader(title: String, onClose: () -> Unit) {
     }
 }
 
+/**
+ * Desktop container for the reader panels: the web's right-hand rail
+ * (reader page.tsx `absolute right-0 top-12 bottom-0 w-80 border-l
+ * border-white/10 bg-zinc-900/95`). A focusable [Popup] so outside-click
+ * and Esc dismiss, mirroring the web overlay's dismissal.
+ *
+ * Same body as the bottom sheet — only the container differs.
+ */
+@Composable
+private fun ReaderSideRail(
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Popup(
+        alignment = Alignment.TopEnd,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(top = 48.dp)               // top-12: clears the reader's top chrome
+                .fillMaxHeight()                    // bottom-0
+                .width(320.dp)                      // w-80
+                .background(ReaderPalette.Hairline) // border-l: 1dp strip left showing
+                .padding(start = 1.dp)
+                .background(ReaderPalette.Sheet)
+                .padding(top = 12.dp),              // stands in for the sheet's drag-handle gap
+            content = content,
+        )
+    }
+}
+
 // ── Reader Settings ───────────────────────────────────────────────────────
 
 /**
@@ -309,13 +346,10 @@ fun ReaderSettingsSheet(
         return
     }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = ReaderPalette.Sheet,
-        contentColor = ReaderPalette.Text,
-    ) {
+    // One body, two containers: a bottom sheet on touch widths, the web's
+    // right-hand rail (page.tsx `absolute right-0 top-12 w-80`) on desktop.
+    val desktopRail = !isTv && screenWidthDp() >= 1024.dp
+    val sheetContent: @Composable ColumnScope.() -> Unit = {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -336,6 +370,19 @@ fun ReaderSettingsSheet(
                 )
             }
         }
+    }
+
+    if (desktopRail) {
+        ReaderSideRail(onDismiss = onDismiss, content = sheetContent)
+    } else {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            containerColor = ReaderPalette.Sheet,
+            contentColor = ReaderPalette.Text,
+            content = sheetContent,
+        )
     }
 }
 
@@ -718,12 +765,10 @@ fun ReaderChapterListSheet(
         return
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = ReaderPalette.Sheet,
-        contentColor = ReaderPalette.Text,
-    ) {
+    // One body, two containers: bottom sheet on touch widths, the web's
+    // right-hand rail (page.tsx `absolute right-0 top-12 w-80`) on desktop.
+    val desktopRail = !isTv && screenWidthDp() >= 1024.dp
+    val sheetContent: @Composable ColumnScope.() -> Unit = {
         Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
             SheetHeader("Chapters", onDismiss)
             HorizontalDivider(color = ReaderPalette.Hairline)
@@ -774,7 +819,11 @@ fun ReaderChapterListSheet(
                 LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(vertical = 4.dp),
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp),
+                    // Sheet caps the list; the rail's list fills the remaining
+                    // height (web: `flex-1 overflow-y-auto`).
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (desktopRail) Modifier.weight(1f) else Modifier.heightIn(max = 440.dp)),
                 ) {
                     items(rows, key = { it.number }) { chapter ->
                         ChapterRow(
@@ -786,6 +835,18 @@ fun ReaderChapterListSheet(
                 }
             }
         }
+    }
+
+    if (desktopRail) {
+        ReaderSideRail(onDismiss = onDismiss, content = sheetContent)
+    } else {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            containerColor = ReaderPalette.Sheet,
+            contentColor = ReaderPalette.Text,
+            content = sheetContent,
+        )
     }
 }
 

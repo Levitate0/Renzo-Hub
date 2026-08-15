@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -51,6 +53,9 @@ import androidx.compose.ui.window.DialogProperties
 import app.renzoshiori.client.data.model.ProviderPreferenceEntryType
 import app.renzoshiori.client.data.network.SourcesApi
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenHeightDp
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -103,10 +108,13 @@ internal fun ProviderPreferencesDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        // DialogContent max-w-7xl max-h-[90vh] (provider-preferences-requester.tsx)
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .fillMaxWidth()
+                .widthIn(max = 1280.dp)
+                .fillMaxWidth(0.94f)
+                .heightIn(max = screenHeightDp() * 0.9f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(RenzoColors.Popover)
                 .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
@@ -169,20 +177,45 @@ internal fun ProviderPreferencesDialog(
                     )
                 }
             } else if (root != null) {
+                // grid grid-cols-1 md:grid-cols-2 gap-6 — two fields per row
+                // from md up; a single column below (and on TV).
+                val twoCol = !LocalIsTv.current && screenWidthDp() >= 768.dp
                 Column(
                     verticalArrangement = Arrangement.spacedBy(24.dp),
                     modifier = Modifier
                         .padding(top = 16.dp)
-                        .heightIn(max = 420.dp)
+                        .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    items.forEachIndexed { index, item ->
-                        PreferenceField(
-                            item = item,
-                            onValueChange = { newValue ->
-                                items[index] = item.copy(currentValue = newValue)
-                            },
-                        )
+                    if (twoCol) {
+                        (items.indices step 2).forEach { rowStart ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                for (index in rowStart until minOf(rowStart + 2, items.size)) {
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        PreferenceField(
+                                            item = items[index],
+                                            onValueChange = { newValue ->
+                                                items[index] = items[index].copy(currentValue = newValue)
+                                            },
+                                        )
+                                    }
+                                }
+                                // A lone trailing field keeps its half-width cell.
+                                if (rowStart + 1 >= items.size) Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    } else {
+                        items.forEachIndexed { index, item ->
+                            PreferenceField(
+                                item = item,
+                                onValueChange = { newValue ->
+                                    items[index] = item.copy(currentValue = newValue)
+                                },
+                            )
+                        }
                     }
                 }
             }

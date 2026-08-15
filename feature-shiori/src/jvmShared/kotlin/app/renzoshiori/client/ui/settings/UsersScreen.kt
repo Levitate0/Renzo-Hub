@@ -53,6 +53,8 @@ import app.renzoshiori.client.data.model.UserDto
 import app.renzoshiori.client.data.model.UserLevel
 import app.renzoshiori.client.data.network.AccountApi
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.launch
 
 /**
@@ -60,8 +62,9 @@ import kotlinx.coroutines.launch
  * RenzoFrontend/src/app/users/page.tsx + components/comp/users/user-manager.tsx.
  *
  * The web renders one wide table (Avatar / Username / Level / OPDS Path /
- * Active / Password / Last Login / Actions). On a phone each row becomes a
- * card carrying the exact same eight facts — the only change the brief allows.
+ * Active / Password / Last Login / Actions). At wide (>=1024dp, never TV) that
+ * table renders as column-aligned rows; on a phone each row becomes a card
+ * carrying the exact same eight facts.
  *
  * The web's "first user" bootstrap form is intentionally absent: it only ever
  * appears when the database has zero users, which cannot happen here because
@@ -93,6 +96,24 @@ fun UsersScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { refresh() }
 
     SettingsScaffold(title = "Users", onBack = onBack, snackbar = snackbar) { padding ->
+        // users/page.tsx header (`sm:flex-row sm:items-center sm:justify-between`)
+        // and user-manager.tsx's wide table; below wide the phone card list stays.
+        val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
+        val description: @Composable () -> Unit = {
+            Text(
+                "Manage user accounts, invite new users, and configure access permissions.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = RenzoColors.MutedForeground,
+            )
+        }
+        val addUserButton: @Composable (Modifier) -> Unit = { buttonModifier ->
+            RenzoButton(
+                text = "Add User",
+                icon = Icons.Filled.Add,
+                modifier = buttonModifier,
+                onClick = { createOpen = true },
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -100,32 +121,34 @@ fun UsersScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {
-            Text(
-                "Manage user accounts, invite new users, and configure access permissions.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = RenzoColors.MutedForeground,
-            )
-            Spacer(Modifier.height(12.dp))
-            RenzoButton(
-                text = "Add User",
-                icon = Icons.Filled.Add,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { createOpen = true },
-            )
+            if (wide) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Box(modifier = Modifier.weight(1f)) { description() }
+                    addUserButton(Modifier)
+                }
+            } else {
+                description()
+                Spacer(Modifier.height(12.dp))
+                addUserButton(Modifier.fillMaxWidth())
+            }
             Spacer(Modifier.height(16.dp))
 
             when {
                 loadError != null -> ErrorBox(loadError!!)
                 users == null -> LoadingBlock("Loading users...")
                 users!!.isEmpty() -> EmptyNote("No users yet.")
-                else -> users!!.forEach { user ->
-                    UserRow(
-                        user = user,
-                        currentLevel = currentUser?.level ?: UserLevel.USER,
-                        onEdit = { editTarget = user },
-                        onInvite = { inviteTarget = user },
-                        onDelete = { deleteTarget = user },
-                    )
+                else -> {
+                    if (wide) UsersTableHeader()
+                    users!!.forEach { user ->
+                        UserRow(
+                            user = user,
+                            currentLevel = currentUser?.level ?: UserLevel.USER,
+                            wide = wide,
+                            onEdit = { editTarget = user },
+                            onInvite = { inviteTarget = user },
+                            onDelete = { deleteTarget = user },
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -186,11 +209,46 @@ fun UsersScreen(onBack: () -> Unit) {
     }
 }
 
-/** One table row from user-manager.tsx, folded into a card. */
+// user-manager.tsx table geometry: Avatar w-12, Actions w-16, the rest sized
+// so the wide header and rows share one set of columns.
+private val UserColAvatar = 48.dp
+private val UserColLevel = 96.dp
+private val UserColActive = 84.dp
+private val UserColPassword = 132.dp
+private val UserColLastLogin = 104.dp
+private val UserColActions = 56.dp
+
+/** user-manager.tsx TableHeader row, only rendered at wide. */
+@Composable
+private fun UsersTableHeader() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        val style = MaterialTheme.typography.labelSmall
+        val color = RenzoColors.MutedForeground
+        Text("Avatar", style = style, color = color, modifier = Modifier.width(UserColAvatar))
+        Text("Username", style = style, color = color, modifier = Modifier.weight(1f))
+        Text("Level", style = style, color = color, modifier = Modifier.width(UserColLevel))
+        Text("OPDS Path", style = style, color = color, modifier = Modifier.weight(1.4f))
+        Text("Active", style = style, color = color, modifier = Modifier.width(UserColActive))
+        Text("Password", style = style, color = color, modifier = Modifier.width(UserColPassword))
+        Text("Last Login", style = style, color = color, modifier = Modifier.width(UserColLastLogin))
+        Text("Actions", style = style, color = color, modifier = Modifier.width(UserColActions))
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(RenzoColors.Border))
+}
+
+/**
+ * One table row from user-manager.tsx: a column-aligned table row at wide,
+ * the same eight facts folded into a card below it.
+ */
 @Composable
 private fun UserRow(
     user: UserDto,
     currentLevel: Int,
+    wide: Boolean,
     onEdit: () -> Unit,
     onInvite: () -> Unit,
     onDelete: () -> Unit,
@@ -212,67 +270,26 @@ private fun UserRow(
     val canEditOrInvite = user.level != UserLevel.OWNER || currentLevel == UserLevel.OWNER
     val canDelete = user.level != UserLevel.OWNER &&
         (user.level != UserLevel.ADMIN || currentLevel == UserLevel.OWNER)
+    val lastLoginText = user.lastLoginAt?.let { formatShortDate(it) } ?: "Never"
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 10.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
-            .background(RenzoColors.Card)
-            .padding(14.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Avatar(decodeAvatar(user.avatarBase64), user.username.take(2).uppercase(), size = 36)
-            Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
-                Text(user.username, style = MaterialTheme.typography.titleSmall, color = RenzoColors.Foreground)
-                Spacer(Modifier.height(4.dp))
-                RenzoBadge(levelLabel, levelColor, icon = Icons.Filled.MilitaryTech)
-            }
-            if (canEditOrInvite || canDelete) {
-                Box {
-                    IconGhostButton(
-                        Icons.Filled.MoreHoriz, "Actions", RenzoColors.MutedForeground,
-                    ) { menuOpen = true }
-                    DropdownMenu(
-                        expanded = menuOpen,
-                        onDismissRequest = { menuOpen = false },
-                        containerColor = RenzoColors.Popover,
-                    ) {
-                        if (canEditOrInvite) {
-                            DropdownMenuItem(
-                                text = { Text("Edit...", color = RenzoColors.Foreground) },
-                                onClick = { menuOpen = false; onEdit() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Invite...", color = RenzoColors.Foreground) },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Filled.Mail, contentDescription = null,
-                                        tint = RenzoColors.Foreground, modifier = Modifier.size(16.dp),
-                                    )
-                                },
-                                onClick = { menuOpen = false; onInvite() },
-                            )
-                        }
-                        if (canDelete) {
-                            DropdownMenuItem(
-                                text = { Text("Delete...", color = RenzoColors.Red) },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Filled.Delete, contentDescription = null,
-                                        tint = RenzoColors.Red, modifier = Modifier.size(16.dp),
-                                    )
-                                },
-                                onClick = { menuOpen = false; onDelete() },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(10.dp))
+    // ── Cell content, written once and placed by either container ───────
+    val avatarCell: @Composable (Int) -> Unit = { avatarSize ->
+        Avatar(decodeAvatar(user.avatarBase64), user.username.take(2).uppercase(), size = avatarSize)
+    }
+    val usernameText: @Composable (Modifier) -> Unit = { textModifier ->
+        Text(
+            user.username,
+            style = MaterialTheme.typography.titleSmall,
+            color = RenzoColors.Foreground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = textModifier,
+        )
+    }
+    val levelBadge: @Composable () -> Unit = {
+        RenzoBadge(levelLabel, levelColor, icon = Icons.Filled.MilitaryTech)
+    }
+    val opdsText: @Composable () -> Unit = {
         Text(
             user.opdsPath,
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
@@ -280,7 +297,8 @@ private fun UserRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(8.dp))
+    }
+    val activeCell: @Composable () -> Unit = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
@@ -294,14 +312,114 @@ private fun UserRow(
                 color = RenzoColors.MutedForeground,
                 modifier = Modifier.padding(start = 6.dp, end = 12.dp),
             )
-            if (user.hasPassword) {
-                RenzoBadge("Password set", RenzoColors.Green)
-            } else {
-                RenzoBadge("Password not set", RenzoColors.Amber)
+        }
+    }
+    val passwordBadge: @Composable () -> Unit = {
+        if (user.hasPassword) {
+            RenzoBadge("Password set", RenzoColors.Green)
+        } else {
+            RenzoBadge("Password not set", RenzoColors.Amber)
+        }
+    }
+    val actionsMenu: @Composable () -> Unit = {
+        Box {
+            IconGhostButton(
+                Icons.Filled.MoreHoriz, "Actions", RenzoColors.MutedForeground,
+            ) { menuOpen = true }
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                containerColor = RenzoColors.Popover,
+            ) {
+                if (canEditOrInvite) {
+                    DropdownMenuItem(
+                        text = { Text("Edit...", color = RenzoColors.Foreground) },
+                        onClick = { menuOpen = false; onEdit() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Invite...", color = RenzoColors.Foreground) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Mail, contentDescription = null,
+                                tint = RenzoColors.Foreground, modifier = Modifier.size(16.dp),
+                            )
+                        },
+                        onClick = { menuOpen = false; onInvite() },
+                    )
+                }
+                if (canDelete) {
+                    DropdownMenuItem(
+                        text = { Text("Delete...", color = RenzoColors.Red) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Delete, contentDescription = null,
+                                tint = RenzoColors.Red, modifier = Modifier.size(16.dp),
+                            )
+                        },
+                        onClick = { menuOpen = false; onDelete() },
+                    )
+                }
             }
         }
+    }
+
+    if (wide) {
+        // The web's TableRow: one fixed/weighted cell per column, ruled apart.
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            ) {
+                Box(modifier = Modifier.width(UserColAvatar)) { avatarCell(32) }
+                usernameText(Modifier.weight(1f))
+                Box(modifier = Modifier.width(UserColLevel)) { levelBadge() }
+                Box(modifier = Modifier.weight(1.4f)) { opdsText() }
+                Box(modifier = Modifier.width(UserColActive)) { activeCell() }
+                Box(modifier = Modifier.width(UserColPassword)) { passwordBadge() }
+                Text(
+                    lastLoginText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RenzoColors.MutedForeground,
+                    modifier = Modifier.width(UserColLastLogin),
+                )
+                Box(modifier = Modifier.width(UserColActions)) {
+                    if (canEditOrInvite || canDelete) actionsMenu()
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(RenzoColors.Border.copy(alpha = 0.6f)))
+        }
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
+            .background(RenzoColors.Card)
+            .padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            avatarCell(36)
+            Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+                usernameText(Modifier)
+                Spacer(Modifier.height(4.dp))
+                levelBadge()
+            }
+            if (canEditOrInvite || canDelete) actionsMenu()
+        }
+
+        Spacer(Modifier.height(10.dp))
+        opdsText()
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            activeCell()
+            passwordBadge()
+        }
         Text(
-            "Last login: ${user.lastLoginAt?.let { formatShortDate(it) } ?: "Never"}",
+            "Last login: $lastLoginText",
             style = MaterialTheme.typography.bodySmall,
             color = RenzoColors.MutedForeground,
             modifier = Modifier.padding(top = 8.dp),

@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,9 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
@@ -41,9 +44,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.network.SetupWizardApi
+import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenHeightDp
+import app.renzoshiori.client.ui.util.screenWidthDp
 
 /** One step of the wizard — RenzoFrontend comp/import-wizard/index.tsx WIZARD_STEPS. */
 private data class WizardStepDef(
@@ -90,10 +98,11 @@ private val WIZARD_STEPS = listOf(
  * comp/import-wizard (WizardShell + the four setup-wizard steps it reuses:
  * import-local, confirm-imports, schedule-updates, finish).
  *
- * The phone layout is the web's own ≤640px layout: a full-screen shell, the
+ * Below 640dp this is the web's own ≤640px layout: a full-screen shell, the
  * compact "01 · IMPORT ›" stepper pill with its hairline instead of the desktop
- * four-segment bar, hero without the description line, and a two-row footer
- * (centred step meta above, Back | Continue side by side below).
+ * four-segment bar, hero without the description line, and a two-row footer.
+ * At ≥640dp (non-TV) the same content stack renders inside the web's centred
+ * modal card with the segment stepper, hero description and one-row footer.
  *
  * @param titleOnly scan the configured ImportFolder (e.g. a Suwayomi migration)
  *   instead of StorageFolder, registering bare titles for archive-less folders.
@@ -117,25 +126,38 @@ fun ImportWizardScreen(titleOnly: Boolean, onClose: () -> Unit) {
 
     HubBackHandler { onClose() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(WizardColors.Shell)
-            .statusBarsPadding(),
-    ) {
-        // ── Header: compact stepper pill + hairline + close ──────────────
+    // Web ≥640px: centred glass modal — wizard-shell.tsx sm:w-[min(720px,calc(100vw-48px))],
+    // top-[6vh], .iw-shell 88vh capped 940px. ≤640px keeps the web's own full-screen shell.
+    val deskCard = !LocalIsTv.current && screenWidthDp() >= 640.dp
+
+    val shellContent: @Composable ColumnScope.() -> Unit = {
+        // ── Header: stepper + close (.iw-header: 22px/40px desktop, 10px/16px phone) ─
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 12.dp, top = 10.dp),
+                .then(
+                    if (deskCard) {
+                        Modifier.padding(start = 40.dp, end = 18.dp, top = 22.dp)
+                    } else {
+                        Modifier.padding(start = 16.dp, end = 12.dp, top = 10.dp)
+                    },
+                ),
         ) {
-            MobileStepper(
-                stepNumber = currentStep + 1,
-                label = step.label,
-                percent = ((currentStep + 1).toFloat() / total),
-                modifier = Modifier.weight(1f),
-            )
+            if (deskCard) {
+                DesktopStepper(
+                    currentStep = currentStep,
+                    steps = WIZARD_STEPS,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                MobileStepper(
+                    stepNumber = currentStep + 1,
+                    label = step.label,
+                    percent = ((currentStep + 1).toFloat() / total),
+                    modifier = Modifier.weight(1f),
+                )
+            }
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -154,12 +176,18 @@ fun ImportWizardScreen(titleOnly: Boolean, onClose: () -> Unit) {
             }
         }
 
-        // ── Hero band: eyebrow + title (the description is hidden ≤640px) ─
+        // ── Hero band: eyebrow + title (.iw-hero: 28px/40px desktop, 20px/16px phone) ─
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp),
+                .then(
+                    if (deskCard) {
+                        Modifier.padding(start = 40.dp, end = 40.dp, top = 28.dp, bottom = 18.dp)
+                    } else {
+                        Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp)
+                    },
+                ),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -190,16 +218,28 @@ fun ImportWizardScreen(titleOnly: Boolean, onClose: () -> Unit) {
             }
             Text(
                 step.title,
-                style = MaterialTheme.typography.headlineSmall,
+                // .iw-title: 38px desktop, 26px ≤640px.
+                style = if (deskCard) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
                 color = WizardColors.Fg,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 14.dp),
             )
+            if (deskCard) {
+                // .iw-desc (max-width 460px) — hidden only under 640px.
+                Text(
+                    step.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = WizardColors.FgMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 460.dp).padding(top = 8.dp),
+                )
+            }
         }
 
         // ── Step content ─────────────────────────────────────────────────
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            // .iw-content: 40px gutters desktop, 16px ≤640px.
+            Column(modifier = Modifier.fillMaxSize().padding(horizontal = if (deskCard) 40.dp else 16.dp)) {
                 error?.let { message ->
                     Text(
                         message,
@@ -257,7 +297,13 @@ fun ImportWizardScreen(titleOnly: Boolean, onClose: () -> Unit) {
                         listOf(Color(0x66101014), Color(0x99090909)),
                     ),
                 )
-                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 20.dp)
+                .then(
+                    if (deskCard) {
+                        Modifier.padding(start = 40.dp, end = 40.dp, top = 12.dp, bottom = 20.dp)
+                    } else {
+                        Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 20.dp)
+                    },
+                )
                 .navigationBarsPadding(),
         ) {
             Box(
@@ -274,31 +320,93 @@ fun ImportWizardScreen(titleOnly: Boolean, onClose: () -> Unit) {
                         ),
                     ),
             )
-            Text(
-                "STEP ${currentStep + 1} OF $total",
-                style = wizardMono(10.5f, FontWeight.SemiBold, 0.22f, WizardColors.FgDim),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-            ) {
-                WizardBackButton(
-                    label = if (canPrevious) "← Back" else "Cancel",
-                    enabled = !isLoading,
-                    onClick = { if (canPrevious) currentStep -= 1 else onClose() },
-                    modifier = Modifier.weight(1f),
+            if (deskCard) {
+                // One-row footer — .iw-footer grid 1fr auto 1fr above 640px.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                ) {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        WizardBackButton(
+                            label = if (canPrevious) "← Back" else "Cancel",
+                            enabled = !isLoading,
+                            onClick = { if (canPrevious) currentStep -= 1 else onClose() },
+                        )
+                    }
+                    Text(
+                        "STEP ${currentStep + 1} OF $total",
+                        style = wizardMono(10.5f, FontWeight.SemiBold, 0.22f, WizardColors.FgDim),
+                    )
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                        WizardPrimaryButton(
+                            label = if (isLastStep) "Finish" else "Continue →",
+                            enabled = canProgress && !isLoading,
+                            onClick = {
+                                if (isLastStep) onClose() else if (currentStep < total - 1) currentStep += 1
+                            },
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    "STEP ${currentStep + 1} OF $total",
+                    style = wizardMono(10.5f, FontWeight.SemiBold, 0.22f, WizardColors.FgDim),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 )
-                WizardPrimaryButton(
-                    label = if (isLastStep) "Finish" else "Continue →",
-                    enabled = canProgress && !isLoading,
-                    onClick = {
-                        if (isLastStep) onClose() else if (currentStep < total - 1) currentStep += 1
-                    },
-                    modifier = Modifier.weight(1f),
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                ) {
+                    WizardBackButton(
+                        label = if (canPrevious) "← Back" else "Cancel",
+                        enabled = !isLoading,
+                        onClick = { if (canPrevious) currentStep -= 1 else onClose() },
+                        modifier = Modifier.weight(1f),
+                    )
+                    WizardPrimaryButton(
+                        label = if (isLastStep) "Finish" else "Continue →",
+                        enabled = canProgress && !isLoading,
+                        onClick = {
+                            if (isLastStep) onClose() else if (currentStep < total - 1) currentStep += 1
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
+        }
+    }
+
+    if (deskCard) {
+        // Route-hosted (ShioriEntry), not a Dialog: paint the app background and
+        // centre the card over it, per the web's overlaid modal.
+        Box(
+            contentAlignment = Alignment.TopCenter,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(RenzoColors.Background)
+                .padding(top = screenHeightDp() * 0.06f),
+        ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 720.dp)
+                    .fillMaxWidth(0.94f)
+                    .height(minOf(screenHeightDp() * 0.88f, 940.dp))
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(14.dp))
+                    .background(WizardColors.Shell),
+            ) {
+                shellContent()
+            }
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(WizardColors.Shell)
+                .statusBarsPadding(),
+        ) {
+            shellContent()
         }
     }
 }
@@ -350,6 +458,88 @@ private fun MobileStepper(
         }
         Spacer(Modifier.width(10.dp))
         WizardProgressBar(progress = percent, modifier = Modifier.weight(1f))
+    }
+}
+
+/** .iw-stepper — the ≥640px segment bar (progress-pill.tsx, repeat(4, 1fr), gap 10px). */
+@Composable
+private fun DesktopStepper(
+    currentStep: Int,
+    steps: List<WizardStepDef>,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier.padding(top = 8.dp),
+    ) {
+        steps.forEachIndexed { index, stepDef ->
+            val complete = index < currentStep
+            val active = index == currentStep
+            Column(modifier = Modifier.weight(1f)) {
+                // .iw-segment-bar — 3px hairline: active/complete rose, pending white 6%.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(
+                            when {
+                                active -> Brush.horizontalGradient(
+                                    listOf(WizardColors.Primary, WizardColors.Primary.copy(alpha = 0.4f)),
+                                )
+                                complete -> Brush.horizontalGradient(
+                                    listOf(
+                                        WizardColors.Primary.copy(alpha = 0.7f),
+                                        WizardColors.Primary.copy(alpha = 0.45f),
+                                    ),
+                                )
+                                else -> Brush.horizontalGradient(
+                                    listOf(Color(0x0FFFFFFF), Color(0x0FFFFFFF)),
+                                )
+                            },
+                        ),
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 10.dp),
+                ) {
+                    if (complete) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = WizardColors.Primary,
+                            modifier = Modifier.size(10.dp),
+                        )
+                    } else {
+                        Text(
+                            (index + 1).toString().padStart(2, '0'),
+                            style = wizardMono(
+                                9.5f,
+                                FontWeight.SemiBold,
+                                0.2f,
+                                if (active) WizardColors.Primary.copy(alpha = 0.8f) else WizardColors.FgDim,
+                            ),
+                        )
+                    }
+                    Text(
+                        stepDef.label.uppercase(),
+                        style = wizardMono(
+                            9.5f,
+                            FontWeight.SemiBold,
+                            0.2f,
+                            when {
+                                active -> WizardColors.Fg
+                                complete -> WizardColors.FgMuted
+                                else -> WizardColors.FgDim
+                            },
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

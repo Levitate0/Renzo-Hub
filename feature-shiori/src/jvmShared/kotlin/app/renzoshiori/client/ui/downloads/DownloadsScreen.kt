@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,6 +54,7 @@ import app.renzoshiori.client.data.offline.OfflineRepository
 import app.renzoshiori.client.ui.library.formatBytes
 import app.renzoshiori.client.ui.library.formatChapter
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -132,13 +134,19 @@ fun DownloadsScreen() {
     val list = chapters
     val activeList = activeSeries.entries.filter { it.value.total > 0 }
 
+    // Web page container: `mx-auto max-w-3xl px-4 py-8` — the whole page sits
+    // in a centred 768dp column on desktop widths. TV keeps the full-bleed list.
+    val wide = !isTv && screenWidthDp() >= 1024.dp
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     LazyColumn(
-        contentPadding = if (app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp) {
+        contentPadding = if (screenWidthDp() >= 1024.dp) {
             PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 64.dp)
         } else {
             PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 64.dp)
         },
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .then(if (wide) Modifier.widthIn(max = 768.dp) else Modifier) // max-w-3xl
+            .fillMaxSize(),
     ) {
         // ── Header ───────────────────────────────────────────────────────
         item(key = "header") {
@@ -448,4 +456,5 @@ fun DownloadsScreen() {
             }
         }
     }
+    } // Box (centred max-w-3xl column)
 }

@@ -45,6 +45,8 @@ import app.renzoshiori.client.data.model.UpdateUserDto
 import app.renzoshiori.client.data.model.UserDto
 import app.renzoshiori.client.data.network.AccountApi
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -159,14 +161,18 @@ fun AppearanceScreen(onBack: () -> Unit) {
                 title = "Theme",
                 description = "Pick a look. Applies instantly and syncs to your account.",
             ) {
-                THEME_PRESETS.chunked(2).forEach { row ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
-                        row.forEachIndexed { index, themePreset ->
+                // appearance/page.tsx: `grid grid-cols-2 gap-3 sm:grid-cols-4`.
+                val presetColumns = if (!LocalIsTv.current && screenWidthDp() >= 640.dp) 4 else 2
+                THEME_PRESETS.chunked(presetColumns).forEach { row ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                    ) {
+                        row.forEach { themePreset ->
                             val active = themePreset.id == preset
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .padding(end = if (index == 0 && row.size > 1) 10.dp else 0.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .border(
                                         if (active) 2.dp else 1.dp,
@@ -225,7 +231,8 @@ fun AppearanceScreen(onBack: () -> Unit) {
                                 }
                             }
                         }
-                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                        // Keep partial rows column-aligned with the full ones.
+                        repeat(presetColumns - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }

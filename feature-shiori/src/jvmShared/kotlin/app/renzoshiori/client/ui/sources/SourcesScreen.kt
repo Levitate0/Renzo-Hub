@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -69,9 +70,11 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ShioriRuntime
+import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.util.screenWidthDp
 import app.renzoshiori.client.data.model.ProviderDto
 import app.renzoshiori.client.data.network.SourcesApi
@@ -223,6 +226,10 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
     var expandedAvailable by remember { mutableStateOf(false) }
 
     var langSheetOpen by remember { mutableStateOf(false) }
+    // md breakpoint — the web's desktop toolbar (sources-toolbar.tsx
+    // `hidden md:flex`) opens Languages as a chip-anchored dropdown; the
+    // bottom sheet serves below md and on TV.
+    val langAsDropdown = !LocalIsTv.current && screenWidthDp() >= 768.dp
 
     suspend fun reload() {
         val result = runCatching { api?.providers() ?: emptyList() }
@@ -287,6 +294,20 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
     val availableLanguageOptions = remember(extensions.toList()) {
         extensions.flatMap { extensionLanguages(it) }.filter { it.isNotEmpty() }
             .distinct().sorted()
+    }
+
+    // Shared by the mobile sheet and the desktop dropdown (toggleLanguage /
+    // toggleAllLanguages in sources-toolbar.tsx).
+    fun toggleLanguage(lang: String) {
+        if (lang in selectedLanguages) selectedLanguages.remove(lang)
+        else selectedLanguages.add(lang)
+    }
+
+    fun toggleAllLanguages() {
+        val allSelected = availableLanguageOptions.isNotEmpty() &&
+            selectedLanguages.size == availableLanguageOptions.size
+        selectedLanguages.clear()
+        if (!allSelected) selectedLanguages.addAll(availableLanguageOptions)
     }
 
     val nameComparator: Comparator<ProviderDto> =
@@ -423,10 +444,16 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
                 hideNsfw = hideNsfw,
                 onToggleNsfw = { hideNsfw = !hideNsfw },
                 selectedLanguages = selectedLanguages,
+                availableLanguageOptions = availableLanguageOptions,
                 sort = sort,
                 onSort = { sort = it },
                 nsfwVisibility = nsfwVisibility,
+                languagesAsDropdown = langAsDropdown,
+                languagesOpen = langSheetOpen,
                 onOpenLanguages = { langSheetOpen = true },
+                onDismissLanguages = { langSheetOpen = false },
+                onToggleLanguage = { toggleLanguage(it) },
+                onToggleAllLanguages = { toggleAllLanguages() },
                 onInstallFromApk = { apkPicker() },
             )
             Spacer(Modifier.height(16.dp))
@@ -514,8 +541,9 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
         }
     }
 
-    // ── Mobile language sheet ────────────────────────────────────────────────
-    if (langSheetOpen) {
+    // ── Mobile language sheet (below md / TV — the desktop dropdown lives in
+    // the toolbar, anchored to the Languages chip) ───────────────────────────
+    if (langSheetOpen && !langAsDropdown) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { langSheetOpen = false },
@@ -530,26 +558,13 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
                     color = RenzoColors.Foreground,
                     modifier = Modifier.padding(bottom = 16.dp),
                 )
-                val allSelected = availableLanguageOptions.isNotEmpty() &&
-                    selectedLanguages.size == availableLanguageOptions.size
-                if (availableLanguageOptions.size > 1) {
-                    LanguageCheckRow("Select All", allSelected, bold = true) {
-                        if (allSelected) selectedLanguages.clear()
-                        else {
-                            selectedLanguages.clear()
-                            selectedLanguages.addAll(availableLanguageOptions)
-                        }
-                    }
-                    HorizontalDivider(color = SourcesLine)
-                }
-                Column(modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-                    availableLanguageOptions.forEach { lang ->
-                        LanguageCheckRow(lang.uppercase(), lang in selectedLanguages) {
-                            if (lang in selectedLanguages) selectedLanguages.remove(lang)
-                            else selectedLanguages.add(lang)
-                        }
-                    }
-                }
+                LanguageFilterRows(
+                    options = availableLanguageOptions,
+                    selected = selectedLanguages,
+                    listMaxHeight = 320.dp,
+                    onToggle = { toggleLanguage(it) },
+                    onToggleAll = { toggleAllLanguages() },
+                )
             }
         }
     }
@@ -601,6 +616,32 @@ private fun SourcesSearchField(value: String, onValueChange: (String) -> Unit) {
                 cursorBrush = SolidColor(RenzoColors.Primary),
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+}
+
+/**
+ * The language filter's checkbox rows — "Select All" + one row per language
+ * (sources-toolbar.tsx). One body serves both the mobile bottom sheet and the
+ * desktop chip-anchored dropdown.
+ */
+@Composable
+private fun LanguageFilterRows(
+    options: List<String>,
+    selected: List<String>,
+    /** max-h-60 (240dp) in the desktop dropdown; taller in the sheet. */
+    listMaxHeight: Dp,
+    onToggle: (String) -> Unit,
+    onToggleAll: () -> Unit,
+) {
+    val allSelected = options.isNotEmpty() && selected.size == options.size
+    if (options.size > 1) {
+        LanguageCheckRow("Select All", allSelected, bold = true) { onToggleAll() }
+        HorizontalDivider(color = SourcesLine)
+    }
+    Column(modifier = Modifier.heightIn(max = listMaxHeight).verticalScroll(rememberScrollState())) {
+        options.forEach { lang ->
+            LanguageCheckRow(lang.uppercase(), lang in selected) { onToggle(lang) }
         }
     }
 }
@@ -963,10 +1004,17 @@ private fun SourcesToolbar(
     hideNsfw: Boolean,
     onToggleNsfw: () -> Unit,
     selectedLanguages: List<String>,
+    availableLanguageOptions: List<String>,
     sort: String,
     onSort: (String) -> Unit,
     nsfwVisibility: String,
+    /** md and up: the Languages chip anchors a dropdown instead of a sheet. */
+    languagesAsDropdown: Boolean,
+    languagesOpen: Boolean,
     onOpenLanguages: () -> Unit,
+    onDismissLanguages: () -> Unit,
+    onToggleLanguage: (String) -> Unit,
+    onToggleAllLanguages: () -> Unit,
     onInstallFromApk: () -> Unit,
 ) {
     val sortLabel = if (sort == SORT_NAME_ASC) "A–Z" else "Z–A"
@@ -984,12 +1032,33 @@ private fun SourcesToolbar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         ) {
-            SrcChip(
-                label = langLabel,
-                icon = Icons.Filled.Language,
-                isOn = selectedLanguages.isNotEmpty(),
-                onClick = onOpenLanguages,
-            )
+            // Language chip — Box-wrapped so the desktop dropdown
+            // (sources-toolbar.tsx DropdownMenuContent align="start" w-64)
+            // anchors to it; below md the chip opens the bottom sheet.
+            Box {
+                SrcChip(
+                    label = langLabel,
+                    icon = Icons.Filled.Language,
+                    isOn = selectedLanguages.isNotEmpty(),
+                    onClick = onOpenLanguages,
+                )
+                if (languagesAsDropdown) {
+                    DropdownMenu(
+                        expanded = languagesOpen,
+                        onDismissRequest = onDismissLanguages,
+                        containerColor = RenzoColors.Popover,
+                        modifier = Modifier.width(256.dp).padding(horizontal = 8.dp),
+                    ) {
+                        LanguageFilterRows(
+                            options = availableLanguageOptions,
+                            selected = selectedLanguages,
+                            listMaxHeight = 240.dp,
+                            onToggle = onToggleLanguage,
+                            onToggleAll = onToggleAllLanguages,
+                        )
+                    }
+                }
+            }
             if (nsfwVisibility != NSFW_ALWAYS_HIDE) {
                 SrcChip(
                     label = "NSFW",

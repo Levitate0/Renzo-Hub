@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.NsfwVisibility
@@ -57,6 +59,8 @@ import app.renzoshiori.client.data.model.ServerSettingsDto
 import app.renzoshiori.client.data.model.TestEmailRequestDto
 import app.renzoshiori.client.data.network.ServerSettingsApi
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.launch
 
 /**
@@ -69,8 +73,7 @@ import kotlinx.coroutines.launch
  * to any signed-in user; PUT is Owner-only and the server's own 403 message is
  * surfaced verbatim if a non-owner ever reaches it.
  *
- * Two deliberate departures from the web, both required by the brief:
- * side-by-side grids stack vertically, and the preferred-language list reorders
+ * One deliberate departure from the web: the preferred-language list reorders
  * with arrow buttons instead of drag-and-drop.
  */
 @Composable
@@ -115,30 +118,49 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
     )
 
     SettingsScaffold(title = "Settings", onBack = onBack, snackbar = snackbar) { padding ->
+        // settings-manager.tsx: `mx-auto max-w-4xl` page column; at lg the nav
+        // sits beside the section card (`lg:grid-cols-[220px_1fr] lg:items-start`)
+        // and Save joins the description on the header row
+        // (`flex items-center justify-between`); below lg the same stack, full
+        // width, with the drawer-trigger nav.
+        val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                "Configure your Renzo Shiori application settings",
-                style = MaterialTheme.typography.bodyMedium,
-                color = RenzoColors.MutedForeground,
-            )
-            Spacer(Modifier.height(12.dp))
+            // mx-auto max-w-4xl
+            Column(modifier = Modifier.widthIn(max = 896.dp).fillMaxWidth()) {
+            val descriptionText: @Composable () -> Unit = {
+                Text(
+                    "Configure your Renzo Shiori application settings",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = RenzoColors.MutedForeground,
+                )
+            }
 
             val current = settings
             when {
-                loadError != null -> ErrorBox(loadError!!)
-                current == null -> LoadingBlock("Loading settings...")
+                loadError != null -> {
+                    descriptionText()
+                    Spacer(Modifier.height(12.dp))
+                    ErrorBox(loadError!!)
+                }
+                current == null -> {
+                    descriptionText()
+                    Spacer(Modifier.height(12.dp))
+                    LoadingBlock("Loading settings...")
+                }
                 else -> {
+                    val saveButton: @Composable (Modifier) -> Unit = { buttonModifier ->
                     RenzoButton(
                         text = if (saving) "Saving..." else "Save Settings",
                         icon = Icons.Filled.Save,
                         busy = saving,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = buttonModifier,
                         onClick = {
                             val domain = current.externalDomain.orEmpty()
                             if (domain.isNotEmpty() && !Regex("^https?://").containsMatchIn(domain)) {
@@ -176,33 +198,61 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
                             }
                         },
                     )
-                    Spacer(Modifier.height(14.dp))
+                    }
 
-                    SettingsSectionNav(
-                        sections = sections,
-                        activeId = activeSection,
-                        onChange = { activeSection = it },
-                        drawerTitle = "Settings",
-                    )
-                    Spacer(Modifier.height(14.dp))
-
-                    val title = sections.firstOrNull { it.id == activeSection }?.title ?: ""
-                    SettingsCard(title = title, description = descriptions[activeSection]) {
-                        val update: (ServerSettingsDto) -> Unit = { settings = it }
-                        when (activeSection) {
-                            "security" -> SecuritySection(current, update, snackbar)
-                            "content-preferences" -> ContentPreferencesSection(current, update, languages)
-                            "mihon-repositories" -> MihonRepositoriesSection(current, update)
-                            "download-settings" -> DownloadSettingsSection(current, update)
-                            "schedule-tasks" -> ScheduleTasksSection(current, update)
-                            "storage" -> StorageSection(current, update)
-                            "flaresolverr" -> FlareSolverrSection(current, update)
-                            "socks-settings" -> SocksSettingsSection(current, update)
+                    if (wide) {
+                        // Header row: description left, Save right.
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Box(modifier = Modifier.weight(1f)) { descriptionText() }
+                            saveButton(Modifier)
                         }
+                    } else {
+                        descriptionText()
+                        Spacer(Modifier.height(12.dp))
+                        saveButton(Modifier.fillMaxWidth())
+                    }
+                    Spacer(Modifier.height(14.dp))
+
+                    val sectionNav: @Composable () -> Unit = {
+                        SettingsSectionNav(
+                            sections = sections,
+                            activeId = activeSection,
+                            onChange = { activeSection = it },
+                            drawerTitle = "Settings",
+                        )
+                    }
+                    val sectionCard: @Composable () -> Unit = {
+                        val title = sections.firstOrNull { it.id == activeSection }?.title ?: ""
+                        SettingsCard(title = title, description = descriptions[activeSection]) {
+                            val update: (ServerSettingsDto) -> Unit = { settings = it }
+                            when (activeSection) {
+                                "security" -> SecuritySection(current, update, snackbar)
+                                "content-preferences" -> ContentPreferencesSection(current, update, languages)
+                                "mihon-repositories" -> MihonRepositoriesSection(current, update)
+                                "download-settings" -> DownloadSettingsSection(current, update)
+                                "schedule-tasks" -> ScheduleTasksSection(current, update)
+                                "storage" -> StorageSection(current, update)
+                                "flaresolverr" -> FlareSolverrSection(current, update)
+                                "socks-settings" -> SocksSettingsSection(current, update)
+                            }
+                        }
+                    }
+                    if (wide) {
+                        // lg:grid-cols-[220px_1fr] lg:items-start, gap-6
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.width(220.dp)) { sectionNav() }
+                            Spacer(Modifier.width(24.dp))
+                            Column(modifier = Modifier.weight(1f)) { sectionCard() }
+                        }
+                    } else {
+                        sectionNav()
+                        Spacer(Modifier.height(14.dp))
+                        sectionCard()
                     }
                 }
             }
             Spacer(Modifier.height(28.dp))
+            }
         }
     }
 }
@@ -263,20 +313,28 @@ private fun ColumnScope.SecuritySection(
     )
     Spacer(Modifier.height(12.dp))
 
-    NumberField(
-        label = "Session Expiration (hours)",
-        value = s.sessionExpirationHours ?: 24,
-        min = 1, max = 8760,
-        onValueChange = { update(s.copy(sessionExpirationHours = it)) },
-        hint = "How long a login token stays valid.",
-    )
-    NumberField(
-        label = "Remember Me Expiration (days)",
-        value = s.rememberMeExpirationDays ?: 90,
-        min = 1, max = 3650,
-        onValueChange = { update(s.copy(rememberMeExpirationDays = it)) },
-        hint = "How long \"Remember Me\" sessions stay signed in. The timer resets each time the " +
-            "session refreshes.",
+    // Web: `grid grid-cols-1 sm:grid-cols-2 gap-4`.
+    FieldPair(
+        breakpoint = 640.dp,
+        left = {
+            NumberField(
+                label = "Session Expiration (hours)",
+                value = s.sessionExpirationHours ?: 24,
+                min = 1, max = 8760,
+                onValueChange = { update(s.copy(sessionExpirationHours = it)) },
+                hint = "How long a login token stays valid.",
+            )
+        },
+        right = {
+            NumberField(
+                label = "Remember Me Expiration (days)",
+                value = s.rememberMeExpirationDays ?: 90,
+                min = 1, max = 3650,
+                onValueChange = { update(s.copy(rememberMeExpirationDays = it)) },
+                hint = "How long \"Remember Me\" sessions stay signed in. The timer resets each time the " +
+                    "session refreshes.",
+            )
+        },
     )
 
     CardDivider()
@@ -289,42 +347,64 @@ private fun ColumnScope.SecuritySection(
     )
     Spacer(Modifier.height(12.dp))
 
-    LabelledField(
-        label = "SMTP Host",
-        value = s.smtpHost.orEmpty(),
-        onValueChange = { update(s.copy(smtpHost = it.trim())) },
-        placeholder = "smtp.gmail.com",
+    // Web: the SMTP block is one `grid grid-cols-1 sm:grid-cols-2 gap-4`.
+    FieldPair(
+        breakpoint = 640.dp,
+        left = {
+            LabelledField(
+                label = "SMTP Host",
+                value = s.smtpHost.orEmpty(),
+                onValueChange = { update(s.copy(smtpHost = it.trim())) },
+                placeholder = "smtp.gmail.com",
+            )
+        },
+        right = {
+            NumberField(
+                label = "Port",
+                value = s.smtpPort ?: 587,
+                min = 1, max = 65535,
+                onValueChange = { update(s.copy(smtpPort = it)) },
+            )
+        },
     )
-    NumberField(
-        label = "Port",
-        value = s.smtpPort ?: 587,
-        min = 1, max = 65535,
-        onValueChange = { update(s.copy(smtpPort = it)) },
+    FieldPair(
+        breakpoint = 640.dp,
+        left = {
+            LabelledField(
+                label = "Username",
+                value = s.smtpUsername.orEmpty(),
+                onValueChange = { update(s.copy(smtpUsername = it)) },
+                placeholder = "you@gmail.com",
+            )
+        },
+        right = {
+            LabelledField(
+                label = "Password",
+                value = s.smtpPassword.orEmpty(),
+                onValueChange = { update(s.copy(smtpPassword = it)) },
+                placeholder = "App password / API key",
+                password = true,
+            )
+        },
     )
-    LabelledField(
-        label = "Username",
-        value = s.smtpUsername.orEmpty(),
-        onValueChange = { update(s.copy(smtpUsername = it)) },
-        placeholder = "you@gmail.com",
-    )
-    LabelledField(
-        label = "Password",
-        value = s.smtpPassword.orEmpty(),
-        onValueChange = { update(s.copy(smtpPassword = it)) },
-        placeholder = "App password / API key",
-        password = true,
-    )
-    LabelledField(
-        label = "From Address",
-        value = s.smtpFromAddress.orEmpty(),
-        onValueChange = { update(s.copy(smtpFromAddress = it.trim())) },
-        placeholder = "renzo@yourdomain.com",
-        keyboardType = KeyboardType.Email,
-    )
-    SwitchRow(
-        checked = s.smtpUseSsl ?: true,
-        onCheckedChange = { update(s.copy(smtpUseSsl = it)) },
-        label = "Use TLS (STARTTLS, port 587)",
+    FieldPair(
+        breakpoint = 640.dp,
+        left = {
+            LabelledField(
+                label = "From Address",
+                value = s.smtpFromAddress.orEmpty(),
+                onValueChange = { update(s.copy(smtpFromAddress = it.trim())) },
+                placeholder = "renzo@yourdomain.com",
+                keyboardType = KeyboardType.Email,
+            )
+        },
+        right = {
+            SwitchRow(
+                checked = s.smtpUseSsl ?: true,
+                onCheckedChange = { update(s.copy(smtpUseSsl = it)) },
+                label = "Use TLS (STARTTLS, port 587)",
+            )
+        },
     )
 
     // Standalone test row — it uses the SAVED settings on the server.
@@ -557,70 +637,95 @@ private fun ColumnScope.DownloadSettingsSection(
     s: ServerSettingsDto,
     update: (ServerSettingsDto) -> Unit,
 ) {
-    NumberField(
-        label = "Number of Simultaneous Downloads",
-        value = s.numberOfSimultaneousDownloads ?: 10,
-        min = 1, max = 20,
-        onValueChange = { update(s.copy(numberOfSimultaneousDownloads = it)) },
-        hint = "Maximum number of downloads that can run simultaneously",
+    // Web: one `grid gap-4 md:grid-cols-2`, paired in source order.
+    FieldPair(
+        left = {
+            NumberField(
+                label = "Number of Simultaneous Downloads",
+                value = s.numberOfSimultaneousDownloads ?: 10,
+                min = 1, max = 20,
+                onValueChange = { update(s.copy(numberOfSimultaneousDownloads = it)) },
+                hint = "Maximum number of downloads that can run simultaneously",
+            )
+        },
+        right = {
+            NumberField(
+                label = "Downloads Per Source",
+                value = s.numberOfSimultaneousDownloadsPerProvider ?: 3,
+                min = 1, max = 10,
+                onValueChange = { update(s.copy(numberOfSimultaneousDownloadsPerProvider = it)) },
+                hint = "Maximum number of simultaneous downloads per source",
+            )
+        },
     )
-    NumberField(
-        label = "Downloads Per Source",
-        value = s.numberOfSimultaneousDownloadsPerProvider ?: 3,
-        min = 1, max = 10,
-        onValueChange = { update(s.copy(numberOfSimultaneousDownloadsPerProvider = it)) },
-        hint = "Maximum number of simultaneous downloads per source",
+    FieldPair(
+        left = {
+            NumberField(
+                label = "Pages In Parallel (per chapter)",
+                value = s.pagesInParallelPerChapter ?: 5,
+                min = 1, max = 16,
+                onValueChange = { update(s.copy(pagesInParallelPerChapter = it)) },
+                hint = "How many page images are fetched at once within a single chapter. Pages are still " +
+                    "saved in order. This is the biggest lever on download speed — 1 is the old " +
+                    "one-page-at-a-time behaviour. Lower it for sources that rate-limit or return errors " +
+                    "under load.",
+            )
+        },
+        right = {
+            NumberField(
+                label = "Download Memory Budget (MB)",
+                value = s.downloadMemoryBudgetMB ?: 2048,
+                min = 128, max = 32768,
+                onValueChange = { update(s.copy(downloadMemoryBudgetMB = it)) },
+                hint = "Hard ceiling on page images held in memory across all downloads at once. Fetches " +
+                    "wait for room instead of piling up, so high concurrency throttles itself rather than " +
+                    "exhausting RAM. Keep it comfortably below the container's memory limit.",
+            )
+        },
     )
-    NumberField(
-        label = "Pages In Parallel (per chapter)",
-        value = s.pagesInParallelPerChapter ?: 5,
-        min = 1, max = 16,
-        onValueChange = { update(s.copy(pagesInParallelPerChapter = it)) },
-        hint = "How many page images are fetched at once within a single chapter. Pages are still " +
-            "saved in order. This is the biggest lever on download speed — 1 is the old " +
-            "one-page-at-a-time behaviour. Lower it for sources that rate-limit or return errors " +
-            "under load.",
+    FieldPair(
+        left = {
+            NumberField(
+                label = "Max Requests Per Host (5–12)",
+                value = s.maxRequestsPerHost ?: 5,
+                min = 5, max = 12,
+                onValueChange = { update(s.copy(maxRequestsPerHost = it)) },
+                hint = "The real ceiling on per-source download speed: every request to one site shares " +
+                    "this budget, no matter how many chapters run at once. 5 is the default. Raise it to " +
+                    "drain a large backlog on a single source faster.",
+                warning = "⚠ Ban risk: higher values hammer a single host harder. Values near 12 make " +
+                    "rate-limiting or an IP ban materially more likely on strict sources — raise this " +
+                    "gradually and back off if a source starts failing.",
+            )
+        },
+        right = {
+            NumberField(
+                label = "Number of Simultaneous Searches",
+                value = s.numberOfSimultaneousSearches ?: 10,
+                min = 1, max = 20,
+                onValueChange = { update(s.copy(numberOfSimultaneousSearches = it)) },
+                hint = "Maximum number of searches that can run simultaneously",
+            )
+        },
     )
-    NumberField(
-        label = "Download Memory Budget (MB)",
-        value = s.downloadMemoryBudgetMB ?: 2048,
-        min = 128, max = 32768,
-        onValueChange = { update(s.copy(downloadMemoryBudgetMB = it)) },
-        hint = "Hard ceiling on page images held in memory across all downloads at once. Fetches " +
-            "wait for room instead of piling up, so high concurrency throttles itself rather than " +
-            "exhausting RAM. Keep it comfortably below the container's memory limit.",
-    )
-    NumberField(
-        label = "Max Requests Per Host (5–12)",
-        value = s.maxRequestsPerHost ?: 5,
-        min = 5, max = 12,
-        onValueChange = { update(s.copy(maxRequestsPerHost = it)) },
-        hint = "The real ceiling on per-source download speed: every request to one site shares " +
-            "this budget, no matter how many chapters run at once. 5 is the default. Raise it to " +
-            "drain a large backlog on a single source faster.",
-        warning = "⚠ Ban risk: higher values hammer a single host harder. Values near 12 make " +
-            "rate-limiting or an IP ban materially more likely on strict sources — raise this " +
-            "gradually and back off if a source starts failing.",
-    )
-    NumberField(
-        label = "Number of Simultaneous Searches",
-        value = s.numberOfSimultaneousSearches ?: 10,
-        min = 1, max = 20,
-        onValueChange = { update(s.copy(numberOfSimultaneousSearches = it)) },
-        hint = "Maximum number of searches that can run simultaneously",
-    )
-    TimeSpanField(
-        label = "Chapter Download Retry Time",
-        timeSpan = s.chapterDownloadFailRetryTime,
-        hint = "How long to wait before retrying a failed chapter download",
-        onChange = { update(s.copy(chapterDownloadFailRetryTime = it)) },
-    )
-    NumberField(
-        label = "Chapter Download Max Retries",
-        value = s.chapterDownloadFailRetries ?: 144,
-        min = 0, max = 1000,
-        onValueChange = { update(s.copy(chapterDownloadFailRetries = it)) },
-        hint = "Maximum number of retry attempts for failed chapter downloads",
+    FieldPair(
+        left = {
+            TimeSpanField(
+                label = "Chapter Download Retry Time",
+                timeSpan = s.chapterDownloadFailRetryTime,
+                hint = "How long to wait before retrying a failed chapter download",
+                onChange = { update(s.copy(chapterDownloadFailRetryTime = it)) },
+            )
+        },
+        right = {
+            NumberField(
+                label = "Chapter Download Max Retries",
+                value = s.chapterDownloadFailRetries ?: 144,
+                min = 0, max = 1000,
+                onValueChange = { update(s.copy(chapterDownloadFailRetries = it)) },
+                hint = "Maximum number of retry attempts for failed chapter downloads",
+            )
+        },
     )
 }
 
@@ -631,31 +736,44 @@ private fun ColumnScope.ScheduleTasksSection(
     s: ServerSettingsDto,
     update: (ServerSettingsDto) -> Unit,
 ) {
-    TimeSpanField(
-        label = "Per Title Update Schedule",
-        timeSpan = s.perTitleUpdateSchedule,
-        hint = "How often to check for updates per title",
-        onChange = { update(s.copy(perTitleUpdateSchedule = it)) },
+    // Web: one `grid gap-4 md:grid-cols-2`, paired in source order.
+    FieldPair(
+        left = {
+            TimeSpanField(
+                label = "Per Title Update Schedule",
+                timeSpan = s.perTitleUpdateSchedule,
+                hint = "How often to check for updates per title",
+                onChange = { update(s.copy(perTitleUpdateSchedule = it)) },
+            )
+        },
+        right = {
+            NumberField(
+                label = "Library Rolling Scan (3–12 h)",
+                value = s.libraryScanIntervalHours ?: 6,
+                min = 3, max = 12,
+                onValueChange = { update(s.copy(libraryScanIntervalHours = it)) },
+                hint = "Full library check for new chapters on every source, every N hours. \"Update now\" " +
+                    "on the Updates page runs the same scan immediately.",
+            )
+        },
     )
-    NumberField(
-        label = "Library Rolling Scan (3–12 h)",
-        value = s.libraryScanIntervalHours ?: 6,
-        min = 3, max = 12,
-        onValueChange = { update(s.copy(libraryScanIntervalHours = it)) },
-        hint = "Full library check for new chapters on every source, every N hours. \"Update now\" " +
-            "on the Updates page runs the same scan immediately.",
-    )
-    TimeSpanField(
-        label = "Per Source Update Schedule",
-        timeSpan = s.perSourceUpdateSchedule,
-        hint = "How often to check for updates per source",
-        onChange = { update(s.copy(perSourceUpdateSchedule = it)) },
-    )
-    TimeSpanField(
-        label = "Extensions Update Check Schedule",
-        timeSpan = s.extensionsCheckForUpdateSchedule,
-        hint = "How often to check for extension updates",
-        onChange = { update(s.copy(extensionsCheckForUpdateSchedule = it)) },
+    FieldPair(
+        left = {
+            TimeSpanField(
+                label = "Per Source Update Schedule",
+                timeSpan = s.perSourceUpdateSchedule,
+                hint = "How often to check for updates per source",
+                onChange = { update(s.copy(perSourceUpdateSchedule = it)) },
+            )
+        },
+        right = {
+            TimeSpanField(
+                label = "Extensions Update Check Schedule",
+                timeSpan = s.extensionsCheckForUpdateSchedule,
+                hint = "How often to check for extension updates",
+                onChange = { update(s.copy(extensionsCheckForUpdateSchedule = it)) },
+            )
+        },
     )
 }
 
@@ -792,41 +910,85 @@ private fun ColumnScope.SocksSettingsSection(
     )
     // The web greys these out when the proxy is off; here they stay live so the
     // details can be filled in before flipping the switch.
-    NumberField(
-        label = "SOCKS Version",
-        value = s.socksProxyVersion ?: 5,
-        min = 4, max = 5,
-        onValueChange = { update(s.copy(socksProxyVersion = it)) },
+    // Web: one `grid gap-4 md:grid-cols-2`; Password is the odd fifth cell.
+    FieldPair(
+        left = {
+            NumberField(
+                label = "SOCKS Version",
+                value = s.socksProxyVersion ?: 5,
+                min = 4, max = 5,
+                onValueChange = { update(s.copy(socksProxyVersion = it)) },
+            )
+        },
+        right = {
+            LabelledField(
+                label = "Host",
+                value = s.socksProxyHost.orEmpty(),
+                onValueChange = { update(s.copy(socksProxyHost = it)) },
+                placeholder = "127.0.0.1",
+            )
+        },
     )
-    LabelledField(
-        label = "Host",
-        value = s.socksProxyHost.orEmpty(),
-        onValueChange = { update(s.copy(socksProxyHost = it)) },
-        placeholder = "127.0.0.1",
+    FieldPair(
+        left = {
+            NumberField(
+                label = "Port",
+                value = s.socksProxyPort ?: 0,
+                min = 0, max = 65535,
+                onValueChange = { update(s.copy(socksProxyPort = it)) },
+            )
+        },
+        right = {
+            LabelledField(
+                label = "Username",
+                value = s.socksProxyUsername.orEmpty(),
+                onValueChange = { update(s.copy(socksProxyUsername = it)) },
+                placeholder = "Optional",
+            )
+        },
     )
-    NumberField(
-        label = "Port",
-        value = s.socksProxyPort ?: 0,
-        min = 0, max = 65535,
-        onValueChange = { update(s.copy(socksProxyPort = it)) },
-    )
-    LabelledField(
-        label = "Username",
-        value = s.socksProxyUsername.orEmpty(),
-        onValueChange = { update(s.copy(socksProxyUsername = it)) },
-        placeholder = "Optional",
-    )
-    LabelledField(
-        label = "Password",
-        value = s.socksProxyPassword.orEmpty(),
-        onValueChange = { update(s.copy(socksProxyPassword = it)) },
-        placeholder = "Optional",
-        password = true,
+    FieldPair(
+        left = {
+            LabelledField(
+                label = "Password",
+                value = s.socksProxyPassword.orEmpty(),
+                onValueChange = { update(s.copy(socksProxyPassword = it)) },
+                placeholder = "Optional",
+                password = true,
+            )
+        },
     )
     Hint("Configure a SOCKS4/5 proxy for provider requests.")
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * The web's paired-field grid (settings-manager.tsx `md:grid-cols-2` /
+ * `sm:grid-cols-2`): two equal columns with a 16dp gap at or above
+ * [breakpoint], the plain stacked column below it. An omitted [right] leaves
+ * a half-width odd item, like the web grid's last cell.
+ */
+@Composable
+private fun FieldPair(
+    breakpoint: Dp = 768.dp, // md; the Security grids pair at sm (640dp)
+    left: @Composable () -> Unit,
+    right: @Composable () -> Unit = {},
+) {
+    val sideBySide = !LocalIsTv.current && screenWidthDp() >= breakpoint
+    if (sideBySide) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) { left() }
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) { right() }
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            left()
+            right()
+        }
+    }
+}
 
 /**
  * A TimeSpan-backed field that keeps the raw keystrokes locally and only pushes

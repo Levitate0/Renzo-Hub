@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -156,6 +157,10 @@ fun BrowseScreen(
     val hideAdult by adultFilter.hidden
 
     val isTv = LocalIsTv.current
+    // lg breakpoint — the web (cloud-latest/page.tsx) portals the tag filter as
+    // a popover anchored under its trigger chip on desktop; narrow/TV keep the
+    // centered dialog.
+    val tagsAsPopover = !isTv && screenWidthDp() >= 1024.dp
 
     var selectedSourceId by remember { mutableStateOf("__ALL__") }
     // One size choice governs both grids: Browse mirrors the Library's
@@ -318,63 +323,84 @@ fun BrowseScreen(
                 placeholder = "All Sources",
             )
 
-            // Tag popover trigger.
-            val tagFocus = rememberFocusState()
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .height(if (isTv) 40.dp else 32.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-                    .background(RenzoColors.Card)
-                    .then(
-                        if (isTv) {
-                            Modifier
-                                .focusRing(tagFocus.focused, 8.dp)
-                                .tvClickable(
-                                    onFocused = tagFocus::set,
-                                    onClick = { tagPopoverOpen = !tagPopoverOpen },
-                                )
-                        } else {
-                            Modifier.clickable { tagPopoverOpen = !tagPopoverOpen }
-                        },
+            // Tag popover trigger — Box-wrapped so the desktop popover can
+            // anchor to the chip (page.tsx tagButtonRef / tagPopoverPos).
+            Box {
+                val tagFocus = rememberFocusState()
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .height(if (isTv) 40.dp else 32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
+                        .background(RenzoColors.Card)
+                        .then(
+                            if (isTv) {
+                                Modifier
+                                    .focusRing(tagFocus.focused, 8.dp)
+                                    .tvClickable(
+                                        onFocused = tagFocus::set,
+                                        onClick = { tagPopoverOpen = !tagPopoverOpen },
+                                    )
+                            } else {
+                                Modifier.clickable { tagPopoverOpen = !tagPopoverOpen }
+                            },
+                        )
+                        .padding(horizontal = 10.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.LocalOffer,
+                        contentDescription = null,
+                        tint = RenzoColors.MutedForeground,
+                        modifier = Modifier.size(16.dp),
                     )
-                    .padding(horizontal = 10.dp),
-            ) {
-                Icon(
-                    Icons.Filled.LocalOffer,
-                    contentDescription = null,
-                    tint = RenzoColors.MutedForeground,
-                    modifier = Modifier.size(16.dp),
-                )
-                Text(
-                    when (selectedGenres.size) {
-                        0 -> "Tags"
-                        1 -> "Tag: ${selectedGenres[0]}"
-                        else -> "Tags · ${selectedGenres.size}"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = RenzoColors.Foreground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-                if (selectedGenres.isNotEmpty()) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .padding(start = 6.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(RenzoColors.Primary)
-                            .padding(horizontal = 6.dp, vertical = 1.dp),
+                    Text(
+                        when (selectedGenres.size) {
+                            0 -> "Tags"
+                            1 -> "Tag: ${selectedGenres[0]}"
+                            else -> "Tags · ${selectedGenres.size}"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = RenzoColors.Foreground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                    if (selectedGenres.isNotEmpty()) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .padding(start = 6.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(RenzoColors.Primary)
+                                .padding(horizontal = 6.dp, vertical = 1.dp),
+                        ) {
+                            Text(
+                                selectedGenres.size.toString(),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                color = RenzoColors.PrimaryForeground,
+                            )
+                        }
+                    }
+                }
+
+                // Desktop: the tag filter as a popover anchored below the chip —
+                // page.tsx TAG_POPOVER_MAX_WIDTH_PX = 352, list max-h-72.
+                if (tagsAsPopover) {
+                    DropdownMenu(
+                        expanded = tagPopoverOpen,
+                        onDismissRequest = { tagPopoverOpen = false },
+                        containerColor = RenzoColors.Popover,
+                        modifier = Modifier.width(352.dp),
                     ) {
-                        Text(
-                            selectedGenres.size.toString(),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            color = RenzoColors.PrimaryForeground,
+                        TagFilterBody(
+                            genres = genresData,
+                            hideAdult = hideAdult,
+                            selected = selectedGenres,
+                            listMaxHeight = 288.dp,
                         )
                     }
                 }
@@ -601,7 +627,9 @@ fun BrowseScreen(
     }
 
     // ── Tag filter popover ───────────────────────────────────────────────
-    if (tagPopoverOpen) {
+    // Desktop anchors it to the ribbon chip above; this centered dialog is
+    // the narrow/TV fallback.
+    if (tagPopoverOpen && !tagsAsPopover) {
         TagFilterDialog(
             genres = genresData,
             hideAdult = hideAdult,
@@ -791,6 +819,38 @@ private fun TagFilterDialog(
     selected: MutableList<String>,
     onDismiss: () -> Unit,
 ) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .heightIn(max = 560.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
+                .background(RenzoColors.Popover),
+        ) {
+            TagFilterBody(
+                genres = genres,
+                hideAdult = hideAdult,
+                selected = selected,
+                listMaxHeight = 380.dp,
+            )
+        }
+    }
+}
+
+/**
+ * The popover's content — search field, capped checkbox list, "Clear all"
+ * footer (page.tsx tag popover). One body serves both the centered dialog
+ * (narrow/TV) and the desktop chip-anchored popover.
+ */
+@Composable
+private fun TagFilterBody(
+    genres: List<LatestGenreDto>?,
+    hideAdult: Boolean,
+    selected: MutableList<String>,
+    /** max-h-72 (288dp) in the desktop popover; taller in the dialog. */
+    listMaxHeight: Dp,
+) {
     var tagSearch by remember { mutableStateOf("") }
     val isTv = LocalIsTv.current
 
@@ -803,188 +863,177 @@ private fun TagFilterDialog(
             .take(MAX_VISIBLE_GENRES)
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(
+    val tagFieldFocus = rememberFocusState()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 10.dp)
+            .focusRing(isTv && tagFieldFocus.focused, 8.dp)
+            .padding(if (isTv) 6.dp else 0.dp),
+    ) {
+        Icon(
+            Icons.Filled.Search,
+            contentDescription = null,
+            tint = RenzoColors.MutedForeground,
+            modifier = Modifier.size(16.dp),
+        )
+        BasicTextField(
+            value = tagSearch,
+            onValueChange = { tagSearch = it },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
+            cursorBrush = SolidColor(RenzoColors.Foreground),
+            decorationBox = { inner ->
+                Box(modifier = Modifier.padding(start = 8.dp)) {
+                    if (tagSearch.isEmpty()) {
+                        Text(
+                            "Search tags…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = RenzoColors.MutedForeground,
+                        )
+                    }
+                    inner()
+                }
+            },
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .heightIn(max = 560.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-                .background(RenzoColors.Popover),
-        ) {
-            val tagFieldFocus = rememberFocusState()
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 10.dp)
-                    .focusRing(isTv && tagFieldFocus.focused, 8.dp)
-                    .padding(if (isTv) 6.dp else 0.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Search,
-                    contentDescription = null,
-                    tint = RenzoColors.MutedForeground,
-                    modifier = Modifier.size(16.dp),
-                )
-                BasicTextField(
-                    value = tagSearch,
-                    onValueChange = { tagSearch = it },
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
-                    cursorBrush = SolidColor(RenzoColors.Foreground),
-                    decorationBox = { inner ->
-                        Box(modifier = Modifier.padding(start = 8.dp)) {
-                            if (tagSearch.isEmpty()) {
-                                Text(
-                                    "Search tags…",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = RenzoColors.MutedForeground,
-                                )
-                            }
-                            inner()
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .onFocusChanged { tagFieldFocus.set(it.isFocused) },
-                )
-            }
-            HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
+                .weight(1f)
+                .onFocusChanged { tagFieldFocus.set(it.isFocused) },
+        )
+    }
+    HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
 
-            Box(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
-                when {
-                    genres == null -> Text(
-                        "Loading tags…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = RenzoColors.MutedForeground,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(24.dp),
-                    )
-                    filtered.isEmpty() -> Text(
-                        if (genres.isEmpty()) "No tags available yet" else "No tags match your search",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = RenzoColors.MutedForeground,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(24.dp),
-                    )
-                    else -> LazyColumn(modifier = Modifier.heightIn(max = 380.dp)) {
-                        items(filtered, key = { it.name }) { g ->
-                            val isChecked = selected.contains(g.name)
-                            val rowFocus = rememberFocusState()
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .then(
-                                        if (isTv) {
-                                            // Ticked stays ticked (and coloured)
-                                            // wherever the cursor goes; the ring
-                                            // is only ever "you are here".
-                                            Modifier.tvFocusTarget(
-                                                focused = rowFocus.focused,
-                                                onFocused = rowFocus::set,
-                                                radius = 8.dp,
-                                                fill = RenzoColors.Card,
-                                                onClick = {
-                                                    if (isChecked) {
-                                                        selected.remove(g.name)
-                                                    } else {
-                                                        selected.add(g.name)
-                                                    }
-                                                },
-                                            )
-                                        } else {
-                                            Modifier.clickable {
-                                                if (isChecked) selected.remove(g.name) else selected.add(g.name)
+    Box(modifier = Modifier.fillMaxWidth()) {
+        when {
+            genres == null -> Text(
+                "Loading tags…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = RenzoColors.MutedForeground,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+            )
+            filtered.isEmpty() -> Text(
+                if (genres.isEmpty()) "No tags available yet" else "No tags match your search",
+                style = MaterialTheme.typography.bodyMedium,
+                color = RenzoColors.MutedForeground,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+            )
+            else -> LazyColumn(modifier = Modifier.heightIn(max = listMaxHeight)) {
+                items(filtered, key = { it.name }) { g ->
+                    val isChecked = selected.contains(g.name)
+                    val rowFocus = rememberFocusState()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (isTv) {
+                                    // Ticked stays ticked (and coloured)
+                                    // wherever the cursor goes; the ring
+                                    // is only ever "you are here".
+                                    Modifier.tvFocusTarget(
+                                        focused = rowFocus.focused,
+                                        onFocused = rowFocus::set,
+                                        radius = 8.dp,
+                                        fill = RenzoColors.Card,
+                                        onClick = {
+                                            if (isChecked) {
+                                                selected.remove(g.name)
+                                            } else {
+                                                selected.add(g.name)
                                             }
                                         },
                                     )
-                                    .padding(horizontal = 10.dp, vertical = if (isTv) 12.dp else 8.dp),
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .border(
-                                            1.dp,
-                                            if (isChecked) RenzoColors.Primary else RenzoColors.Border,
-                                            RoundedCornerShape(3.dp),
-                                        )
-                                        .background(if (isChecked) RenzoColors.Primary else Color.Transparent),
-                                ) {
-                                    if (isChecked) {
-                                        Icon(
-                                            Icons.Filled.Check,
-                                            contentDescription = null,
-                                            tint = RenzoColors.PrimaryForeground,
-                                            modifier = Modifier.size(11.dp),
-                                        )
+                                } else {
+                                    Modifier.clickable {
+                                        if (isChecked) selected.remove(g.name) else selected.add(g.name)
                                     }
-                                }
-                                Text(
-                                    g.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (isTv) {
-                                        tvContentColor(isChecked, rowFocus.focused)
-                                    } else {
-                                        RenzoColors.Foreground
-                                    },
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(start = 8.dp).weight(1f),
+                                },
+                            )
+                            .padding(horizontal = 10.dp, vertical = if (isTv) 12.dp else 8.dp),
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .border(
+                                    1.dp,
+                                    if (isChecked) RenzoColors.Primary else RenzoColors.Border,
+                                    RoundedCornerShape(3.dp),
                                 )
-                                Text(
-                                    g.count.toString(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = RenzoColors.MutedForeground,
+                                .background(if (isChecked) RenzoColors.Primary else Color.Transparent),
+                        ) {
+                            if (isChecked) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = RenzoColors.PrimaryForeground,
+                                    modifier = Modifier.size(11.dp),
                                 )
                             }
                         }
+                        Text(
+                            g.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isTv) {
+                                tvContentColor(isChecked, rowFocus.focused)
+                            } else {
+                                RenzoColors.Foreground
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 8.dp).weight(1f),
+                        )
+                        Text(
+                            g.count.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = RenzoColors.MutedForeground,
+                        )
                     }
                 }
             }
+        }
+    }
 
-            if (selected.isNotEmpty()) {
-                HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-                ) {
-                    Text(
-                        "${selected.size} selected",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = RenzoColors.MutedForeground,
-                        modifier = Modifier.weight(1f),
-                    )
-                    val clearAllFocus = rememberFocusState()
-                    Text(
-                        "Clear all",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isTv && clearAllFocus.focused) {
-                            RenzoColors.Primary
+    if (selected.isNotEmpty()) {
+        HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Text(
+                "${selected.size} selected",
+                style = MaterialTheme.typography.labelSmall,
+                color = RenzoColors.MutedForeground,
+                modifier = Modifier.weight(1f),
+            )
+            val clearAllFocus = rememberFocusState()
+            Text(
+                "Clear all",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isTv && clearAllFocus.focused) {
+                    RenzoColors.Primary
+                } else {
+                    RenzoColors.MutedForeground
+                },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .then(
+                        if (isTv) {
+                            Modifier
+                                .focusRing(clearAllFocus.focused, 6.dp)
+                                .tvClickable(
+                                    onFocused = clearAllFocus::set,
+                                    onClick = { selected.clear() },
+                                )
                         } else {
-                            RenzoColors.MutedForeground
+                            Modifier.clickable { selected.clear() }
                         },
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .then(
-                                if (isTv) {
-                                    Modifier
-                                        .focusRing(clearAllFocus.focused, 6.dp)
-                                        .tvClickable(
-                                            onFocused = clearAllFocus::set,
-                                            onClick = { selected.clear() },
-                                        )
-                                } else {
-                                    Modifier.clickable { selected.clear() }
-                                },
-                            )
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
                     )
-                }
-            }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
         }
     }
 }

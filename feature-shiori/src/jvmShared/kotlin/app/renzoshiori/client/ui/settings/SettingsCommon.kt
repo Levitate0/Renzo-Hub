@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,9 +65,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import app.renzoshiori.client.ui.theme.GeistFamily
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -85,9 +90,10 @@ import retrofit2.HttpException
 data class SettingsNavSection(val id: String, val title: String, val icon: ImageVector)
 
 /**
- * The web nav is a sidebar at `lg` and a full drawer below it. The phone only
- * ever sees the narrow branch, so this is exactly that: a full-width trigger
- * showing the active section, opening the same list in a drawer.
+ * The web nav (settings-section-nav.tsx) is a sidebar at `lg` and a full
+ * drawer below it. At `lg` (web `hidden lg:block`) the same list renders
+ * inline as the page grid's left column; below (web `lg:hidden`) a full-width
+ * trigger showing the active section opens that list in a drawer.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,6 +103,15 @@ fun SettingsSectionNav(
     onChange: (String) -> Unit,
     drawerTitle: String,
 ) {
+    val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
+    if (wide) {
+        // Web `hidden lg:block`: the inline sidebar list.
+        Column(modifier = Modifier.fillMaxWidth()) {
+            SectionNavList(sections, activeId, onSelect = onChange)
+        }
+        return
+    }
+
     var open by remember { mutableStateOf(false) }
     val active = sections.firstOrNull { it.id == activeId }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -144,50 +159,60 @@ fun SettingsSectionNav(
                     color = RenzoColors.Foreground,
                     modifier = Modifier.padding(bottom = 12.dp),
                 )
-                sections.forEach { section ->
-                    val isActive = section.id == activeId
-                    Box {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isActive) RenzoColors.Primary.copy(alpha = 0.1f) else Color.Transparent)
-                                .clickable {
-                                    onChange(section.id)
-                                    open = false
-                                }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                        ) {
-                            Icon(
-                                section.icon, contentDescription = null,
-                                tint = if (isActive) RenzoColors.Primary else RenzoColors.MutedForeground,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Text(
-                                section.title,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (isActive) RenzoColors.Primary else RenzoColors.MutedForeground,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(start = 10.dp),
-                            )
-                        }
-                        if (isActive) {
-                            // The web's active marker: a 2px rose bar hugging the left edge.
-                            Box(
-                                modifier = Modifier
-                                    .padding(vertical = 10.dp)
-                                    .width(2.dp)
-                                    .height(20.dp)
-                                    .clip(RoundedCornerShape(1.dp))
-                                    .background(RenzoColors.Primary)
-                                    .align(Alignment.CenterStart),
-                            )
-                        }
-                    }
+                SectionNavList(sections, activeId) { id ->
+                    onChange(id)
+                    open = false
                 }
+            }
+        }
+    }
+}
+
+/** The web's `renderList`: one item list shared by the sidebar and the drawer. */
+@Composable
+private fun SectionNavList(
+    sections: List<SettingsNavSection>,
+    activeId: String,
+    onSelect: (String) -> Unit,
+) {
+    sections.forEach { section ->
+        val isActive = section.id == activeId
+        Box {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isActive) RenzoColors.Primary.copy(alpha = 0.1f) else Color.Transparent)
+                    .clickable { onSelect(section.id) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Icon(
+                    section.icon, contentDescription = null,
+                    tint = if (isActive) RenzoColors.Primary else RenzoColors.MutedForeground,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    section.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (isActive) RenzoColors.Primary else RenzoColors.MutedForeground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
+            if (isActive) {
+                // The web's active marker: a 2px rose bar hugging the left edge.
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = 10.dp)
+                        .width(2.dp)
+                        .height(20.dp)
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(RenzoColors.Primary)
+                        .align(Alignment.CenterStart),
+                )
             }
         }
     }
@@ -493,8 +518,10 @@ fun SwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     label: String,
     hint: String? = null,
+    // Overridable so a wide layout can place the switch inline (intrinsic width).
+    modifier: Modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+    Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(
                 checked = checked,
@@ -706,11 +733,24 @@ fun RenzoDialog(
     onDismiss: () -> Unit,
     title: String,
     description: String? = null,
+    // Web dialogs vary `max-w-*` per dialog (e.g. series-match-dialog's
+    // max-w-2xl). Null keeps the platform's default dialog width.
+    maxWidth: Dp? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = maxWidth == null),
+    ) {
         Column(
             modifier = Modifier
+                .then(
+                    if (maxWidth != null) {
+                        Modifier.padding(horizontal = 16.dp).widthIn(max = maxWidth)
+                    } else {
+                        Modifier
+                    },
+                )
                 .fillMaxWidth()
                 .heightIn(max = 620.dp)
                 .clip(RoundedCornerShape(12.dp))

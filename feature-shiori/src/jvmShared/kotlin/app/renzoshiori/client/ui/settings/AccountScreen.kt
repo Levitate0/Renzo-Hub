@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,8 @@ import app.renzoshiori.client.data.model.UpdateUserDto
 import app.renzoshiori.client.data.model.UserDto
 import app.renzoshiori.client.data.network.AccountApi
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.launch
 
 /**
@@ -129,27 +132,36 @@ fun AccountScreen(
     )
 
     SettingsScaffold(title = "Account", onBack = onBack, snackbar = snackbar) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-        ) {
-            PageHeading(
-                "Account",
-                "Personal settings for ${user?.username ?: username} — private to you.",
-            )
-            Spacer(Modifier.height(16.dp))
-
+        // account/page.tsx: `mx-auto max-w-4xl` page column; at lg the section
+        // nav sits beside the content (`lg:grid-cols-[200px_1fr] lg:items-start`),
+        // below lg the same stack renders full width with the drawer trigger.
+        val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
+        val sectionNav: @Composable () -> Unit = {
             SettingsSectionNav(
                 sections = sections,
                 activeId = activeSection,
                 onChange = { activeSection = it },
                 drawerTitle = "Account",
             )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // mx-auto max-w-4xl
+            Column(modifier = Modifier.widthIn(max = 896.dp).fillMaxWidth()) {
+            PageHeading(
+                "Account",
+                "Personal settings for ${user?.username ?: username} — private to you.",
+            )
             Spacer(Modifier.height(16.dp))
 
+            val sectionContent: @Composable () -> Unit = {
+                Column(modifier = Modifier.fillMaxWidth()) {
             when (activeSection) {
                 // ── Account ─────────────────────────────────────────────
                 "account" -> {
@@ -443,8 +455,24 @@ fun AccountScreen(
                     ScrobblerSettings(snackbar)
                 }
             }
+                }
+            }
+
+            if (wide) {
+                // lg:grid-cols-[200px_1fr] lg:items-start, gap-5
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.width(200.dp)) { sectionNav() }
+                    Spacer(Modifier.width(20.dp))
+                    Column(modifier = Modifier.weight(1f)) { sectionContent() }
+                }
+            } else {
+                sectionNav()
+                Spacer(Modifier.height(16.dp))
+                sectionContent()
+            }
 
             Spacer(Modifier.height(28.dp))
+            }
         }
     }
 }

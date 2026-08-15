@@ -66,6 +66,8 @@ import app.renzoshiori.client.data.model.withField
 import app.renzoshiori.client.data.model.withSeriesField
 import app.renzoshiori.client.data.network.SetupWizardApi
 import app.renzoshiori.client.data.network.absoluteUrl
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -444,6 +446,73 @@ private fun ImportCard(
     }
     var categoryOpen by remember { mutableStateOf(false) }
 
+    // Web ≥640px: .iw-card-head is `64px 1fr auto` with the action cluster as the
+    // trailing cell; ≤640px it moves to a full-width row below (globals.css @640).
+    val wide = !LocalIsTv.current && screenWidthDp() >= 640.dp
+
+    // .iw-action-chapter — label + numeric input (110px wide on desktop).
+    val chapterField: @Composable (Modifier) -> Unit = { fieldModifier ->
+        Column(modifier = fieldModifier) {
+            Text(
+                "CONTINUE AFTER",
+                style = wizardMono(8.5f, FontWeight.SemiBold, 0.16f, WizardColors.FgDim),
+            )
+            BasicTextField(
+                value = chapterText,
+                onValueChange = { raw ->
+                    val filtered = raw.filter { it.isDigit() || it == '.' }
+                    chapterText = filtered
+                    onChapterChange(filtered.toDoubleOrNull() ?: 0.0)
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = wizardMono(13f, FontWeight.Normal, 0.0f, WizardColors.Fg)
+                    .copy(textAlign = TextAlign.Center),
+                cursorBrush = SolidColor(WizardColors.Primary),
+                decorationBox = { inner ->
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(WizardColors.Panel)
+                            .border(1.dp, WizardColors.BorderStrong, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp),
+                    ) {
+                        if (chapterText.isEmpty()) {
+                            Text(
+                                "0",
+                                style = wizardMono(13f, FontWeight.Normal, 0.0f, WizardColors.FgDim),
+                            )
+                        }
+                        inner()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
+            )
+        }
+    }
+
+    // .iw-action-btn-row
+    val actionButtons: @Composable (Modifier) -> Unit = { rowModifier ->
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = rowModifier,
+        ) {
+            if (showSearchButton || entry.series.isEmpty()) {
+                ActionButton(icon = Icons.Filled.Search, label = "Search", onClick = onSearch)
+            }
+            if (showSkipButton) {
+                ActionButton(icon = Icons.Filled.Close, label = "Mismatch", onClick = onSkip)
+            }
+            if (showAddButton) {
+                ActionButton(icon = Icons.Filled.Add, label = "Add", onClick = onAdd)
+            }
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -451,12 +520,23 @@ private fun ImportCard(
             .background(WizardColors.CardBg)
             .border(1.dp, WizardColors.Border, RoundedCornerShape(12.dp)),
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 14.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (wide) {
+                        Modifier.padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 14.dp)
+                    } else {
+                        Modifier.padding(start = 14.dp, end = 14.dp, top = 14.dp)
+                    },
+                ),
+        ) {
             if (!thumbnail.isNullOrEmpty()) {
+                // .iw-card-poster: 64×96 desktop, 56×80 ≤640px.
                 Box(
                     modifier = Modifier
-                        .width(56.dp)
-                        .height(80.dp)
+                        .width(if (wide) 64.dp else 56.dp)
+                        .height(if (wide) 96.dp else 80.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(WizardColors.Panel),
                 ) {
@@ -534,68 +614,27 @@ private fun ImportCard(
                     }
                 }
             }
+            if (wide) {
+                // Trailing head cell — .iw-action-cluster: column, items flex-end, gap 8px.
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(start = 16.dp),
+                ) {
+                    chapterField(Modifier.width(110.dp))
+                    actionButtons(Modifier)
+                }
+            }
         }
 
-        // Action cluster — full-width row below the poster/title grid on phones.
-        Row(
-            verticalAlignment = Alignment.Top,
-            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 14.dp),
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "CONTINUE AFTER",
-                    style = wizardMono(8.5f, FontWeight.SemiBold, 0.16f, WizardColors.FgDim),
-                )
-                BasicTextField(
-                    value = chapterText,
-                    onValueChange = { raw ->
-                        val filtered = raw.filter { it.isDigit() || it == '.' }
-                        chapterText = filtered
-                        onChapterChange(filtered.toDoubleOrNull() ?: 0.0)
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    textStyle = wizardMono(13f, FontWeight.Normal, 0.0f, WizardColors.Fg)
-                        .copy(textAlign = TextAlign.Center),
-                    cursorBrush = SolidColor(WizardColors.Primary),
-                    decorationBox = { inner ->
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(36.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(WizardColors.Panel)
-                                .border(1.dp, WizardColors.BorderStrong, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp),
-                        ) {
-                            if (chapterText.isEmpty()) {
-                                Text(
-                                    "0",
-                                    style = wizardMono(13f, FontWeight.Normal, 0.0f, WizardColors.FgDim),
-                                )
-                            }
-                            inner()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
-                )
-            }
-
+        if (!wide) {
+            // Action cluster — full-width row below the poster/title grid on phones.
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 8.dp, top = 12.dp),
+                verticalAlignment = Alignment.Top,
+                modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 14.dp),
             ) {
-                if (showSearchButton || entry.series.isEmpty()) {
-                    ActionButton(icon = Icons.Filled.Search, label = "Search", onClick = onSearch)
-                }
-                if (showSkipButton) {
-                    ActionButton(icon = Icons.Filled.Close, label = "Mismatch", onClick = onSkip)
-                }
-                if (showAddButton) {
-                    ActionButton(icon = Icons.Filled.Add, label = "Add", onClick = onAdd)
-                }
+                chapterField(Modifier.weight(1f))
+                actionButtons(Modifier.padding(start = 8.dp, top = 12.dp))
             }
         }
 
@@ -646,7 +685,7 @@ private fun ActionButton(
 /**
  * .iw-match-row — one provider match. Tapping the info column toggles
  * "preferred" (rose accent bar + tinted row + PREFERRED tag); the three
- * switches below are Permanent / Cover / Title.
+ * Permanent / Cover / Title switches sit inline at ≥640dp, below otherwise.
  */
 @Composable
 private fun MatchRow(
@@ -657,7 +696,68 @@ private fun MatchRow(
 ) {
     var permanentInfoOpen by remember { mutableStateOf(false) }
 
+    // Web ≥640px: .iw-match-row is `3px 36px 1fr auto` (gap 14px) with the switch
+    // cluster inline as the trailing cell; ≤640px it drops to a 3-col grid below.
+    val wide = !LocalIsTv.current && screenWidthDp() >= 640.dp
+
+    val switchCluster: @Composable (Modifier) -> Unit = { clusterModifier ->
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(if (wide) 14.dp else 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = clusterModifier,
+        ) {
+            Box(modifier = if (wide) Modifier else Modifier.weight(1f)) {
+                SwitchCell(
+                    label = "Permanent",
+                    checked = match.isStorage,
+                    onCheckedChange = { onPropertyChange("isStorage", it) },
+                    onLabelClick = { permanentInfoOpen = true },
+                    boxed = !wide,
+                )
+                DropdownMenu(
+                    expanded = permanentInfoOpen,
+                    onDismissRequest = { permanentInfoOpen = false },
+                    containerColor = WizardColors.Panel,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.width(260.dp),
+                ) {
+                    Text(
+                        "Permanent sources always download new chapters and replace any " +
+                            "existing copies from non-permanent sources.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WizardColors.Fg,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                    Text(
+                        "Non-permanent sources only download a chapter if they are the first " +
+                            "to have it available.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WizardColors.Fg,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                }
+            }
+            Box(modifier = if (wide) Modifier else Modifier.weight(1f)) {
+                SwitchCell(
+                    label = "Cover",
+                    checked = match.useCover,
+                    onCheckedChange = { onPropertyChange("useCover", it) },
+                    boxed = !wide,
+                )
+            }
+            Box(modifier = if (wide) Modifier else Modifier.weight(1f)) {
+                SwitchCell(
+                    label = "Title",
+                    checked = match.useTitle,
+                    onCheckedChange = { onPropertyChange("useTitle", it) },
+                    boxed = !wide,
+                )
+            }
+        }
+    }
+
     Row(
+        verticalAlignment = if (wide) Alignment.CenterVertically else Alignment.Top,
         modifier = Modifier
             .fillMaxWidth()
             .then(
@@ -787,96 +887,74 @@ private fun MatchRow(
                 }
             }
 
-            // Switch cluster — a 3-column grid under the cover/info row on phones.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    SwitchCell(
-                        label = "Permanent",
-                        checked = match.isStorage,
-                        onCheckedChange = { onPropertyChange("isStorage", it) },
-                        onLabelClick = { permanentInfoOpen = true },
-                    )
-                    DropdownMenu(
-                        expanded = permanentInfoOpen,
-                        onDismissRequest = { permanentInfoOpen = false },
-                        containerColor = WizardColors.Panel,
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.width(260.dp),
-                    ) {
-                        Text(
-                            "Permanent sources always download new chapters and replace any " +
-                                "existing copies from non-permanent sources.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = WizardColors.Fg,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        )
-                        Text(
-                            "Non-permanent sources only download a chapter if they are the first " +
-                                "to have it available.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = WizardColors.Fg,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        )
-                    }
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    SwitchCell(
-                        label = "Cover",
-                        checked = match.useCover,
-                        onCheckedChange = { onPropertyChange("useCover", it) },
-                    )
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    SwitchCell(
-                        label = "Title",
-                        checked = match.useTitle,
-                        onCheckedChange = { onPropertyChange("useTitle", it) },
-                    )
-                }
+            if (!wide) {
+                switchCluster(Modifier.fillMaxWidth().padding(top = 12.dp))
             }
+        }
+        if (wide) {
+            switchCluster(Modifier.padding(start = 14.dp))
         }
     }
 }
 
-/** .iw-match-switch-cell (mobile variant: label left, switch right, 44px tall). */
+/**
+ * .iw-match-switch-cell — boxed variant (≤640px): label left, switch right,
+ * 44px tall; desktop variant: label stacked above the switch, centred, no box.
+ */
 @Composable
 private fun SwitchCell(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onLabelClick: (() -> Unit)? = null,
+    boxed: Boolean = true,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(WizardColors.SwitchCell)
-            .padding(horizontal = 10.dp),
-    ) {
+    val labelText: @Composable () -> Unit = {
         Text(
             label.uppercase(),
             style = wizardMono(8.5f, FontWeight.Normal, 0.16f, WizardColors.FgDim),
             maxLines = 1,
             modifier = if (onLabelClick != null) Modifier.clickable(onClick = onLabelClick) else Modifier,
         )
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = WizardColors.Primary,
-                checkedBorderColor = WizardColors.Primary,
-                uncheckedThumbColor = WizardColors.FgMuted,
-                uncheckedTrackColor = WizardColors.Panel,
-                uncheckedBorderColor = WizardColors.BorderStrong,
-            ),
-            modifier = Modifier.scale(0.75f),
-        )
     }
+    if (boxed) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(WizardColors.SwitchCell)
+                .padding(horizontal = 10.dp),
+        ) {
+            labelText()
+            CellSwitch(checked, onCheckedChange)
+        }
+    } else {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            labelText()
+            CellSwitch(checked, onCheckedChange)
+        }
+    }
+}
+
+@Composable
+private fun CellSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        colors = SwitchDefaults.colors(
+            checkedThumbColor = Color.White,
+            checkedTrackColor = WizardColors.Primary,
+            checkedBorderColor = WizardColors.Primary,
+            uncheckedThumbColor = WizardColors.FgMuted,
+            uncheckedTrackColor = WizardColors.Panel,
+            uncheckedBorderColor = WizardColors.BorderStrong,
+        ),
+        modifier = Modifier.scale(0.75f),
+    )
 }

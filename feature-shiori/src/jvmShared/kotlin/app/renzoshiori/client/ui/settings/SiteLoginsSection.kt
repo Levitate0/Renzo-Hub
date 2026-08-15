@@ -44,6 +44,8 @@ import app.renzoshiori.client.data.model.SiteInfoDto
 import app.renzoshiori.client.data.model.SiteLoginResultDto
 import app.renzoshiori.client.data.network.SiteAuthApi
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.launch
 
 /**
@@ -53,8 +55,8 @@ import kotlinx.coroutines.launch
  * Logins for coin/paid scanlation sites: the password is stored encrypted
  * server-side, Renzo Shiori logs in for you and re-logs-in when the session
  * lapses; sites that can't be automated take a pasted session cookie. The
- * web's side-by-side Site/Method and Username/Password grids stack vertically
- * here — that's the only intentional difference.
+ * Site/Method and Username/Password pairs sit side by side at sm (>=640dp),
+ * exactly like the web's `sm:grid-cols-2` grids, and stack below it.
  */
 @Composable
 fun SiteLoginsSection(snackbar: SnackbarHostState) {
@@ -195,35 +197,44 @@ fun SiteLoginsSection(snackbar: SnackbarHostState) {
                 )
             }
 
-            FieldLabel("Site")
-            RenzoSelect(
-                options = availableSites.map { site ->
-                    site.provider to buildString {
-                        append(site.provider)
-                        if (site.domain.isNotBlank()) append(" · ${site.domain}")
-                        if (site.coin) append("  PAID")
-                    }
+            // Web: `grid grid-cols-1 gap-3 sm:grid-cols-2` — Site | Method.
+            PairRow(
+                stackedGap = 12,
+                left = {
+                    FieldLabel("Site")
+                    RenzoSelect(
+                        options = availableSites.map { site ->
+                            site.provider to buildString {
+                                append(site.provider)
+                                if (site.domain.isNotBlank()) append(" · ${site.domain}")
+                                if (site.coin) append("  PAID")
+                            }
+                        },
+                        value = provider,
+                        onChange = { provider = it },
+                        placeholder = "Choose a site",
+                    )
                 },
-                value = provider,
-                onChange = { provider = it },
-                placeholder = "Choose a site",
-            )
-            Spacer(Modifier.height(12.dp))
-
-            FieldLabel("Method")
-            RenzoSelect(
-                options = listOf(
-                    "password" to "Username & password (auto-login)",
-                    "cookie" to "Paste session cookie",
-                ),
-                value = mode,
-                onChange = { mode = it },
+                right = {
+                    FieldLabel("Method")
+                    RenzoSelect(
+                        options = listOf(
+                            "password" to "Username & password (auto-login)",
+                            "cookie" to "Paste session cookie",
+                        ),
+                        value = mode,
+                        onChange = { mode = it },
+                    )
+                },
             )
             Spacer(Modifier.height(12.dp))
 
             if (mode == "password") {
-                LabelledField("Username / email", username, { username = it })
-                LabelledField("Password", password, { password = it }, password = true)
+                // Web: `sm:grid-cols-2` — Username | Password.
+                PairRow(
+                    left = { LabelledField("Username / email", username, { username = it }) },
+                    right = { LabelledField("Password", password, { password = it }, password = true) },
+                )
             } else {
                 LabelledField(
                     label = "Session cookie",
@@ -297,6 +308,33 @@ fun SiteLoginsSection(snackbar: SnackbarHostState) {
                     },
                 )
             }
+        }
+    }
+}
+
+/**
+ * site-logins-section.tsx `grid grid-cols-1 gap-3 sm:grid-cols-2`: two equal
+ * columns with a 16dp gap at sm (>=640dp), the plain stacked column below —
+ * [stackedGap] dp apart when the halves don't pad themselves.
+ */
+@Composable
+private fun PairRow(
+    stackedGap: Int = 0,
+    left: @Composable () -> Unit,
+    right: @Composable () -> Unit,
+) {
+    val sideBySide = !LocalIsTv.current && screenWidthDp() >= 640.dp
+    if (sideBySide) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) { left() }
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) { right() }
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            left()
+            if (stackedGap > 0) Spacer(Modifier.height(stackedGap.dp))
+            right()
         }
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.renzoshiori.client.ShioriRuntime
@@ -53,7 +55,11 @@ import app.renzoshiori.client.data.model.SeriesMatchStatusDto
 import app.renzoshiori.client.data.model.scrobblerRouteName
 import app.renzoshiori.client.data.model.scrobblerShortIcon
 import app.renzoshiori.client.data.network.ScrobblerApi
+import app.renzoshiori.client.data.network.absoluteUrl
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -138,23 +144,33 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
     }
 
     val unmatchedCount = unmatched.count { it.mappingStatus == 0 }
+    // scrobbler-settings.tsx lays its header/action rows out with
+    // `sm:flex-row sm:items-center sm:justify-between` and renders the
+    // unmatched list as a 4-column <table>; both apply at wide here, the
+    // stacked phone layout below.
+    val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
 
     Column(modifier = Modifier.fillMaxWidth()) {
         // ── Header + library-wide actions ───────────────────────────────
-        Text("Scrobbler / Tracking", style = MaterialTheme.typography.titleLarge, color = RenzoColors.Foreground)
-        Text(
-            "Connect your reading progress to external tracking services",
-            style = MaterialTheme.typography.bodySmall,
-            color = RenzoColors.MutedForeground,
-            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
-        )
+        val headerText: @Composable () -> Unit = {
+            Column {
+                Text("Scrobbler / Tracking", style = MaterialTheme.typography.titleLarge, color = RenzoColors.Foreground)
+                Text(
+                    "Connect your reading progress to external tracking services",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RenzoColors.MutedForeground,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+        val trackAllButton: @Composable (Modifier) -> Unit = { buttonModifier ->
         RenzoButton(
             text = "Track all series",
             icon = Icons.Filled.Checklist,
             variant = "outline",
             busy = matchingAll,
             small = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = buttonModifier,
             onClick = {
                 val connected = configs.orEmpty().filter { it.isConnected }
                 if (connected.isEmpty()) {
@@ -173,14 +189,15 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                 }
             },
         )
-        Spacer(Modifier.height(8.dp))
+        }
+        val syncAllButton: @Composable (Modifier) -> Unit = { buttonModifier ->
         RenzoButton(
             text = "Sync All",
             icon = Icons.Filled.Refresh,
             variant = "outline",
             busy = syncing,
             small = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = buttonModifier,
             onClick = {
                 syncing = true
                 scope.launch {
@@ -192,6 +209,22 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                 }
             },
         )
+        }
+        if (wide) {
+            // Heading left, intrinsic-width actions right.
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f)) { headerText() }
+                trackAllButton(Modifier)
+                Spacer(Modifier.width(8.dp))
+                syncAllButton(Modifier)
+            }
+        } else {
+            headerText()
+            Spacer(Modifier.height(12.dp))
+            trackAllButton(Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            syncAllButton(Modifier.fillMaxWidth())
+        }
 
         CardDivider()
 
@@ -239,9 +272,11 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                 // them when disconnected; here they simply aren't there yet.
                 if (config.isConnected) {
                     Spacer(Modifier.height(12.dp))
+                    val enabledSwitch: @Composable (Modifier) -> Unit = { switchModifier ->
                     SwitchRow(
                         checked = config.isEnabled,
                         label = "Enabled",
+                        modifier = switchModifier,
                         onCheckedChange = { next ->
                             configs = configs.orEmpty().map {
                                 if (it.provider == config.provider) it.copy(isEnabled = next) else it
@@ -255,9 +290,12 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                             }
                         },
                     )
+                    }
+                    val autoSyncSwitch: @Composable (Modifier) -> Unit = { switchModifier ->
                     SwitchRow(
                         checked = config.autoSync,
                         label = "Auto Sync",
+                        modifier = switchModifier,
                         onCheckedChange = { next ->
                             configs = configs.orEmpty().map {
                                 if (it.provider == config.provider) it.copy(autoSync = next) else it
@@ -271,14 +309,18 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                             }
                         },
                     )
-                    config.lastSyncAt?.let { iso ->
-                        Text(
-                            "Last sync: ${formatShortDate(iso)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = RenzoColors.MutedForeground,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
                     }
+                    val lastSyncText: @Composable (Modifier) -> Unit = { textModifier ->
+                        config.lastSyncAt?.let { iso ->
+                            Text(
+                                "Last sync: ${formatShortDate(iso)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = RenzoColors.MutedForeground,
+                                modifier = textModifier,
+                            )
+                        }
+                    }
+                    val disconnectButton: @Composable () -> Unit = {
                     RenzoButton(
                         text = "Disconnect",
                         icon = Icons.Filled.LinkOff,
@@ -293,6 +335,24 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                             }
                         },
                     )
+                    }
+                    if (wide) {
+                        // Web `sm:flex-row sm:justify-between`: toggles inline
+                        // at the start (gap-x-6), actions at the end.
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            enabledSwitch(Modifier)
+                            Spacer(Modifier.width(24.dp))
+                            autoSyncSwitch(Modifier)
+                            Spacer(Modifier.weight(1f))
+                            disconnectButton()
+                        }
+                        lastSyncText(Modifier.padding(top = 8.dp))
+                    } else {
+                        enabledSwitch(Modifier.fillMaxWidth().padding(bottom = 8.dp))
+                        autoSyncSwitch(Modifier.fillMaxWidth().padding(bottom = 8.dp))
+                        lastSyncText(Modifier.padding(bottom = 8.dp))
+                        disconnectButton()
+                    }
                 } else {
                     Spacer(Modifier.height(12.dp))
                     when {
@@ -446,21 +506,25 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
         CardDivider()
 
         // ── Unmatched series ────────────────────────────────────────────
-        Text("Unmatched Series", style = MaterialTheme.typography.titleMedium, color = RenzoColors.Foreground)
-        Text(
-            if (unmatchedCount > 0) "$unmatchedCount series need manual matching" else "All series are matched",
-            style = MaterialTheme.typography.bodySmall,
-            color = RenzoColors.MutedForeground,
-            modifier = Modifier.padding(top = 2.dp, bottom = 10.dp),
-        )
-        if (unmatchedCount > 0) {
+        val unmatchedHeader: @Composable () -> Unit = {
+            Column {
+                Text("Unmatched Series", style = MaterialTheme.typography.titleMedium, color = RenzoColors.Foreground)
+                Text(
+                    if (unmatchedCount > 0) "$unmatchedCount series need manual matching" else "All series are matched",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RenzoColors.MutedForeground,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+        val autoMatchAllButton: @Composable (Modifier) -> Unit = { buttonModifier ->
             RenzoButton(
                 text = "Auto-Match All",
                 icon = Icons.Filled.Refresh,
                 variant = "outline",
                 small = true,
                 busy = matchingAll,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = buttonModifier,
                 onClick = {
                     matchingAll = true
                     scope.launch {
@@ -473,45 +537,76 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                     }
                 },
             )
+        }
+        if (wide) {
+            // Web `sm:flex-row sm:justify-between`: heading left, button right.
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f)) { unmatchedHeader() }
+                if (unmatchedCount > 0) autoMatchAllButton(Modifier)
+            }
             Spacer(Modifier.height(12.dp))
+        } else {
+            unmatchedHeader()
+            Spacer(Modifier.height(10.dp))
+            if (unmatchedCount > 0) {
+                autoMatchAllButton(Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+            }
         }
 
-        unmatched.filter { it.mappingStatus != 2 }.take(20).forEach { status ->
+        // scrobbler-settings.tsx colgroup: Series flexes, Provider w-28,
+        // Status w-40, Actions w-24.
+        val colProvider = 112.dp
+        val colStatus = 160.dp
+        val colActions = 96.dp
+        val visibleUnmatched = unmatched.filter { it.mappingStatus != 2 }.take(20)
+        if (wide && visibleUnmatched.isNotEmpty()) {
+            // The web table's header row: Series | Provider | Status | Actions.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, RenzoColors.Border.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        status.seriesTitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = RenzoColors.Foreground,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                val style = MaterialTheme.typography.labelSmall
+                val color = RenzoColors.MutedForeground
+                Text("Series", style = style, color = color, modifier = Modifier.weight(1f))
+                Text("Provider", style = style, color = color, modifier = Modifier.width(colProvider))
+                Text("Status", style = style, color = color, modifier = Modifier.width(colStatus))
+                Text("Actions", style = style, color = color, modifier = Modifier.width(colActions))
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(RenzoColors.Border))
+        }
+
+        visibleUnmatched.forEach { status ->
+            val seriesTitle: @Composable () -> Unit = {
+                Text(
+                    status.seriesTitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = RenzoColors.Foreground,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val providerLabel: @Composable (Modifier) -> Unit = { textModifier ->
+                Text(
+                    scrobblerRouteName(status.provider),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RenzoColors.MutedForeground,
+                    modifier = textModifier,
+                )
+            }
+            val statusBadge: @Composable () -> Unit = {
+                when (status.mappingStatus) {
+                    0 -> RenzoBadge("Not matched", RenzoColors.MutedForeground)
+                    1 -> RenzoBadge(
+                        "Auto-matched (${((status.matchScore ?: 0.0) * 100).toInt()}%)",
+                        RenzoColors.Primary,
+                        filled = true,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                        Text(
-                            scrobblerRouteName(status.provider),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = RenzoColors.MutedForeground,
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                        when (status.mappingStatus) {
-                            0 -> RenzoBadge("Not matched", RenzoColors.MutedForeground)
-                            1 -> RenzoBadge(
-                                "Auto-matched (${((status.matchScore ?: 0.0) * 100).toInt()}%)",
-                                RenzoColors.Primary,
-                                filled = true,
-                            )
-                            3 -> RenzoBadge("Disabled", RenzoColors.MutedForeground)
-                        }
-                    }
+                    3 -> RenzoBadge("Disabled", RenzoColors.MutedForeground)
                 }
+            }
+            val matchButton: @Composable () -> Unit = {
                 RenzoButton(
                     text = "Match",
                     icon = Icons.AutoMirrored.Filled.OpenInNew,
@@ -519,6 +614,41 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                     small = true,
                     onClick = { matchTarget = status },
                 )
+            }
+            if (wide) {
+                // One web table row, ruled apart from the next.
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) { seriesTitle() }
+                        providerLabel(Modifier.width(colProvider))
+                        Box(modifier = Modifier.width(colStatus)) { statusBadge() }
+                        Box(modifier = Modifier.width(colActions)) { matchButton() }
+                    }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(RenzoColors.Border.copy(alpha = 0.5f)))
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, RenzoColors.Border.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        seriesTitle()
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                            providerLabel(Modifier.padding(end = 8.dp))
+                            statusBadge()
+                        }
+                    }
+                    matchButton()
+                }
             }
         }
     }
@@ -568,20 +698,29 @@ private fun SeriesMatchDialog(
 
     LaunchedEffect(target.seriesId, target.provider) { search() }
 
+    // series-match-dialog.tsx: `DialogContent className="max-w-2xl"`.
+    val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
+    val baseUrl = app.tokenStore.serverUrl ?: ""
+
     RenzoDialog(
         onDismiss = onDismiss,
         title = "Match “${target.seriesTitle}”",
         description = "Pick the ${scrobblerRouteName(target.provider)} entry this series should sync with.",
+        maxWidth = if (wide) 672.dp else null,
     ) {
-        RenzoTextField(value = query, onValueChange = { query = it }, placeholder = "Search title")
-        Spacer(Modifier.height(10.dp))
-        RenzoButton(
-            text = "Search",
-            small = true,
-            busy = searching,
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { scope.launch { search() } },
-        )
+        // Web: the input and the Search button share one `flex gap-2` row.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.weight(1f)) {
+                RenzoTextField(value = query, onValueChange = { query = it }, placeholder = "Search title")
+            }
+            Spacer(Modifier.width(8.dp))
+            RenzoButton(
+                text = "Search",
+                small = true,
+                busy = searching,
+                onClick = { scope.launch { search() } },
+            )
+        }
         Spacer(Modifier.height(12.dp))
 
         when {
@@ -589,13 +728,50 @@ private fun SeriesMatchDialog(
             results!!.isEmpty() -> EmptyNote("No results — try a different title.")
             else -> Column(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                 results!!.forEach { result ->
-                    Column(
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 6.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-                            .clickable {
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                    ) {
+                        // Web: `h-16 w-12` cover thumbnail.
+                        if (!result.coverUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = absoluteUrl(baseUrl, result.coverUrl!!),
+                                contentDescription = result.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .width(48.dp)
+                                    .height(64.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(RenzoColors.Card),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                result.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = RenzoColors.Foreground,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (!result.type.isNullOrBlank()) {
+                                Text(
+                                    result.type!!,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = RenzoColors.MutedForeground,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        RenzoButton(
+                            text = "Match",
+                            small = true,
+                            onClick = {
                                 scope.launch {
                                     val api = app.network.currentServiceOf<ScrobblerApi>()
                                     runCatching {
@@ -611,23 +787,8 @@ private fun SeriesMatchDialog(
                                         .onSuccess { onConfirmed() }
                                         .onFailure { snackbar.showSnackbar(it.apiMessage("Couldn't save the match")) }
                                 }
-                            }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                    ) {
-                        Text(
-                            result.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = RenzoColors.Foreground,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
+                            },
                         )
-                        if (!result.type.isNullOrBlank()) {
-                            Text(
-                                result.type!!,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = RenzoColors.MutedForeground,
-                            )
-                        }
                     }
                 }
             }

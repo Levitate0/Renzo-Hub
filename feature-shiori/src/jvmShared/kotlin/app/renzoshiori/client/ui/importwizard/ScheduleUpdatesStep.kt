@@ -42,11 +42,13 @@ import androidx.compose.ui.unit.dp
 import app.renzoshiori.client.data.model.WizardImportTotalsDto
 import app.renzoshiori.client.data.network.SetupWizardApi
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 
 /**
- * Step 03 — setup-wizard/steps/schedule-updates-step.tsx. The desktop
- * three-column Import Summary becomes a vertical stack (which is exactly what
- * the web itself does below md).
+ * Step 03 — setup-wizard/steps/schedule-updates-step.tsx. The Import Summary
+ * is three columns at ≥768dp (web md:grid-cols-3) and a vertical stack below,
+ * matching the web's own breakpoint.
  */
 @Composable
 fun ScheduleUpdatesStep(
@@ -59,6 +61,9 @@ fun ScheduleUpdatesStep(
     var totals by remember { mutableStateOf<WizardImportTotalsDto?>(null) }
     var loading by remember { mutableStateOf(true) }
     var downloadOption by remember { mutableStateOf("proceed") }
+
+    // Web: Import Summary is `grid grid-cols-1 md:grid-cols-3 gap-4`.
+    val wide = !LocalIsTv.current && screenWidthDp() >= 768.dp
 
     LaunchedEffect(api) {
         val service = api ?: run {
@@ -141,30 +146,51 @@ fun ScheduleUpdatesStep(
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }
-            Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                StatTile(
-                    icon = Icons.AutoMirrored.Filled.LibraryBooks,
-                    iconTint = RenzoColors.Primary,
-                    background = RenzoColors.Primary.copy(alpha = 0.1f),
-                    value = data.totalSeries.toString(),
-                    label = "Series",
-                )
-                StatTile(
-                    icon = Icons.Filled.Power,
-                    iconTint = WizardColors.Fg,
-                    background = RenzoColors.Secondary.copy(alpha = 0.1f),
-                    value = data.totalProviders.toString(),
-                    label = "Sources",
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                StatTile(
-                    icon = Icons.Filled.Download,
-                    iconTint = Color(0xFF60A5FA),
-                    background = RenzoColors.Primary.copy(alpha = 0.1f),
-                    value = data.totalDownloads.toString(),
-                    label = "Scheduled Downloads",
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+            val tiles = listOf<@Composable (Modifier) -> Unit>(
+                { m ->
+                    StatTile(
+                        icon = Icons.AutoMirrored.Filled.LibraryBooks,
+                        iconTint = RenzoColors.Primary,
+                        background = RenzoColors.Primary.copy(alpha = 0.1f),
+                        value = data.totalSeries.toString(),
+                        label = "Series",
+                        modifier = m,
+                    )
+                },
+                { m ->
+                    StatTile(
+                        icon = Icons.Filled.Power,
+                        iconTint = WizardColors.Fg,
+                        background = RenzoColors.Secondary.copy(alpha = 0.1f),
+                        value = data.totalProviders.toString(),
+                        label = "Sources",
+                        modifier = m,
+                    )
+                },
+                { m ->
+                    StatTile(
+                        icon = Icons.Filled.Download,
+                        iconTint = Color(0xFF60A5FA),
+                        background = RenzoColors.Primary.copy(alpha = 0.1f),
+                        value = data.totalDownloads.toString(),
+                        label = "Scheduled Downloads",
+                        modifier = m,
+                    )
+                },
+            )
+            if (wide) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                ) {
+                    tiles.forEach { tile -> tile(Modifier.weight(1f)) }
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                    tiles.forEachIndexed { index, tile ->
+                        tile(if (index > 0) Modifier.padding(top = 8.dp) else Modifier)
+                    }
+                }
             }
         }
 
