@@ -99,6 +99,7 @@ import app.renzoshiori.client.ui.tv.tvClickable
 import app.renzoshiori.client.ui.tv.tvContentColor
 import app.renzoshiori.client.ui.util.AdultFilter
 import app.renzoshiori.client.ui.util.rememberHideAdult
+import app.renzoshiori.client.ui.util.screenHeightDp
 import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
 
@@ -1310,21 +1311,34 @@ private fun CloudLatestDetailsDialog(
     onRead: (() -> Unit)?,
     onAddSeries: () -> Unit,
 ) {
+    // Half the window wide (user direction 2026-08-15), and the card keeps
+    // the web card's width:height ratio as it scales — height follows width
+    // instead of hugging content. Floored so a smaller window still fits the
+    // cover-beside-info layout, and width backs off if the proportional
+    // height wouldn't fit the window. NOTE: a fillMaxWidth BEFORE a widthIn
+    // pins the min constraint and the cap silently never applies — that
+    // ordering bug is what stretched this card edge to edge.
+    val cardRatio = 1.5f
+    val dialogWidth = (screenWidthDp() * 0.5f)
+        .coerceIn(640.dp, 1100.dp)
+        .coerceAtMost(screenHeightDp() * 0.9f * cardRatio)
+    // The cover scales with the card (web: 160/660 of the card's width).
+    val coverWidth = dialogWidth * 0.26f
     Column(
         modifier = Modifier
-            .fillMaxWidth(0.94f)
-            .widthIn(max = 780.dp)
+            .width(dialogWidth)
+            .aspectRatio(cardRatio)
             .clip(RoundedCornerShape(12.dp))
             .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
             .background(RenzoColors.Card),
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             Row(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
                 // ── Cover + source badge ──
-                Column(modifier = Modifier.width(200.dp)) {
+                Column(modifier = Modifier.width(coverWidth)) {
                     Box(
                         modifier = Modifier
-                            .width(200.dp)
+                            .width(coverWidth)
                             .aspectRatio(2f / 3f)
                             .clip(RoundedCornerShape(12.dp))
                             .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
@@ -1440,7 +1454,7 @@ private fun CloudLatestDetailsDialog(
                         fontSize = 13.sp,
                         lineHeight = 20.sp,
                         color = RenzoColors.MutedForeground,
-                        maxLines = 5,
+                        maxLines = 7,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 12.dp),
                     )
