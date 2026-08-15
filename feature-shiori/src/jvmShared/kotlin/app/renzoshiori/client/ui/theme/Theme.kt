@@ -40,6 +40,9 @@ object RenzoColors {
 
     val Foreground = Color(0xFFF2F2F2)      // --foreground: 0 0% 95%
     val Popover = Color(0xFF171717)         // --popover: 0 0% 9%
+    /** Overlay behind full-window dialogs — the web's bg-black/80, darker
+     *  than Compose's default scrim (user direction 2026-08-15). */
+    val DialogScrim = Color(0xCC000000)
     val PrimaryForeground = Color(0xFFFFF1F2) // --primary-foreground
     val Secondary = Color(0xFF27272A)       // --secondary: 240 3.7% 15.9%
     val Muted = Color(0xFF262626)           // --muted: 0 0% 15%

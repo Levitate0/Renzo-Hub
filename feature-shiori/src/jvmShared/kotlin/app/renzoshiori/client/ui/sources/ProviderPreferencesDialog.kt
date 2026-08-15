@@ -48,10 +48,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.renzoshiori.client.data.model.ProviderPreferenceEntryType
 import app.renzoshiori.client.data.network.SourcesApi
+import app.renzoshiori.client.ui.components.ScrimDialog
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.util.screenHeightDp
@@ -104,10 +103,7 @@ internal fun ProviderPreferencesDialog(
         loading = false
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    ScrimDialog(onDismiss = onDismiss) {
         // DialogContent max-w-7xl max-h-[90vh] (provider-preferences-requester.tsx)
         Column(
             modifier = Modifier

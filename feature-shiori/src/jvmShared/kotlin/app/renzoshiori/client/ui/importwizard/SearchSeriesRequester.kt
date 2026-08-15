@@ -51,11 +51,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.renzoshiori.client.data.model.WizardSearchSourceDto
 import app.renzoshiori.client.data.network.SetupWizardApi
 import app.renzoshiori.client.data.network.absoluteUrl
+import app.renzoshiori.client.ui.components.ScrimDialog
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.util.screenWidthDp
@@ -533,10 +532,7 @@ fun SearchSeriesRequester(
             }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    ScrimDialog(onDismiss = onDismiss) {
         if (deskCard) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Column(

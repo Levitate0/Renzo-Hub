@@ -74,8 +74,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.InLibraryStatus
@@ -85,6 +83,7 @@ import app.renzoshiori.client.data.model.SearchSourceDto
 import app.renzoshiori.client.data.network.BrowseApi
 import app.renzoshiori.client.data.network.absoluteUrl
 import app.renzoshiori.client.ui.components.RibbonSelect
+import app.renzoshiori.client.ui.components.ScrimDialog
 import app.renzoshiori.client.ui.components.SelectOption
 import app.renzoshiori.client.ui.components.TvSearchBar
 import app.renzoshiori.client.ui.components.tvFocusTarget
@@ -821,7 +820,7 @@ private fun TagFilterDialog(
     selected: MutableList<String>,
     onDismiss: () -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    ScrimDialog(onDismiss = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
@@ -1064,7 +1063,7 @@ private fun CloudLatestDetailsSheet(
     ).joinToString(" · ")
     val chapters = item.chapterCount ?: item.latestChapter?.toInt()
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    ScrimDialog(onDismiss = onDismiss) {
         // Web md+: a landscape dialog card — cover left, metadata right, one
         // footer bar of actions. Below md (and on TV) the portrait drawer
         // stack below serves.
@@ -1083,7 +1082,7 @@ private fun CloudLatestDetailsSheet(
                 onRead = onRead,
                 onAddSeries = onAddSeries,
             )
-            return@Dialog
+            return@ScrimDialog
         }
         Column(
             modifier = Modifier

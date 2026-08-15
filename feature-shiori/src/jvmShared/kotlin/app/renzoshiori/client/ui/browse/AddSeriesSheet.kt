@@ -595,7 +595,9 @@ fun AddSeriesSheet(
                 contentAlignment = Alignment.TopCenter,
                 modifier = Modifier
                     .fillMaxSize()
-                    // The web dialog's overlay: clicking outside the card closes.
+                    // The web dialog's overlay (bg-black/80): darker than the
+                    // platform scrim, and clicking outside the card closes.
+                    .background(RenzoColors.DialogScrim)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
