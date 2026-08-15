@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -241,9 +242,22 @@ fun HomeShell(
         Box(modifier = Modifier.fillMaxSize().background(RenzoColors.Background)) {
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                 // ── 56dp command bar ─────────────────────────────────────
+                Box(modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                if (wide) {
+                    // Web: the section pills are absolutely centred in the bar
+                    // (`absolute left-1/2 -translate-x-1/2`), so they sit dead
+                    // centre no matter how wide the logo or right cluster is.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .widthIn(max = maxOf(screenWidthDp() * 0.6f, 0.dp)),
+                    ) {
+                        SectionPillsRow(current, metrics) { s -> section = s.name }
+                    }
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
                 ) {
                     if (!isTv && !wide) {
                         IconButton(
@@ -270,13 +284,7 @@ fun HomeShell(
                             modifier = Modifier.padding(start = 8.dp),
                         )
                     }
-                    if (wide) {
-                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            SectionPillsRow(current, metrics) { s -> section = s.name }
-                        }
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
+                    Spacer(Modifier.weight(1f))
                     // TV has ONE search, and it is the in-screen TvSearchBar on
                     // library/browse — the only one with a microphone. Keeping
                     // this field too would put two near-identical boxes on the
@@ -382,6 +390,7 @@ fun HomeShell(
                             )
                         }
                     }
+                }
                 }
                 HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
 
