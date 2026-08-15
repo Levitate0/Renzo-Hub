@@ -29,7 +29,25 @@ SetCompressor /SOLID lzma
 
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
 
+; Close every process running from $INSTDIR. A running Renzo Hub IS
+; javaw.exe loaded out of $INSTDIR\jre, so each mapped DLL stays
+; write-locked and an in-place upgrade dies on "Error opening file for
+; writing: ...\awt.dll". Matching by executable path (via an env var, so
+; quotes/apostrophes in the path can't break the PowerShell string) kills
+; only our own processes — never someone else's Java.
+!macro CloseRunningApp
+  System::Call 'Kernel32::SetEnvironmentVariable(t "RENZOHUB_DIR", t "$INSTDIR")i'
+  nsExec::Exec `powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -like ($$env:RENZOHUB_DIR + '\*') } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"`
+  Pop $0
+  ; Give the OS a beat to release the file handles.
+  Sleep 800
+!macroend
+
 Section "Install"
+  !insertmacro CloseRunningApp
+  ; Start the JRE clean: a newer JRE may drop files the old one shipped,
+  ; and overwrite-in-place would leave a mixed runtime behind.
+  RMDir /r "$INSTDIR\jre"
   SetOutPath "$INSTDIR"
   File /r "${SRC}/*"
   CreateShortcut "$SMPROGRAMS\${APPNAME}.lnk" "$INSTDIR\RenzoHub.exe" "" "$INSTDIR\RenzoHub.exe" 0
@@ -46,6 +64,7 @@ Section "Install"
 SectionEnd
 
 Section "Uninstall"
+  !insertmacro CloseRunningApp
   Delete "$SMPROGRAMS\${APPNAME}.lnk"
   Delete "$DESKTOP\${APPNAME}.lnk"
   RMDir /r "$INSTDIR"
