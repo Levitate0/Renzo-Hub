@@ -54,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -228,23 +229,29 @@ fun SettingsScaffold(
     snackbar: SnackbarHostState,
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    // Wide desktop: the persistent command bar above every route carries the
+    // navigation (the web settings pages have no local back bar); the
+    // back-arrow TopAppBar is the phone/TV affordance.
+    val localBar = !(!LocalIsTv.current && screenWidthDp() >= 1024.dp)
     Scaffold(
         containerColor = RenzoColors.Background,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            TopAppBar(
-                title = { Text(title, style = MaterialTheme.typography.titleLarge) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = RenzoColors.Background,
-                    titleContentColor = RenzoColors.Foreground,
-                    navigationIconContentColor = RenzoColors.Foreground,
-                ),
-            )
+            if (localBar) {
+                TopAppBar(
+                    title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = RenzoColors.Background,
+                        titleContentColor = RenzoColors.Foreground,
+                        navigationIconContentColor = RenzoColors.Foreground,
+                    ),
+                )
+            }
         },
         content = content,
     )
@@ -369,7 +376,8 @@ fun RenzoTextField(
                         placeholder,
                         style = MaterialTheme.typography.bodyMedium,
                         color = RenzoColors.MutedForeground,
-                        maxLines = 1,
+                        // Multiline fields may carry a multiline example placeholder.
+                        maxLines = if (singleLine) 1 else minLines,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -455,6 +463,9 @@ fun RenzoSelect(
     onChange: (String) -> Unit,
     placeholder: String = "Choose…",
     modifier: Modifier = Modifier,
+    // Optional decoration after an option's label (e.g. site-logins-section.tsx's
+    // "paid" pill), rendered in both the trigger and the menu items.
+    trailing: (@Composable (value: String) -> Unit)? = null,
 ) {
     var open by remember { mutableStateOf(false) }
     val selected = options.firstOrNull { it.first == value }
@@ -468,14 +479,17 @@ fun RenzoSelect(
                 .clickable { open = true }
                 .padding(horizontal = 12.dp, vertical = 9.dp),
         ) {
-            Text(
-                selected?.second ?: placeholder,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (selected == null) RenzoColors.MutedForeground else RenzoColors.Foreground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Text(
+                    selected?.second ?: placeholder,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (selected == null) RenzoColors.MutedForeground else RenzoColors.Foreground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (selected != null && trailing != null) trailing(selected.first)
+            }
             Icon(
                 Icons.Filled.ExpandMore, contentDescription = null,
                 tint = RenzoColors.MutedForeground, modifier = Modifier.size(16.dp),
@@ -489,7 +503,10 @@ fun RenzoSelect(
             options.forEach { (optValue, optLabel) ->
                 DropdownMenuItem(
                     text = {
-                        Text(optLabel, style = MaterialTheme.typography.bodyMedium, color = RenzoColors.Foreground)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(optLabel, style = MaterialTheme.typography.bodyMedium, color = RenzoColors.Foreground)
+                            trailing?.invoke(optValue)
+                        }
                     },
                     onClick = {
                         onChange(optValue)
@@ -497,6 +514,33 @@ fun RenzoSelect(
                     },
                 )
             }
+        }
+    }
+}
+
+/**
+ * The web's paired-field grid (settings-manager.tsx `md:grid-cols-2` /
+ * `sm:grid-cols-2`, account/page.tsx `sm:grid-cols-2`): two equal columns with
+ * a 16dp gap at or above [breakpoint], the plain stacked column below it. An
+ * omitted [right] leaves a half-width odd item, like the web grid's last cell.
+ */
+@Composable
+fun FieldPair(
+    breakpoint: Dp = 768.dp, // md; the Security/Account grids pair at sm (640dp)
+    left: @Composable () -> Unit,
+    right: @Composable () -> Unit = {},
+) {
+    val sideBySide = !LocalIsTv.current && screenWidthDp() >= breakpoint
+    if (sideBySide) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) { left() }
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) { right() }
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            left()
+            right()
         }
     }
 }
@@ -582,6 +626,8 @@ fun RenzoButton(
     variant: String = "default", // default | outline | secondary | ghost | destructive
     busy: Boolean = false,
     small: Boolean = false,
+    // button.tsx `disabled:opacity-50`: dimmed but visible, and inert.
+    enabled: Boolean = true,
 ) {
     val bg = when (variant) {
         "default" -> RenzoColors.Primary
@@ -600,10 +646,11 @@ fun RenzoButton(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
         modifier = modifier
+            .then(if (enabled) Modifier else Modifier.alpha(0.4f))
             .clip(shape)
             .background(bg)
             .then(if (variant == "outline") Modifier.border(1.dp, RenzoColors.Border, shape) else Modifier)
-            .clickable(enabled = !busy, onClick = onClick)
+            .clickable(enabled = enabled && !busy, onClick = onClick)
             .padding(horizontal = if (small) 10.dp else 14.dp, vertical = if (small) 7.dp else 9.dp),
     ) {
         val gap = if (text.isEmpty()) 0.dp else 8.dp

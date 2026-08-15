@@ -177,11 +177,19 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
                     )
                 }
                 if (state.allDownloadedNumbers.isNotEmpty()) {
+                    // chapters-section.tsx:592-598 — while the batch runs the
+                    // label swaps to "Saving done/total" and the count hides.
+                    val batchTotal = state.offlineSaving.size
+                    val batchActive = batchTotal > 0
+                    val batchDone = state.offlineSaving.count { n ->
+                        chapterKey(vm.seriesId, n) in state.offlineKeys
+                    }
                     RenzoChip(
-                        label = "Save series offline",
+                        label = if (batchActive) "Saving $batchDone/$batchTotal" else "Save series offline",
                         icon = Icons.Filled.CloudDownload,
-                        count = state.allDownloadedNumbers.size,
+                        count = state.allDownloadedNumbers.size.takeIf { !batchActive },
                         accent = Emerald400,
+                        enabled = !batchActive,
                         onClick = { vm.saveOffline(state.chapters.filter { it.downloaded }) },
                     )
                 }

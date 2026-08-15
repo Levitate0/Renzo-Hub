@@ -315,10 +315,11 @@ private fun UserRow(
         }
     }
     val passwordBadge: @Composable () -> Unit = {
+        // user-manager.tsx:220-222 — "Set" / "Not set".
         if (user.hasPassword) {
-            RenzoBadge("Password set", RenzoColors.Green)
+            RenzoBadge("Set", RenzoColors.Green)
         } else {
-            RenzoBadge("Password not set", RenzoColors.Amber)
+            RenzoBadge("Not set", RenzoColors.Amber)
         }
     }
     val actionsMenu: @Composable () -> Unit = {

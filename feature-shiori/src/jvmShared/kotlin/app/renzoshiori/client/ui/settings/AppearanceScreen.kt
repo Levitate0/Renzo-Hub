@@ -3,6 +3,8 @@ package app.renzoshiori.client.ui.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +40,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.UpdateUserDto
@@ -253,27 +260,37 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     modifier = Modifier.padding(bottom = 12.dp),
                 )
 
-                val (hue, saturation, lightness) = parseHsl(customHsl)
+                // Web: the swatch is an <input type="color"> — clicking it opens
+                // the platform's picker (SV square + hue bar + RGB fields). No
+                // Compose native picker exists, so the popover recreates it.
+                var pickerOpen by remember { mutableStateOf(false) }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Box(
-                        modifier = Modifier
-                            .width(56.dp)
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(accentColor)
-                            .border(
-                                if (customOn) 2.dp else 1.dp,
-                                if (customOn) RenzoColors.Foreground else RenzoColors.Border,
-                                RoundedCornerShape(8.dp),
-                            ),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        if (customOn) customHsl else activePreset.accent,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = RenzoColors.MutedForeground,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Box {
+                        Box(
+                            modifier = Modifier
+                                .width(56.dp)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(accentColor)
+                                .border(
+                                    if (customOn) 2.dp else 1.dp,
+                                    if (customOn) RenzoColors.Foreground else RenzoColors.Border,
+                                    RoundedCornerShape(8.dp),
+                                )
+                                .clickable { pickerOpen = !pickerOpen },
+                        )
+                        AccentPickerPopover(
+                            open = pickerOpen,
+                            onDismiss = { pickerOpen = false },
+                            hslString = if (customOn) customHsl else activePreset.accent,
+                            onPick = { hsl ->
+                                customOn = true
+                                customHsl = hsl
+                                persist(debounce = true)
+                            },
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
                     if (customOn) {
                         RenzoButton(
                             text = "Use preset accent",
@@ -285,23 +302,6 @@ fun AppearanceScreen(onBack: () -> Unit) {
                             },
                         )
                     }
-                }
-
-                Spacer(Modifier.height(12.dp))
-                AccentSlider("Hue", hue, 0f, 360f, accentColor) { value ->
-                    customOn = true
-                    customHsl = hslToStr(value, saturation, lightness)
-                    persist(debounce = true)
-                }
-                AccentSlider("Saturation", saturation * 100f, 0f, 100f, accentColor) { value ->
-                    customOn = true
-                    customHsl = hslToStr(hue, value / 100f, lightness)
-                    persist(debounce = true)
-                }
-                AccentSlider("Lightness", lightness * 100f, 0f, 100f, accentColor) { value ->
-                    customOn = true
-                    customHsl = hslToStr(hue, saturation, value / 100f)
-                    persist(debounce = true)
                 }
 
                 // ── Live preview ────────────────────────────────────────
@@ -380,38 +380,176 @@ fun AppearanceScreen(onBack: () -> Unit) {
     }
 }
 
+// ── The picker popover (the browser's native color dialog, recreated) ──────
+
+/** HSV working colour — the SV square's natural space; storage stays HSL. */
+private data class Hsv(val h: Float, val s: Float, val v: Float)
+
+private fun hslToHsv(h: Float, s: Float, l: Float): Hsv {
+    val v = l + s * minOf(l, 1f - l)
+    val sv = if (v <= 0f) 0f else 2f * (1f - l / v)
+    return Hsv(h, sv.coerceIn(0f, 1f), v.coerceIn(0f, 1f))
+}
+
+private fun hsvToHslString(hsv: Hsv): String {
+    val l = hsv.v * (1f - hsv.s / 2f)
+    val s = if (l <= 0f || l >= 1f) 0f else (hsv.v - l) / minOf(l, 1f - l)
+    return hslToStr(hsv.h, s.coerceIn(0f, 1f), l.coerceIn(0f, 1f))
+}
+
+private fun hsvToColor(hsv: Hsv): Color =
+    Color.hsv(hsv.h.coerceIn(0f, 360f).let { if (it >= 360f) 359.99f else it }, hsv.s, hsv.v)
+
+private fun rgbToHsv(r: Int, g: Int, b: Int): Hsv {
+    val rf = r / 255f; val gf = g / 255f; val bf = b / 255f
+    val max = maxOf(rf, gf, bf); val min = minOf(rf, gf, bf)
+    val d = max - min
+    val h = when {
+        d == 0f -> 0f
+        max == rf -> 60f * (((gf - bf) / d) % 6f)
+        max == gf -> 60f * (((bf - rf) / d) + 2f)
+        else -> 60f * (((rf - gf) / d) + 4f)
+    }.let { if (it < 0f) it + 360f else it }
+    return Hsv(h, if (max == 0f) 0f else d / max, max)
+}
+
+/**
+ * The SV square + hue bar + RGB fields, anchored under the accent swatch —
+ * what the web gets for free from `<input type="color">`. Edits stream out
+ * through [onPick] as the stored "H S% L%" string; the caller debounces.
+ */
 @Composable
-private fun AccentSlider(
-    label: String,
-    value: Float,
-    min: Float,
-    max: Float,
-    accent: Color,
-    onChange: (Float) -> Unit,
+private fun AccentPickerPopover(
+    open: Boolean,
+    onDismiss: () -> Unit,
+    hslString: String,
+    onPick: (String) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                color = RenzoColors.MutedForeground,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                value.toInt().toString(),
-                style = MaterialTheme.typography.labelMedium,
-                color = RenzoColors.MutedForeground,
-            )
+    androidx.compose.material3.DropdownMenu(
+        expanded = open,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.background(RenzoColors.Popover),
+    ) {
+        val (h, s, l) = parseHsl(hslString)
+        val hsv = hslToHsv(h, s, l)
+        val current = hsvToColor(hsv)
+
+        Column(modifier = Modifier.padding(12.dp).width(256.dp)) {
+            // ── SV square ──
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .pointerInput(hsv.h) {
+                        detectDragGestures { change, _ ->
+                            change.consume()
+                            val ns = (change.position.x / size.width).coerceIn(0f, 1f)
+                            val nv = 1f - (change.position.y / size.height).coerceIn(0f, 1f)
+                            onPick(hsvToHslString(Hsv(hsv.h, ns, nv)))
+                        }
+                    }
+                    .pointerInput(hsv.h) {
+                        detectTapGestures { offset ->
+                            val ns = (offset.x / size.width).coerceIn(0f, 1f)
+                            val nv = 1f - (offset.y / size.height).coerceIn(0f, 1f)
+                            onPick(hsvToHslString(Hsv(hsv.h, ns, nv)))
+                        }
+                    },
+            ) {
+                drawRect(
+                    Brush.horizontalGradient(listOf(Color.White, hsvToColor(Hsv(hsv.h, 1f, 1f)))),
+                )
+                drawRect(
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black)),
+                )
+                val thumb = Offset(hsv.s * size.width, (1f - hsv.v) * size.height)
+                drawCircle(Color.Black.copy(alpha = 0.6f), radius = 7.dp.toPx(), center = thumb)
+                drawCircle(Color.White, radius = 6.dp.toPx(), center = thumb, style = Stroke(2.dp.toPx()))
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // ── Hue bar ──
+            val hueStops = listOf(0f, 60f, 120f, 180f, 240f, 300f, 360f)
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, _ ->
+                            change.consume()
+                            val nh = (change.position.x / size.width).coerceIn(0f, 1f) * 360f
+                            onPick(hsvToHslString(hsv.copy(h = nh)))
+                        }
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures { offset ->
+                            val nh = (offset.x / size.width).coerceIn(0f, 1f) * 360f
+                            onPick(hsvToHslString(hsv.copy(h = nh)))
+                        }
+                    },
+            ) {
+                drawRect(
+                    Brush.horizontalGradient(hueStops.map { hsvToColor(Hsv(it, 1f, 1f)) }),
+                )
+                val x = (hsv.h / 360f) * size.width
+                drawCircle(Color.White, radius = 6.dp.toPx(), center = Offset(x, size.height / 2f), style = Stroke(2.dp.toPx()))
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // ── RGB fields ──
+            val r = (current.red * 255f).toInt()
+            val g = (current.green * 255f).toInt()
+            val b = (current.blue * 255f).toInt()
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                RgbField("R", r, Modifier.weight(1f)) { onPick(hsvToHslString(rgbToHsv(it, g, b))) }
+                RgbField("G", g, Modifier.weight(1f)) { onPick(hsvToHslString(rgbToHsv(r, it, b))) }
+                RgbField("B", b, Modifier.weight(1f)) { onPick(hsvToHslString(rgbToHsv(r, g, it))) }
+            }
         }
-        Slider(
-            value = value.coerceIn(min, max),
-            onValueChange = onChange,
-            valueRange = min..max,
-            colors = SliderDefaults.colors(
-                thumbColor = accent,
-                activeTrackColor = accent,
-                inactiveTrackColor = RenzoColors.Secondary,
+    }
+}
+
+@Composable
+private fun RgbField(label: String, value: Int, modifier: Modifier = Modifier, onCommit: (Int) -> Unit) {
+    // Local draft re-seeded whenever the committed value changes elsewhere
+    // (square/hue drags), committed on the IME action or focus loss.
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    fun commit() {
+        text.toIntOrNull()?.coerceIn(0, 255)?.let { if (it != value) onCommit(it) }
+    }
+    Column(modifier = modifier) {
+        androidx.compose.foundation.text.BasicTextField(
+            value = text,
+            onValueChange = { text = it.filter { c -> c.isDigit() }.take(3) },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodySmall.copy(
+                color = RenzoColors.Foreground,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             ),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(RenzoColors.Foreground),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+            ),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { commit() }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .background(RenzoColors.Secondary)
+                .border(1.dp, RenzoColors.Border, RoundedCornerShape(6.dp))
+                .onFocusChanged { if (!it.isFocused) commit() }
+                .padding(vertical = 6.dp),
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = RenzoColors.MutedForeground,
+            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
 }

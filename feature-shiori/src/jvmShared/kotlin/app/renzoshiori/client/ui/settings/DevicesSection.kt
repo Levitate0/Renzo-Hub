@@ -31,7 +31,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ShioriRuntime
@@ -72,10 +75,15 @@ fun DevicesSection(snackbar: SnackbarHostState, onLogout: () -> Unit) {
     }
     LaunchedEffect(Unit) { refresh() }
 
-    // Web: intro copy above the list.
+    // Web: intro copy above the list — devices-section.tsx:101 sets
+    // "Remember me" in `font-medium text-foreground`.
     Text(
-        buildString {
-            append("Each time you sign in with Remember me — or approve a television — that ")
+        buildAnnotatedString {
+            append("Each time you sign in with ")
+            withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = RenzoColors.Foreground)) {
+                append("Remember me")
+            }
+            append(" — or approve a television — that ")
             append("device gets its own long-lived session (90 days), renewed every time ")
             append("it's used. Sign one out here and the rest stay signed in.")
         },

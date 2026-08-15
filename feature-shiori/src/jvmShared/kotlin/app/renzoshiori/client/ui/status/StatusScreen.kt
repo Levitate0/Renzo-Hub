@@ -261,6 +261,7 @@ fun StatusScreen(onOpenSeries: (String) -> Unit = {}) {
                                 canAdmin = canAdmin,
                                 baseUrl = baseUrl,
                                 onOpenSeries = onOpenSeries,
+                                wide = statusWide,
                             )
                             Spacer(Modifier.height(12.dp))
                         }
@@ -285,6 +286,7 @@ fun StatusScreen(onOpenSeries: (String) -> Unit = {}) {
                                 api = api,
                                 onSaved = { reloadKey++ },
                                 onError = { scope.launch { snackbar.showSnackbar(it) } },
+                                wide = statusWide,
                             )
                             Spacer(Modifier.height(8.dp))
                         }
@@ -617,9 +619,22 @@ private fun ProviderCard(
     canAdmin: Boolean,
     baseUrl: String,
     onOpenSeries: (String) -> Unit,
+    wide: Boolean,
 ) {
     var isOpen by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(12.dp)
+
+    // provider-status-panel.tsx:125-131 — the pills + Dismiss cluster. One
+    // content set; `wide` only decides whether it sits at the header row's
+    // trailing edge (desktop) or stacks underneath (mobile).
+    val hasCluster = !provider.isMihonInstalled || provider.affectedSeries.isNotEmpty() || canAdmin
+    val actionCluster: @Composable () -> Unit = {
+        if (!provider.isMihonInstalled) MetaPill("User Provider")
+        if (provider.affectedSeries.isNotEmpty()) MetaPill("${provider.affectedSeries.size} series")
+        if (canAdmin) {
+            DismissButton { onClearAlert(HealthStatusTargetType.PROVIDER, provider.providerId) }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -629,10 +644,11 @@ private fun ProviderCard(
             .border(1.dp, levelAccent(provider.level), shape),
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .dpadClickable(radius = 8.dp) { isOpen = !isOpen },
             ) {
                 Icon(
@@ -684,20 +700,23 @@ private fun ProviderCard(
                     )
                 }
             }
-            // Right-hand action cluster (pills + Dismiss) — stacked under the
-            // header on mobile instead of beside it.
-            if (!provider.isMihonInstalled || provider.affectedSeries.isNotEmpty() || canAdmin) {
+            // Wide: cluster at the row's trailing edge, like the web's
+            // `flex shrink-0 items-center gap-2` column.
+            if (wide && hasCluster) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(start = 8.dp),
+                ) { actionCluster() }
+            }
+            }
+            // Stacked form below wide — cluster under the header instead.
+            if (!wide && hasCluster) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(start = 36.dp, top = 8.dp),
-                ) {
-                    if (!provider.isMihonInstalled) MetaPill("User Provider")
-                    if (provider.affectedSeries.isNotEmpty()) MetaPill("${provider.affectedSeries.size} series")
-                    if (canAdmin) {
-                        DismissButton { onClearAlert(HealthStatusTargetType.PROVIDER, provider.providerId) }
-                    }
-                }
+                ) { actionCluster() }
             }
             Text(
                 provider.message,
@@ -787,6 +806,7 @@ private fun SeriesAlertCard(
     api: StatusApi?,
     onSaved: () -> Unit,
     onError: (String) -> Unit,
+    wide: Boolean,
 ) {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -811,6 +831,46 @@ private fun SeriesAlertCard(
     }
 
     val shape = RoundedCornerShape(12.dp)
+
+    // series-status-panel.tsx:146-178 — cadence edit (admin) + days badge +
+    // dismiss. One content set; `wide` only picks the slot: the web's
+    // right-hand `flex shrink-0 flex-col items-end gap-2` column at desktop,
+    // stacked under the header below wide.
+    val actionsCluster: @Composable () -> Unit = {
+        if (canAdmin) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Cadence:",
+                    fontSize = 11.sp,
+                    color = RenzoColors.MutedForeground,
+                    maxLines = 1,
+                )
+                CadenceInput(
+                    value = input,
+                    placeholder = series.releaseCadenceDays?.toString() ?: "auto",
+                    onValueChange = { typed -> input = typed.filter { c -> c.isDigit() } },
+                    onDone = { saveCadence() },
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+                SaveCadenceButton(
+                    enabled = hasValidInput && !isSaving,
+                    saving = isSaving,
+                    onClick = { saveCadence() },
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            series.daysWithoutRelease?.let { MetaPill("${it}d") }
+            if (canAdmin) {
+                DismissButton { onClearAlert(HealthStatusTargetType.SERIES, series.id) }
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -850,47 +910,21 @@ private fun SeriesAlertCard(
                     }
                 }
             }
+            if (wide) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(start = 8.dp),
+                ) { actionsCluster() }
+            }
         }
 
-        // Actions — cadence edit (admin) + days badge + dismiss. The web keeps
-        // these in a right-hand column; on a phone they stack underneath.
-        Column(
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        ) {
-            if (canAdmin) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Cadence:",
-                        fontSize = 11.sp,
-                        color = RenzoColors.MutedForeground,
-                        maxLines = 1,
-                    )
-                    CadenceInput(
-                        value = input,
-                        placeholder = series.releaseCadenceDays?.toString() ?: "auto",
-                        onValueChange = { typed -> input = typed.filter { c -> c.isDigit() } },
-                        onDone = { saveCadence() },
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
-                    SaveCadenceButton(
-                        enabled = hasValidInput && !isSaving,
-                        saving = isSaving,
-                        onClick = { saveCadence() },
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
-                }
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                series.daysWithoutRelease?.let { MetaPill("${it}d") }
-                if (canAdmin) {
-                    DismissButton { onClearAlert(HealthStatusTargetType.SERIES, series.id) }
-                }
-            }
+        if (!wide) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) { actionsCluster() }
         }
     }
 }

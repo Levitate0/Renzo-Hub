@@ -4,9 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,9 +30,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlaylistAddCheck
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,15 +54,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.ui.util.screenWidthDp
+import app.renzoshiori.client.data.model.LibraryRowDto
 import app.renzoshiori.client.data.model.SeriesStatus
 import app.renzoshiori.client.data.network.absoluteUrl
 import app.renzoshiori.client.data.offline.OfflineRepository
@@ -65,6 +82,7 @@ import app.renzoshiori.client.ui.components.RibbonToggleChip
 import app.renzoshiori.client.ui.components.SelectOption
 import app.renzoshiori.client.ui.components.TvSearchBar
 import app.renzoshiori.client.ui.queue.parseUtcMillis
+import app.renzoshiori.client.ui.series.flagForLanguage
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.tv.focusRing
@@ -584,6 +602,9 @@ private fun OnlineGrid(
                 lastChapterColor = getStatusDisplay(effectiveStatus).color,
                 paused = series.pausedDownloads,
                 hasUnknown = series.hasUnknown,
+                // Desktop hover preview (list-series/index.tsx Tooltip) needs
+                // the full row: author/artist/genres/description/providers.
+                preview = series,
                 onClick = { onOpenSeries(series.id) },
             )
         }
@@ -789,9 +810,27 @@ private fun SeriesCard(
     lastChapterColor: Color,
     paused: Boolean,
     hasUnknown: Boolean,
+    preview: LibraryRowDto? = null,
     onClick: () -> Unit,
 ) {
     val isTv = LocalIsTv.current
+
+    // Hover preview — desktop pointer only (the web Tooltip in
+    // list-series/index.tsx). Hover doesn't exist on touch, and TV never gets
+    // the hoverable modifier, so phone/TV behavior is untouched.
+    val previewEnabled = preview != null && !isTv && screenWidthDp() >= 1024.dp
+    val hoverSource = remember { MutableInteractionSource() }
+    val hovered by hoverSource.collectIsHoveredAsState()
+    var previewVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(hovered, previewEnabled) {
+        if (hovered && previewEnabled) {
+            delay(500) // the Tooltip's open delay; hide is immediate
+            previewVisible = true
+        } else {
+            previewVisible = false
+        }
+    }
+
     TvFocusTile(onClick = onClick) {
         Box(
             modifier = Modifier
@@ -808,6 +847,7 @@ private fun SeriesCard(
                 )
                 .clip(RoundedCornerShape(6.dp))
                 .background(RenzoColors.Muted)
+                .then(if (previewEnabled) Modifier.hoverable(hoverSource) else Modifier)
                 // On TV the wrapper owns the click (it owns the focus ring too).
                 .then(if (isTv) Modifier else Modifier.clickable(onClick = onClick)),
         ) {
@@ -927,6 +967,220 @@ private fun SeriesCard(
                 .background(Color.Black.copy(alpha = 0.6f))
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         )
+
+        // Hover preview panel — anchored to this card, shown beside it.
+        if (previewVisible && preview != null) {
+            SeriesHoverPreview(preview)
+        }
+        }
+    }
+}
+
+/**
+ * The library card's hover tooltip, cloned from list-series/index.tsx
+ * (TooltipContent side="right"): last-chapter badge + bold title with the
+ * status badge on the right, "by author" / "art by artist", the genre chips,
+ * a 4-line-clamped description, and the provider chips (external-link +
+ * name • scanlator + language flag + green storage icon). Anchored to the
+ * card it decorates; rendered in a non-focusable Popup so it never steals
+ * clicks or keyboard focus from the grid.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SeriesHoverPreview(series: LibraryRowDto) {
+    val density = LocalDensity.current
+    // side="right" with collision handling: the panel sits 8dp to the right of
+    // the card and flips to the left near the window edge — always beside the
+    // pointer, never under it, so hovering can't flicker.
+    val positionProvider = remember(density) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset {
+                val gap = with(density) { 8.dp.roundToPx() }
+                var x = anchorBounds.right + gap
+                if (x + popupContentSize.width > windowSize.width) {
+                    x = anchorBounds.left - gap - popupContentSize.width
+                }
+                val y = anchorBounds.top
+                    .coerceAtMost(windowSize.height - popupContentSize.height)
+                    .coerceAtLeast(0)
+                return IntOffset(x, y)
+            }
+        }
+    }
+
+    Popup(
+        popupPositionProvider = positionProvider,
+        properties = PopupProperties(focusable = false),
+    ) {
+        val status = getStatusDisplay(series.status)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .width(320.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(RenzoColors.Card)
+                .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
+                .padding(16.dp),
+        ) {
+            // Header row: last-chapter badge + title; status badge top-right.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val lastChapter = series.lastChapter
+                if (lastChapter != null) {
+                    Text(
+                        formatChapter(lastChapter),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RenzoColors.Foreground,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(RenzoColors.Secondary)
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                }
+                Text(
+                    series.title,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = RenzoColors.Primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    status.text,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(status.color)
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
+
+            // by {author} / art by {artist} — artist only when distinct.
+            val author = series.author?.takeIf { it.isNotBlank() }
+            val artist = series.artist?.takeIf { it.isNotBlank() }
+            if (author != null || artist != null) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (author != null) {
+                        Text(
+                            "by $author",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = RenzoColors.MutedForeground,
+                        )
+                    }
+                    if (artist != null && artist != author) {
+                        Text(
+                            "art by $artist",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = RenzoColors.MutedForeground,
+                        )
+                    }
+                }
+            }
+
+            // Genre tag chips (the web's DynamicTags).
+            val genres = series.genre.filter { it.isNotBlank() }
+            if (genres.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    genres.forEach { genre ->
+                        Text(
+                            genre,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = RenzoColors.MutedForeground,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(RenzoColors.Secondary)
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
+
+            // Description — line-clamp-4, with the web's fallback wording.
+            Text(
+                series.description?.takeIf { it.isNotBlank() } ?: "No description available",
+                style = MaterialTheme.typography.bodySmall,
+                color = RenzoColors.MutedForeground,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            // Provider chips — link icon when a source url exists, language
+            // flag, and the green storage marker for the permanent provider.
+            if (series.providers.isNotEmpty()) {
+                val uriHandler = LocalUriHandler.current
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    series.providers.forEach { p ->
+                        val url = p.url?.takeIf { it.isNotBlank() }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .border(1.dp, RenzoColors.Border, RoundedCornerShape(4.dp))
+                                .background(RenzoColors.Secondary)
+                                .then(
+                                    if (url != null) {
+                                        Modifier.clickable { uriHandler.openUri(url) }
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        ) {
+                            if (url != null) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.OpenInNew,
+                                    contentDescription = "Open in the source",
+                                    tint = RenzoColors.Foreground,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
+                            Text(
+                                if (p.scanlator.isNotBlank() && p.scanlator != p.provider) {
+                                    "${p.provider} • ${p.scanlator}"
+                                } else {
+                                    p.provider
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = RenzoColors.Foreground,
+                                maxLines = 1,
+                            )
+                            if (p.language.isNotBlank()) {
+                                Text(
+                                    flagForLanguage(p.language),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                            if (p.isStorage) {
+                                Icon(
+                                    Icons.Filled.Storage,
+                                    contentDescription = "Stored permanently",
+                                    tint = RenzoColors.Green,
+                                    modifier = Modifier.size(13.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

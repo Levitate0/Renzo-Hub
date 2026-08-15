@@ -1,6 +1,7 @@
 package app.renzoshiori.client.ui.queue
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
@@ -18,9 +19,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -537,15 +540,17 @@ private fun QueueRow(
 
             // Downloading rows are read-only (server-driven) — no actions.
             if (!isDownloading) {
-                if (!item.url.isNullOrBlank()) {
-                    RowIcon(Icons.AutoMirrored.Filled.ArrowForward, "Open source") { onOpen(item.url) }
-                }
-                if (item.status == RowStatus.FAILED) {
-                    RowIcon(Icons.Filled.Refresh, "Retry download", onRetry)
-                }
                 if (item.status == RowStatus.QUEUED) {
+                    // queue-row.tsx:182-188 — queued rows get ONLY the Cancel ✕.
                     RowIcon(Icons.Filled.Close, "Cancel", onRemove)
                 } else {
+                    // Completed or failed (queue-row.tsx:190-207).
+                    if (!item.url.isNullOrBlank()) {
+                        RowIcon(Icons.AutoMirrored.Filled.ArrowForward, "Open source") { onOpen(item.url) }
+                    }
+                    if (item.status == RowStatus.FAILED) {
+                        RowIcon(Icons.Filled.Refresh, "Retry download", onRetry)
+                    }
                     RowIcon(Icons.Filled.Delete, "Remove from history", onRemove)
                 }
             }
@@ -590,8 +595,11 @@ private fun RowIcon(
 private fun JobsDialog(onDismiss: () -> Unit) {
     val renzoApp = ShioriRuntime.app
     val scope = rememberCoroutineScope()
+    // Native job state: the REST call is all-or-nothing (no SignalR hub here),
+    // so "running" is the in-flight request and completed/failed its outcome.
     var running by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var completed by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
     var runFocused by remember { mutableStateOf(false) }
     val isTv = LocalIsTv.current
 
@@ -611,17 +619,14 @@ private fun JobsDialog(onDismiss: () -> Unit) {
             Button(
                 onClick = {
                     running = true
-                    message = null
+                    completed = false
+                    failed = false
                     scope.launch {
                         val ok = runCatching {
                             renzoApp.network.currentServiceOf<QueueApi>()?.updateAllSeries()
                         }.isSuccess
                         running = false
-                        message = if (ok) {
-                            "Update All Series completed successfully!"
-                        } else {
-                            "Failed to start Update All Series."
-                        }
+                        if (ok) completed = true else failed = true
                     }
                 },
                 shape = MaterialTheme.shapes.small,
@@ -655,14 +660,128 @@ private fun JobsDialog(onDismiss: () -> Unit) {
                 color = RenzoColors.MutedForeground,
                 modifier = Modifier.padding(top = 8.dp),
             )
-            val msg = message
-            if (msg != null) {
-                Text(
-                    msg,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = RenzoColors.Primary,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
+            // jobs-panel.tsx:133-145 (JobProgress) — the "Updating All Series"
+            // card: leading state icon, progress bar, message line + rounded %.
+            if (running || completed || failed) {
+                val pct = if (completed) 100 else 0
+                Column(
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(RenzoColors.Background)
+                        .border(
+                            1.dp,
+                            if (running) RenzoColors.Primary else RenzoColors.Foreground.copy(alpha = 0.08f),
+                            RoundedCornerShape(10.dp),
+                        )
+                        .padding(12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        when {
+                            failed -> Icon(
+                                Icons.Filled.ErrorOutline,
+                                contentDescription = null,
+                                tint = RenzoColors.Red,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            completed -> Icon(
+                                Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                tint = RenzoColors.Primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            else -> CircularProgressIndicator(
+                                color = RenzoColors.Primary,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        Text(
+                            "Updating All Series",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = RenzoColors.Foreground,
+                            modifier = Modifier.padding(start = 10.dp),
+                        )
+                        if (failed) {
+                            Text(
+                                "Failed",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = RenzoColors.Red,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                    }
+                    // Progress track (`<Progress className="h-2" />`).
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 10.dp)
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(RenzoColors.Secondary),
+                    ) {
+                        if (pct > 0) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(pct / 100f)
+                                    .height(6.dp)
+                                    .background(RenzoColors.Primary),
+                            )
+                        }
+                    }
+                    Row(modifier = Modifier.padding(top = 6.dp).fillMaxWidth()) {
+                        Text(
+                            when {
+                                failed -> "Failed to start Update All Series."
+                                else -> "Processing..."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (failed) RenzoColors.Red else RenzoColors.MutedForeground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            "$pct%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = RenzoColors.MutedForeground,
+                        )
+                    }
+                }
+            }
+            // Completion block (jobs-panel.tsx:148-160).
+            if (completed) {
+                Column(
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(RenzoColors.Secondary)
+                        .border(1.dp, RenzoColors.Green.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = RenzoColors.Primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            "Update All Series completed successfully!",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = RenzoColors.Foreground,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                    Text(
+                        "All series have been updated with consistent naming and metadata.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RenzoColors.MutedForeground,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {

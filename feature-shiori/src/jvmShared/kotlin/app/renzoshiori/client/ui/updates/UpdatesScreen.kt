@@ -61,6 +61,7 @@ import app.renzoshiori.client.ui.queue.formatRelativeTime
 import app.renzoshiori.client.ui.queue.getDateBucket
 import app.renzoshiori.client.ui.queue.parseUtcMillis
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.util.hubToast
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -226,7 +227,15 @@ fun UpdatesScreen(onOpenSeries: (String) -> Unit) {
                         .dpadClickable(radius = 50.dp, enabled = !scanning, fill = null) {
                             scanning = true
                             scope.launch {
-                                runCatching { api?.scanAll() }
+                                // updates/page.tsx:335-346 — toast the outcome.
+                                val ok = runCatching { api?.scanAll() }.isSuccess
+                                hubToast(
+                                    if (ok) {
+                                        "Library scan queued — new chapters will appear here as sources are checked."
+                                    } else {
+                                        "Could not queue the library scan."
+                                    },
+                                )
                                 // Brief lockout so double-taps don't queue twice.
                                 delay(4000)
                                 scanning = false

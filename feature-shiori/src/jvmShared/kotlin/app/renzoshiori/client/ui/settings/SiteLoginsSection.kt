@@ -34,8 +34,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.SaveSiteCookieDto
 import app.renzoshiori.client.data.model.SaveSiteLoginDto
@@ -207,12 +209,15 @@ fun SiteLoginsSection(snackbar: SnackbarHostState) {
                             site.provider to buildString {
                                 append(site.provider)
                                 if (site.domain.isNotBlank()) append(" · ${site.domain}")
-                                if (site.coin) append("  PAID")
                             }
                         },
                         value = provider,
                         onChange = { provider = it },
                         placeholder = "Choose a site",
+                        // site-logins-section.tsx:167-169 — coin sites carry a "paid" pill.
+                        trailing = { value ->
+                            if (availableSites.firstOrNull { it.provider == value }?.coin == true) PaidPill()
+                        },
                     )
                 },
                 right = {
@@ -249,31 +254,31 @@ fun SiteLoginsSection(snackbar: SnackbarHostState) {
             val canSubmit = provider.isNotEmpty() &&
                 if (mode == "password") username.isNotBlank() && password.isNotEmpty() else cookie.isNotBlank()
 
-            if (canSubmit) {
-                RenzoButton(
-                    text = if (mode == "password") "Log in & save" else "Save cookie",
-                    icon = Icons.Filled.VpnKey,
-                    busy = busy,
-                    onClick = {
-                        busy = true
-                        scope.launch {
-                            val api = app.network.currentServiceOf<SiteAuthApi>()
-                            runCatching {
-                                if (mode == "password") {
-                                    api?.save(SaveSiteLoginDto(provider, username.trim(), password))
-                                } else {
-                                    api?.saveCookie(SaveSiteCookieDto(provider, username.trim(), cookie.trim()))
-                                }
+            // Web: always visible, disabled until the form is complete.
+            RenzoButton(
+                text = if (mode == "password") "Log in & save" else "Save cookie",
+                icon = Icons.Filled.VpnKey,
+                busy = busy,
+                enabled = canSubmit,
+                onClick = {
+                    busy = true
+                    scope.launch {
+                        val api = app.network.currentServiceOf<SiteAuthApi>()
+                        runCatching {
+                            if (mode == "password") {
+                                api?.save(SaveSiteLoginDto(provider, username.trim(), password))
+                            } else {
+                                api?.saveCookie(SaveSiteCookieDto(provider, username.trim(), cookie.trim()))
                             }
-                                .onSuccess { it?.let { r -> report(r.result) } }
-                                .onFailure { snackbar.showSnackbar(it.apiMessage("Failed to save login")) }
-                            username = ""; password = ""; cookie = ""
-                            busy = false
-                            refresh()
                         }
-                    },
-                )
-            }
+                            .onSuccess { it?.let { r -> report(r.result) } }
+                            .onFailure { snackbar.showSnackbar(it.apiMessage("Failed to save login")) }
+                        username = ""; password = ""; cookie = ""
+                        busy = false
+                        refresh()
+                    }
+                },
+            )
         } else if (!loading && creds.isNotEmpty()) {
             CardDivider()
             Text(
@@ -337,6 +342,28 @@ private fun PairRow(
             right()
         }
     }
+}
+
+/**
+ * site-logins-section.tsx:167-169 — `rounded-full bg-primary/15 px-1.5 py-0.5
+ * text-[9px] font-medium uppercase tracking-wide text-primary`.
+ */
+@Composable
+private fun PaidPill() {
+    Text(
+        "PAID",
+        style = MaterialTheme.typography.labelSmall.copy(
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 0.5.sp,
+        ),
+        color = RenzoColors.Primary,
+        modifier = Modifier
+            .padding(start = 6.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(RenzoColors.Primary.copy(alpha = 0.15f))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
 
 /** The web's StatusIcon: ok/manual_cookie ✓, failed ⚠, anything else ⏱. */

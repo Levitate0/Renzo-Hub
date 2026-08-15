@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.data.model.ExtensionInfoDto
 import app.renzoshiori.client.data.network.SourcesApi
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
+import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -308,96 +310,94 @@ private fun ExtensionVersionRow(
 ) {
     var versionsOpen by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(8.dp)
+    // extension-versions.tsx:120-176 keeps name/meta left with the select +
+    // AUTO switch trailing on the SAME row at desktop; narrow (and TV) stacks
+    // the controls on a row of their own below.
+    val wide = !LocalIsTv.current && screenWidthDp() >= 768.dp
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(RenzoColors.Card.copy(alpha = 0.50f))
-            .border(1.dp, RenzoColors.Border.copy(alpha = 0.40f), shape)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    val nameAndMeta: @Composable (Modifier) -> Unit = { blockModifier ->
+        Column(modifier = blockModifier) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    ext.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = RenzoColors.Foreground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (!ext.autoUpdate) {
+                    Icon(
+                        Icons.Filled.PushPin,
+                        contentDescription = null,
+                        tint = RenzoColors.Amber,
+                        modifier = Modifier.padding(start = 6.dp).size(12.dp),
+                    )
+                }
+            }
             Text(
-                ext.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = RenzoColors.Foreground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                "${ext.versions.size} version${if (ext.versions.size == 1) "" else "s"} installed",
+                fontSize = 11.sp,
+                color = RenzoColors.MutedForeground,
             )
-            if (!ext.autoUpdate) {
+        }
+    }
+
+    val versionSelect: @Composable () -> Unit = {
+        Box {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .width(170.dp)
+                    .height(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
+                    .background(RenzoColors.Background)
+                    .clickable(enabled = !busy) { versionsOpen = true }
+                    .padding(horizontal = 10.dp),
+            ) {
+                Text(
+                    ext.activeVersion,
+                    fontSize = 12.sp,
+                    color = RenzoColors.Foreground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
                 Icon(
-                    Icons.Filled.PushPin,
+                    Icons.Filled.ExpandMore,
                     contentDescription = null,
-                    tint = RenzoColors.Amber,
-                    modifier = Modifier.padding(start = 6.dp).size(12.dp),
+                    tint = RenzoColors.MutedForeground,
+                    modifier = Modifier.size(16.dp),
                 )
             }
-        }
-        Text(
-            "${ext.versions.size} version${if (ext.versions.size == 1) "" else "s"} installed",
-            fontSize = 11.sp,
-            color = RenzoColors.MutedForeground,
-        )
-
-        // Version select + auto-update switch — a right-hand cluster on the
-        // web, a row of its own underneath here.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        ) {
-            Box {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .width(170.dp)
-                        .height(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-                        .background(RenzoColors.Background)
-                        .clickable(enabled = !busy) { versionsOpen = true }
-                        .padding(horizontal = 10.dp),
-                ) {
-                    Text(
-                        ext.activeVersion,
-                        fontSize = 12.sp,
-                        color = RenzoColors.Foreground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
+            DropdownMenu(
+                expanded = versionsOpen,
+                onDismissRequest = { versionsOpen = false },
+                containerColor = RenzoColors.Popover,
+            ) {
+                ext.versions.forEach { v ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                v.version + if (v.isLocal) " (sideloaded)" else "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = RenzoColors.Foreground,
+                            )
+                        },
+                        onClick = {
+                            versionsOpen = false
+                            if (v.version != ext.activeVersion) onSetActive(v.version)
+                        },
                     )
-                    Icon(
-                        Icons.Filled.ExpandMore,
-                        contentDescription = null,
-                        tint = RenzoColors.MutedForeground,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-                DropdownMenu(
-                    expanded = versionsOpen,
-                    onDismissRequest = { versionsOpen = false },
-                    containerColor = RenzoColors.Popover,
-                ) {
-                    ext.versions.forEach { v ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    v.version + if (v.isLocal) " (sideloaded)" else "",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = RenzoColors.Foreground,
-                                )
-                            },
-                            onClick = {
-                                versionsOpen = false
-                                if (v.version != ext.activeVersion) onSetActive(v.version)
-                            },
-                        )
-                    }
                 }
             }
-            Box(Modifier.weight(1f))
+        }
+    }
+
+    val autoCluster: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "AUTO",
                 fontSize = 10.sp,
@@ -417,6 +417,43 @@ private fun ExtensionVersionRow(
                     uncheckedBorderColor = RenzoColors.Border,
                 ),
             )
+        }
+    }
+
+    if (wide) {
+        // Web gap-3 between the three cells.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(RenzoColors.Card.copy(alpha = 0.50f))
+                .border(1.dp, RenzoColors.Border.copy(alpha = 0.40f), shape)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            nameAndMeta(Modifier.weight(1f))
+            versionSelect()
+            autoCluster()
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(RenzoColors.Card.copy(alpha = 0.50f))
+                .border(1.dp, RenzoColors.Border.copy(alpha = 0.40f), shape)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            nameAndMeta(Modifier.fillMaxWidth())
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) {
+                versionSelect()
+                Box(Modifier.weight(1f))
+                autoCluster()
+            }
         }
     }
 }

@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,11 +52,16 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.WizardAction
 import app.renzoshiori.client.data.model.WizardImport
@@ -695,10 +703,12 @@ private fun MatchRow(
     onPropertyChange: (String, Boolean) -> Unit,
 ) {
     var permanentInfoOpen by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
+    val isTv = LocalIsTv.current
 
     // Web ≥640px: .iw-match-row is `3px 36px 1fr auto` (gap 14px) with the switch
     // cluster inline as the trailing cell; ≤640px it drops to a 3-col grid below.
-    val wide = !LocalIsTv.current && screenWidthDp() >= 640.dp
+    val wide = !isTv && screenWidthDp() >= 640.dp
 
     val switchCluster: @Composable (Modifier) -> Unit = { clusterModifier ->
         Row(
@@ -786,6 +796,11 @@ private fun MatchRow(
 
         Column(modifier = Modifier.weight(1f)) {
             Row {
+                // Desktop pointer hover on the thumb shows a large cover in a
+                // popover beside it (cover-popover.tsx) — hover only, so touch
+                // and TV never see it.
+                val coverInteraction = remember { MutableInteractionSource() }
+                val coverHovered by coverInteraction.collectIsHoveredAsState()
                 Box(
                     modifier = Modifier
                         .width(36.dp)
@@ -798,7 +813,8 @@ private fun MatchRow(
                             } else {
                                 Modifier
                             }
-                        ),
+                        )
+                        .hoverable(coverInteraction, enabled = !isTv),
                 ) {
                     if (!match.thumbnailUrl.isNullOrEmpty()) {
                         AsyncImage(
@@ -808,6 +824,50 @@ private fun MatchRow(
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
+                    if (!isTv && coverHovered && !match.thumbnailUrl.isNullOrEmpty()) {
+                        // Right of the thumb, vertically centred on it
+                        // (cover-popover.tsx default placement, scaled up for
+                        // the desktop window).
+                        val density = LocalDensity.current
+                        Popup(
+                            offset = with(density) {
+                                IntOffset(48.dp.roundToPx(), (-124).dp.roundToPx())
+                            },
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(200.dp)
+                                    .height(300.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, WizardColors.Border, RoundedCornerShape(8.dp))
+                                    .background(WizardColors.Panel),
+                            ) {
+                                AsyncImage(
+                                    model = absoluteUrl(baseUrl, match.thumbnailUrl),
+                                    contentDescription = "${match.title} cover preview",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                // .iw-cover-pop__label — provider name, italic,
+                                // over a dark strip at the foot of the cover.
+                                Text(
+                                    match.provider,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontStyle = FontStyle.Italic,
+                                    ),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .background(Color.Black.copy(alpha = 0.6f))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+                            }
+                        }
+                    }
                 }
                 Column(
                     modifier = Modifier
@@ -816,21 +876,35 @@ private fun MatchRow(
                         .clickable(onClick = onToggle),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            match.provider,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = WizardColors.Fg,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (!match.url.isNullOrEmpty()) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = null,
-                                tint = WizardColors.Fg.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(start = 4.dp).size(10.dp),
+                        // match-row.tsx:152-166 — with a url the provider name
+                        // + icon are a real link; its own clickable consumes
+                        // the tap (web stopPropagation) so opening the source
+                        // never toggles "preferred".
+                        val matchUrl = match.url
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = if (matchUrl.isNullOrEmpty()) {
+                                Modifier
+                            } else {
+                                Modifier.clickable { runCatching { uriHandler.openUri(matchUrl) } }
+                            },
+                        ) {
+                            Text(
+                                match.provider,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = WizardColors.Fg,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
+                            if (!matchUrl.isNullOrEmpty()) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.OpenInNew,
+                                    contentDescription = "Open ${match.provider}",
+                                    tint = WizardColors.Fg.copy(alpha = 0.6f),
+                                    modifier = Modifier.padding(start = 4.dp).size(10.dp),
+                                )
+                            }
                         }
                         Text(
                             match.lang.lowercase(),

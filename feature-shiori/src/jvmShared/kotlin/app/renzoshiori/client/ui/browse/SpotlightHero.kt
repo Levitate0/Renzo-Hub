@@ -257,6 +257,14 @@ fun SpotlightHero(
                 )
             }
             if (!current.sourceName.isNullOrBlank()) {
+                // h-1 w-1 rounded-full bg-white/20 interpunct between meta
+                // items (spotlight-hero.tsx:434-443).
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.20f)),
+                )
                 Text(
                     "Source: ${current.sourceName}",
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
@@ -278,6 +286,9 @@ fun SpotlightHero(
                 textAlign = if (wide) TextAlign.Start else TextAlign.Center,
             )
             val moreFocus = rememberFocusState()
+            // The web's markup says "Read more"/"Read less" but the button's
+            // `uppercase tracking-wider` class renders it all-caps
+            // (spotlight-hero.tsx:478-480) — so the caps string IS parity.
             Text(
                 if (descExpanded) "READ LESS" else "READ MORE",
                 style = MaterialTheme.typography.labelSmall.copy(

@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
@@ -37,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,7 +56,9 @@ import app.renzoshiori.client.data.model.SeriesMatchSearchDto
 import app.renzoshiori.client.data.model.SeriesMatchStatusDto
 import app.renzoshiori.client.data.model.scrobblerRouteName
 import app.renzoshiori.client.data.model.scrobblerShortIcon
+import app.renzoshiori.client.data.network.DisableLinkRequestDto
 import app.renzoshiori.client.data.network.ScrobblerApi
+import app.renzoshiori.client.data.network.SeriesDetailApi
 import app.renzoshiori.client.data.network.absoluteUrl
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
@@ -268,16 +272,16 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                     }
                 }
 
-                // Toggles only exist for a connected tracker — the web dims
-                // them when disconnected; here they simply aren't there yet.
-                if (config.isConnected) {
-                    Spacer(Modifier.height(12.dp))
-                    val enabledSwitch: @Composable (Modifier) -> Unit = { switchModifier ->
-                    SwitchRow(
-                        checked = config.isEnabled,
-                        label = "Enabled",
-                        modifier = switchModifier,
-                        onCheckedChange = { next ->
+                // scrobbler-settings.tsx:238-245: the Enabled switch always
+                // renders, disabled (dimmed) while disconnected; Auto Sync
+                // stays connected-only.
+                val enabledSwitch: @Composable (Modifier) -> Unit = { switchModifier ->
+                SwitchRow(
+                    checked = config.isEnabled,
+                    label = "Enabled",
+                    modifier = if (config.isConnected) switchModifier else switchModifier.alpha(0.4f),
+                    onCheckedChange = { next ->
+                        if (config.isConnected) {
                             configs = configs.orEmpty().map {
                                 if (it.provider == config.provider) it.copy(isEnabled = next) else it
                             }
@@ -288,9 +292,12 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                                 }.onFailure { snackbar.showSnackbar(it.apiMessage("Couldn't update the tracker")) }
                                 refresh()
                             }
-                        },
-                    )
-                    }
+                        }
+                    },
+                )
+                }
+                if (config.isConnected) {
+                    Spacer(Modifier.height(12.dp))
                     val autoSyncSwitch: @Composable (Modifier) -> Unit = { switchModifier ->
                     SwitchRow(
                         checked = config.autoSync,
@@ -355,31 +362,33 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                     }
                 } else {
                     Spacer(Modifier.height(12.dp))
+                    enabledSwitch(Modifier.fillMaxWidth().padding(bottom = 8.dp))
                     when {
                         config.supportsDirectAuth && config.provider == ScrobblerProvider.KITSU -> {
                             LabelledField("Email", kitsuEmail, { kitsuEmail = it }, placeholder = "Email")
                             LabelledField("Password", kitsuPassword, { kitsuPassword = it }, placeholder = "Password", password = true)
-                            if (kitsuEmail.isNotBlank() && kitsuPassword.isNotBlank()) {
-                                RenzoButton(
-                                    text = "Connect",
-                                    icon = Icons.Filled.Link,
-                                    small = true,
-                                    busy = connecting == config.provider,
-                                    onClick = {
-                                        connecting = config.provider
-                                        scope.launch {
-                                            val api = app.network.currentServiceOf<ScrobblerApi>()
-                                            runCatching {
-                                                api?.kitsuDirect(KitsuDirectAuthDto(kitsuEmail, kitsuPassword))
-                                            }
-                                                .onSuccess { kitsuEmail = ""; kitsuPassword = "" }
-                                                .onFailure { snackbar.showSnackbar(it.apiMessage("Kitsu login failed")) }
-                                            connecting = null
-                                            refresh()
+                            // scrobbler-settings.tsx:293-303: always visible,
+                            // merely disabled until both fields are filled.
+                            RenzoButton(
+                                text = "Connect",
+                                icon = Icons.Filled.Link,
+                                small = true,
+                                busy = connecting == config.provider,
+                                enabled = kitsuEmail.isNotBlank() && kitsuPassword.isNotBlank(),
+                                onClick = {
+                                    connecting = config.provider
+                                    scope.launch {
+                                        val api = app.network.currentServiceOf<ScrobblerApi>()
+                                        runCatching {
+                                            api?.kitsuDirect(KitsuDirectAuthDto(kitsuEmail, kitsuPassword))
                                         }
-                                    },
-                                )
-                            }
+                                            .onSuccess { kitsuEmail = ""; kitsuPassword = "" }
+                                            .onFailure { snackbar.showSnackbar(it.apiMessage("Kitsu login failed")) }
+                                        connecting = null
+                                        refresh()
+                                    }
+                                },
+                            )
                         }
 
                         config.supportsDirectAuth && config.provider == ScrobblerProvider.MANGADEX -> {
@@ -397,31 +406,31 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                             LabelledField("Password", mdPassword, { mdPassword = it }, placeholder = "Password", password = true)
                             LabelledField("Client ID", mdClientId, { mdClientId = it }, placeholder = "Client ID")
                             LabelledField("Client Secret", mdClientSecret, { mdClientSecret = it }, placeholder = "Client Secret", password = true)
-                            if (mdUsername.isNotBlank() && mdPassword.isNotBlank() &&
-                                mdClientId.isNotBlank() && mdClientSecret.isNotBlank()
-                            ) {
-                                RenzoButton(
-                                    text = "Connect",
-                                    icon = Icons.Filled.Link,
-                                    small = true,
-                                    busy = connecting == config.provider,
-                                    onClick = {
-                                        connecting = config.provider
-                                        scope.launch {
-                                            val api = app.network.currentServiceOf<ScrobblerApi>()
-                                            runCatching {
-                                                api?.mangaDexDirect(
-                                                    MangaDexDirectAuthDto(mdUsername, mdPassword, mdClientId, mdClientSecret),
-                                                )
-                                            }
-                                                .onSuccess { mdUsername = ""; mdPassword = ""; mdClientId = ""; mdClientSecret = "" }
-                                                .onFailure { snackbar.showSnackbar(it.apiMessage("MangaDex login failed")) }
-                                            connecting = null
-                                            refresh()
+                            // scrobbler-settings.tsx:344-359: always visible,
+                            // merely disabled until every field is filled.
+                            RenzoButton(
+                                text = "Connect",
+                                icon = Icons.Filled.Link,
+                                small = true,
+                                busy = connecting == config.provider,
+                                enabled = mdUsername.isNotBlank() && mdPassword.isNotBlank() &&
+                                    mdClientId.isNotBlank() && mdClientSecret.isNotBlank(),
+                                onClick = {
+                                    connecting = config.provider
+                                    scope.launch {
+                                        val api = app.network.currentServiceOf<ScrobblerApi>()
+                                        runCatching {
+                                            api?.mangaDexDirect(
+                                                MangaDexDirectAuthDto(mdUsername, mdPassword, mdClientId, mdClientSecret),
+                                            )
                                         }
-                                    },
-                                )
-                            }
+                                            .onSuccess { mdUsername = ""; mdPassword = ""; mdClientId = ""; mdClientSecret = "" }
+                                            .onFailure { snackbar.showSnackbar(it.apiMessage("MangaDex login failed")) }
+                                        connecting = null
+                                        refresh()
+                                    }
+                                },
+                            )
                         }
 
                         config.provider == ScrobblerProvider.COMIC_VINE -> {
@@ -432,22 +441,23 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                                 placeholder = "Enter ComicVine API key",
                                 password = true,
                             )
-                            if (comicVineApiKey.isNotBlank()) {
-                                RenzoButton(
-                                    text = "Save Key",
-                                    icon = Icons.Filled.VpnKey,
-                                    small = true,
-                                    onClick = {
-                                        scope.launch {
-                                            val api = app.network.currentServiceOf<ScrobblerApi>()
-                                            runCatching { api?.comicVineApiKey(ComicVineApiKeyDto(comicVineApiKey.trim())) }
-                                                .onSuccess { comicVineApiKey = "" }
-                                                .onFailure { snackbar.showSnackbar(it.apiMessage("Couldn't save the API key")) }
-                                            refresh()
-                                        }
-                                    },
-                                )
-                            }
+                            // scrobbler-settings.tsx:372-380: always visible,
+                            // merely disabled until a key is entered.
+                            RenzoButton(
+                                text = "Save Key",
+                                icon = Icons.Filled.VpnKey,
+                                small = true,
+                                enabled = comicVineApiKey.isNotBlank(),
+                                onClick = {
+                                    scope.launch {
+                                        val api = app.network.currentServiceOf<ScrobblerApi>()
+                                        runCatching { api?.comicVineApiKey(ComicVineApiKeyDto(comicVineApiKey.trim())) }
+                                            .onSuccess { comicVineApiKey = "" }
+                                            .onFailure { snackbar.showSnackbar(it.apiMessage("Couldn't save the API key")) }
+                                        refresh()
+                                    }
+                                },
+                            )
                         }
 
                         else -> RenzoButton(
@@ -657,7 +667,13 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
         SeriesMatchDialog(
             target = target,
             snackbar = snackbar,
-            onDismiss = { matchTarget = null },
+            // The dialog can auto-match or disable the link without
+            // confirming; the web's query invalidation refreshes the list
+            // regardless, so mirror that on plain dismissal too.
+            onDismiss = {
+                matchTarget = null
+                scope.launch { refresh() }
+            },
             onConfirmed = {
                 matchTarget = null
                 scope.launch { refresh() }
@@ -683,6 +699,21 @@ private fun SeriesMatchDialog(
     var query by remember { mutableStateOf(target.seriesTitle) }
     var results by remember { mutableStateOf<List<ScrobblerSearchResultDto>?>(null) }
     var searching by remember { mutableStateOf(false) }
+    // The dialog's actions mutate the mapping, so its status is live local
+    // state seeded from the row that opened it (web: the `matches` query).
+    var current by remember { mutableStateOf(target) }
+    var autoMatching by remember { mutableStateOf(false) }
+
+    // series-match-dialog.tsx keeps `currentMatch` fresh by invalidating the
+    // matches query after each action; here we re-read the unmatched list
+    // (which carries statuses 0/1/3) and pick our row back out.
+    suspend fun refreshStatus() {
+        val api = app.network.currentServiceOf<ScrobblerApi>() ?: return
+        runCatching { api.unmatched() }.onSuccess { list ->
+            list.firstOrNull { it.seriesId == target.seriesId && it.provider == target.provider }
+                ?.let { current = it }
+        }
+    }
 
     suspend fun search() {
         searching = true
@@ -704,10 +735,105 @@ private fun SeriesMatchDialog(
 
     RenzoDialog(
         onDismiss = onDismiss,
-        title = "Match “${target.seriesTitle}”",
-        description = "Pick the ${scrobblerRouteName(target.provider)} entry this series should sync with.",
+        // series-match-dialog.tsx:88-91.
+        title = "Series Match",
+        description = "${scrobblerRouteName(target.provider)} — ${current.seriesTitle}",
         maxWidth = if (wide) 672.dp else null,
     ) {
+        // series-match-dialog.tsx:95-125 — "Current status:" + mapping actions
+        // in one bordered row (stacked on phones, inline at `sm:`).
+        val statusLine: @Composable () -> Unit = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Current status:",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = RenzoColors.Foreground,
+                )
+                Spacer(Modifier.width(8.dp))
+                when (current.mappingStatus) {
+                    0 -> RenzoBadge("Not matched", RenzoColors.MutedForeground)
+                    1 -> RenzoBadge(
+                        "Auto-matched (${((current.matchScore ?: 0.0) * 100).toInt()}%)",
+                        RenzoColors.Primary,
+                        filled = true,
+                    )
+                    2 -> RenzoBadge("Matched", RenzoColors.Primary, filled = true)
+                    3 -> RenzoBadge("Disabled", RenzoColors.MutedForeground)
+                }
+            }
+        }
+        val autoMatchButton: @Composable () -> Unit = {
+            RenzoButton(
+                text = "Auto-Match",
+                icon = Icons.Filled.Refresh,
+                variant = "outline",
+                small = true,
+                busy = autoMatching,
+                onClick = {
+                    autoMatching = true
+                    scope.launch {
+                        val detail = app.network.currentServiceOf<SeriesDetailApi>()
+                        runCatching { detail?.autoMatchSeries(target.seriesId) }
+                            .onFailure { snackbar.showSnackbar(it.apiMessage("Auto-match failed")) }
+                        refreshStatus()
+                        autoMatching = false
+                    }
+                },
+            )
+        }
+        // Hidden once the link is already disabled, matching the web. The
+        // web's third button, Remove Mapping (series-match-dialog.tsx:117-122),
+        // has no native endpoint yet, so it is left out here.
+        val disableLinkButton: (@Composable () -> Unit)? = if (current.mappingStatus == 3) null else {
+            {
+                RenzoButton(
+                    text = "Disable Link",
+                    icon = Icons.Filled.Block,
+                    variant = "outline",
+                    small = true,
+                    onClick = {
+                        scope.launch {
+                            val detail = app.network.currentServiceOf<SeriesDetailApi>()
+                            runCatching {
+                                detail?.disableTrackerLink(DisableLinkRequestDto(target.seriesId, target.provider))
+                            }.onFailure { snackbar.showSnackbar(it.apiMessage("Couldn't disable the link")) }
+                            refreshStatus()
+                        }
+                    },
+                )
+            }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
+                .padding(12.dp),
+        ) {
+            if (wide) {
+                // Web `sm:flex-row sm:items-center sm:justify-between`.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Box(modifier = Modifier.weight(1f)) { statusLine() }
+                    autoMatchButton()
+                    disableLinkButton?.let {
+                        Spacer(Modifier.width(8.dp))
+                        it()
+                    }
+                }
+            } else {
+                statusLine()
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    autoMatchButton()
+                    disableLinkButton?.let {
+                        Spacer(Modifier.width(8.dp))
+                        it()
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+
         // Web: the input and the Search button share one `flex gap-2` row.
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Box(modifier = Modifier.weight(1f)) {
@@ -759,11 +885,26 @@ private fun SeriesMatchDialog(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            // series-match-dialog.tsx:165-169: first three
+                            // alternate titles, muted, one line.
+                            if (result.alternateTitles.isNotEmpty()) {
+                                Text(
+                                    result.alternateTitles.take(3).joinToString(", "),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = RenzoColors.MutedForeground,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            // series-match-dialog.tsx:170-180 meta row; of its
+                            // type / chapterCount / score, only `type` exists
+                            // on ScrobblerSearchResultDto.
                             if (!result.type.isNullOrBlank()) {
                                 Text(
                                     result.type!!,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = RenzoColors.MutedForeground,
+                                    modifier = Modifier.padding(top = 2.dp),
                                 )
                             }
                         }

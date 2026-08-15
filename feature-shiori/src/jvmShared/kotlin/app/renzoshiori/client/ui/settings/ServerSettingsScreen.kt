@@ -50,14 +50,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.NsfwVisibility
 import app.renzoshiori.client.data.model.ServerSettingsDto
 import app.renzoshiori.client.data.model.TestEmailRequestDto
 import app.renzoshiori.client.data.network.ServerSettingsApi
+import app.renzoshiori.client.ui.series.flagForLanguage
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.util.screenWidthDp
@@ -299,7 +303,8 @@ private fun ColumnScope.SecuritySection(
                 ),
             )
         },
-        placeholder = "https://renzo.example.com",
+        // settings-manager.tsx:1356 — a two-line example showing the one-per-line format.
+        placeholder = "https://renzo.example.com\nhttp://192.168.1.10:9833",
         singleLine = false,
         minLines = 3,
     )
@@ -411,19 +416,23 @@ private fun ColumnScope.SecuritySection(
     var testAddress by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     FieldLabel("Send Test Email")
-    RenzoTextField(
-        value = testAddress,
-        onValueChange = { testAddress = it },
-        placeholder = "you@example.com",
-        keyboardType = KeyboardType.Email,
-    )
-    Spacer(Modifier.height(8.dp))
-    if (testAddress.isNotBlank()) {
+    val testField: @Composable () -> Unit = {
+        RenzoTextField(
+            value = testAddress,
+            onValueChange = { testAddress = it },
+            placeholder = "you@example.com",
+            keyboardType = KeyboardType.Email,
+        )
+    }
+    // Web `disabled={sending || !testAddress.trim()}`: always visible, inert
+    // until an address is typed.
+    val testButton: @Composable () -> Unit = {
         RenzoButton(
             text = if (sending) "Sending…" else "Send Test",
             variant = "secondary",
             small = true,
             busy = sending,
+            enabled = testAddress.isNotBlank(),
             onClick = {
                 sending = true
                 scope.launch {
@@ -438,7 +447,29 @@ private fun ColumnScope.SecuritySection(
             },
         )
     }
-    Hint("Uses the last saved SMTP settings — save your changes first.")
+    // Web `flex gap-2`: field and button share one row at sm (>=640dp).
+    if (!LocalIsTv.current && screenWidthDp() >= 640.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.weight(1f)) { testField() }
+            Spacer(Modifier.width(8.dp))
+            testButton()
+        }
+    } else {
+        testField()
+        Spacer(Modifier.height(8.dp))
+        testButton()
+    }
+    // Web italicizes "saved" — the test uses the server's saved settings.
+    Text(
+        buildAnnotatedString {
+            append("Uses the last ")
+            withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append("saved") }
+            append(" SMTP settings — save your changes first.")
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = RenzoColors.MutedForeground,
+        modifier = Modifier.padding(top = 4.dp),
+    )
 }
 
 // ── Content preferences ──────────────────────────────────────────────────
@@ -453,52 +484,53 @@ private fun ColumnScope.ContentPreferencesSection(
     val preferred = s.preferredLanguages.orEmpty()
 
     Text("Language", style = MaterialTheme.typography.titleSmall, color = RenzoColors.Foreground)
-    Hint("Ordered by preference — the first match wins when a chapter exists in several languages.")
     Spacer(Modifier.height(8.dp))
 
-    if (preferred.isEmpty()) {
-        EmptyNote("No preferred languages yet — add one below.")
-    } else {
-        preferred.forEachIndexed { index, language ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-                    .background(RenzoColors.Secondary.copy(alpha = 0.4f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    "${index + 1}.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = RenzoColors.MutedForeground,
-                    modifier = Modifier.width(22.dp),
-                )
-                Text(
-                    language,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = RenzoColors.Foreground,
-                    modifier = Modifier.weight(1f),
-                )
-                if (index > 0) {
-                    IconGhostButton(Icons.Filled.ArrowUpward, "Move up", RenzoColors.MutedForeground) {
-                        val next = preferred.toMutableList()
-                        next.add(index - 1, next.removeAt(index))
-                        update(s.copy(preferredLanguages = next))
-                    }
+    preferred.forEachIndexed { index, language ->
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 6.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
+                .background(RenzoColors.Secondary.copy(alpha = 0.4f))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        ) {
+            Text(
+                "${index + 1}.",
+                style = MaterialTheme.typography.labelSmall,
+                color = RenzoColors.MutedForeground,
+                modifier = Modifier.width(22.dp),
+            )
+            // settings-manager.tsx:168-176 — ReactCountryFlag on the selected badge.
+            Text(
+                flagForLanguage(language),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(end = 6.dp),
+            )
+            Text(
+                language,
+                style = MaterialTheme.typography.bodyMedium,
+                color = RenzoColors.Foreground,
+                modifier = Modifier.weight(1f),
+            )
+            if (index > 0) {
+                IconGhostButton(Icons.Filled.ArrowUpward, "Move up", RenzoColors.MutedForeground) {
+                    val next = preferred.toMutableList()
+                    next.add(index - 1, next.removeAt(index))
+                    update(s.copy(preferredLanguages = next))
                 }
-                if (index < preferred.size - 1) {
-                    IconGhostButton(Icons.Filled.ArrowDownward, "Move down", RenzoColors.MutedForeground) {
-                        val next = preferred.toMutableList()
-                        next.add(index + 1, next.removeAt(index))
-                        update(s.copy(preferredLanguages = next))
-                    }
+            }
+            if (index < preferred.size - 1) {
+                IconGhostButton(Icons.Filled.ArrowDownward, "Move down", RenzoColors.MutedForeground) {
+                    val next = preferred.toMutableList()
+                    next.add(index + 1, next.removeAt(index))
+                    update(s.copy(preferredLanguages = next))
                 }
-                IconGhostButton(Icons.Filled.Close, "Remove $language", RenzoColors.Red) {
-                    update(s.copy(preferredLanguages = preferred.filter { it != language }))
-                }
+            }
+            IconGhostButton(Icons.Filled.Close, "Remove $language", RenzoColors.Red) {
+                update(s.copy(preferredLanguages = preferred.filter { it != language }))
             }
         }
     }
@@ -524,6 +556,12 @@ private fun ColumnScope.ContentPreferencesSection(
                     Icon(
                         Icons.Filled.Add, contentDescription = null,
                         tint = RenzoColors.MutedForeground, modifier = Modifier.size(12.dp),
+                    )
+                    // settings-manager.tsx:332-340 — ReactCountryFlag on the add-chip.
+                    Text(
+                        flagForLanguage(language),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(start = 4.dp),
                     )
                     Text(
                         language,
@@ -614,19 +652,19 @@ private fun ColumnScope.MihonRepositoriesSection(
             )
         }
         Spacer(Modifier.width(8.dp))
-        if (isValidUrl(newRepository)) {
-            RenzoButton(
-                text = "",
-                icon = Icons.Filled.Add,
-                small = true,
-                onClick = {
-                    if (newRepository !in repositories) {
-                        update(s.copy(mihonRepositories = repositories + newRepository))
-                    }
-                    newRepository = ""
-                },
-            )
-        }
+        // Web: always visible, disabled until the URL is valid.
+        RenzoButton(
+            text = "",
+            icon = Icons.Filled.Add,
+            small = true,
+            enabled = isValidUrl(newRepository),
+            onClick = {
+                if (newRepository !in repositories) {
+                    update(s.copy(mihonRepositories = repositories + newRepository))
+                }
+                newRepository = ""
+            },
+        )
     }
 }
 
@@ -838,19 +876,19 @@ private fun ColumnScope.StorageSection(
                 )
             }
             Spacer(Modifier.width(8.dp))
-            if (newCategory.isNotBlank()) {
-                RenzoButton(
-                    text = "",
-                    icon = Icons.Filled.Add,
-                    small = true,
-                    onClick = {
-                        if (newCategory !in categories) {
-                            update(s.copy(categories = categories + newCategory))
-                        }
-                        newCategory = ""
-                    },
-                )
-            }
+            // Web: always visible, disabled until a name is typed.
+            RenzoButton(
+                text = "",
+                icon = Icons.Filled.Add,
+                small = true,
+                enabled = newCategory.isNotBlank(),
+                onClick = {
+                    if (newCategory !in categories) {
+                        update(s.copy(categories = categories + newCategory))
+                    }
+                    newCategory = ""
+                },
+            )
         }
     }
 }
@@ -963,32 +1001,8 @@ private fun ColumnScope.SocksSettingsSection(
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/**
- * The web's paired-field grid (settings-manager.tsx `md:grid-cols-2` /
- * `sm:grid-cols-2`): two equal columns with a 16dp gap at or above
- * [breakpoint], the plain stacked column below it. An omitted [right] leaves
- * a half-width odd item, like the web grid's last cell.
- */
-@Composable
-private fun FieldPair(
-    breakpoint: Dp = 768.dp, // md; the Security grids pair at sm (640dp)
-    left: @Composable () -> Unit,
-    right: @Composable () -> Unit = {},
-) {
-    val sideBySide = !LocalIsTv.current && screenWidthDp() >= breakpoint
-    if (sideBySide) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) { left() }
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) { right() }
-        }
-    } else {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            left()
-            right()
-        }
-    }
-}
+// FieldPair (the web's `sm:/md:grid-cols-2` pairing) lives in SettingsCommon.kt,
+// shared with AccountScreen's password grid.
 
 /**
  * A TimeSpan-backed field that keeps the raw keystrokes locally and only pushes

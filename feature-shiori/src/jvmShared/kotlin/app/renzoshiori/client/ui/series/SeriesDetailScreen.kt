@@ -218,7 +218,8 @@ fun SeriesDetailScreen(
                                 .verticalScroll(rememberScrollState()),
                         ) {
                             SeriesSourcesSection(state = state, baseUrl = vm.baseUrl, vm = vm)
-                            SeriesDownloadsPanel(state = state, baseUrl = vm.baseUrl)
+                            // TODO(nav): no queue route reachable from here yet — link hidden.
+                            SeriesDownloadsPanel(state = state, baseUrl = vm.baseUrl, onOpenQueue = null)
                             Spacer(Modifier.height(16.dp))
                         }
                         // Right column — the always-visible chapters list.
@@ -260,7 +261,8 @@ fun SeriesDetailScreen(
                     // ── Latest downloads ──
                     item(key = "downloads") {
                         Spacer(Modifier.height(16.dp))
-                        SeriesDownloadsPanel(state = state, baseUrl = vm.baseUrl)
+                        // TODO(nav): no queue route reachable from here yet — link hidden.
+                        SeriesDownloadsPanel(state = state, baseUrl = vm.baseUrl, onOpenQueue = null)
                     }
                 }
             }

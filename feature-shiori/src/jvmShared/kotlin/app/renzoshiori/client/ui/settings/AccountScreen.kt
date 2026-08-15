@@ -1,5 +1,6 @@
 package app.renzoshiori.client.ui.settings
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -217,24 +218,28 @@ fun AccountScreen(
                                         )
                                     }
                                 }
-                                Hint("Any image works — PNG, JPEG, GIF or WebP, up to 2MB.")
+                                // account/page.tsx:247, minus "in your browser" — untrue here.
+                                Hint("Any image works — it's center-cropped and resized before upload.")
                             }
                         }
 
                         Spacer(Modifier.height(14.dp))
                         FieldLabel("Use Gravatar")
-                        RenzoTextField(
-                            value = gravatarEmail,
-                            onValueChange = { gravatarEmail = it },
-                            placeholder = "you@example.com",
-                            keyboardType = KeyboardType.Email,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        if (gravatarEmail.isNotBlank()) {
+                        val gravatarField: @Composable () -> Unit = {
+                            RenzoTextField(
+                                value = gravatarEmail,
+                                onValueChange = { gravatarEmail = it },
+                                placeholder = "you@example.com",
+                                keyboardType = KeyboardType.Email,
+                            )
+                        }
+                        // Web: always visible; inert until an address is typed.
+                        val fetchButton: @Composable () -> Unit = {
                             RenzoButton(
                                 text = "Fetch",
                                 variant = "secondary",
                                 small = true,
+                                enabled = gravatarEmail.isNotBlank(),
                                 onClick = {
                                     avatarError = ""
                                     scope.launch {
@@ -250,43 +255,55 @@ fun AccountScreen(
                                 },
                             )
                         }
+                        // account/page.tsx `flex flex-wrap gap-2`: field + Fetch share a row at sm.
+                        if (!LocalIsTv.current && screenWidthDp() >= 640.dp) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Box(modifier = Modifier.weight(1f)) { gravatarField() }
+                                Spacer(Modifier.width(8.dp))
+                                fetchButton()
+                            }
+                        } else {
+                            gravatarField()
+                            Spacer(Modifier.height(8.dp))
+                            fetchButton()
+                        }
                         Hint(
                             "Looks up that address's Gravatar as a preview — nothing changes until " +
                                 "you save. The email itself is never sent to the server.",
                         )
 
-                        if (avatarBase64 != null) {
-                            Spacer(Modifier.height(12.dp))
-                            RenzoButton(
-                                text = if (savingAvatar) "Saving…" else "Save avatar",
-                                busy = savingAvatar,
-                                onClick = {
-                                    savingAvatar = true
-                                    avatarError = ""
-                                    scope.launch {
-                                        runCatching {
-                                            app.network.currentServiceOf<AccountApi>()?.updateMe(
-                                                UpdateUserDto(
-                                                    avatarBase64 = avatarBase64,
-                                                    avatarContentType = avatarContentType,
-                                                ),
-                                            )
-                                        }
-                                            .onSuccess {
-                                                avatarBase64 = null
-                                                avatarContentType = null
-                                                gravatarEmail = ""
-                                                snackbar.showSnackbar("Avatar updated")
-                                            }
-                                            .onFailure {
-                                                avatarError = it.apiMessage("Failed to save avatar")
-                                            }
-                                        savingAvatar = false
-                                        reload()
+                        // Web `disabled={!avatarDirty || savingAvatar}`: always visible.
+                        Spacer(Modifier.height(12.dp))
+                        RenzoButton(
+                            text = if (savingAvatar) "Saving…" else "Save avatar",
+                            busy = savingAvatar,
+                            enabled = avatarBase64 != null,
+                            onClick = {
+                                savingAvatar = true
+                                avatarError = ""
+                                scope.launch {
+                                    runCatching {
+                                        app.network.currentServiceOf<AccountApi>()?.updateMe(
+                                            UpdateUserDto(
+                                                avatarBase64 = avatarBase64,
+                                                avatarContentType = avatarContentType,
+                                            ),
+                                        )
                                     }
-                                },
-                            )
-                        }
+                                        .onSuccess {
+                                            avatarBase64 = null
+                                            avatarContentType = null
+                                            gravatarEmail = ""
+                                            snackbar.showSnackbar("Avatar updated")
+                                        }
+                                        .onFailure {
+                                            avatarError = it.apiMessage("Failed to save avatar")
+                                        }
+                                    savingAvatar = false
+                                    reload()
+                                }
+                            },
+                        )
                     }
 
                     Spacer(Modifier.height(16.dp))
@@ -297,17 +314,20 @@ fun AccountScreen(
                         description = "Changing your password signs out all your other sessions.",
                     ) {
                         FieldLabel("Email", Icons.Filled.Mail)
-                        RenzoTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            placeholder = "Optional — used for password reset",
-                            keyboardType = KeyboardType.Email,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        if (email.trim() != (user?.email ?: "")) {
+                        val emailField: @Composable () -> Unit = {
+                            RenzoTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                placeholder = "Optional — used for password reset",
+                                keyboardType = KeyboardType.Email,
+                            )
+                        }
+                        // Web `disabled={!emailDirty || savingEmail}`: always visible.
+                        val emailSaveButton: @Composable () -> Unit = {
                             RenzoButton(
                                 text = if (savingEmail) "Saving…" else "Save",
                                 busy = savingEmail,
+                                enabled = email.trim() != (user?.email ?: ""),
                                 onClick = {
                                     savingEmail = true
                                     scope.launch {
@@ -324,6 +344,18 @@ fun AccountScreen(
                                     }
                                 },
                             )
+                        }
+                        // account/page.tsx `flex flex-wrap gap-2`: field + Save share a row at sm.
+                        if (!LocalIsTv.current && screenWidthDp() >= 640.dp) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Box(modifier = Modifier.weight(1f)) { emailField() }
+                                Spacer(Modifier.width(8.dp))
+                                emailSaveButton()
+                            }
+                        } else {
+                            emailField()
+                            Spacer(Modifier.height(8.dp))
+                            emailSaveButton()
                         }
                         Hint(
                             "Password-reset links are sent here. Leave empty to disable email reset " +
@@ -344,15 +376,29 @@ fun AccountScreen(
                             )
                         }
                         if (passwordError.isNotEmpty()) ErrorBox(passwordError)
-                        LabelledField("Current password", currentPassword, { currentPassword = it }, password = true)
-                        LabelledField(
-                            label = "New password",
-                            value = newPassword,
-                            onValueChange = { newPassword = it },
-                            placeholder = "At least 8 characters",
-                            password = true,
+                        // account/page.tsx `sm:grid-cols-2`: Current | New paired,
+                        // Confirm at half width (`sm:w-1/2`).
+                        FieldPair(
+                            breakpoint = 640.dp,
+                            left = {
+                                LabelledField("Current password", currentPassword, { currentPassword = it }, password = true)
+                            },
+                            right = {
+                                LabelledField(
+                                    label = "New password",
+                                    value = newPassword,
+                                    onValueChange = { newPassword = it },
+                                    placeholder = "At least 8 characters",
+                                    password = true,
+                                )
+                            },
                         )
-                        LabelledField("Confirm new password", confirmPassword, { confirmPassword = it }, password = true)
+                        FieldPair(
+                            breakpoint = 640.dp,
+                            left = {
+                                LabelledField("Confirm new password", confirmPassword, { confirmPassword = it }, password = true)
+                            },
+                        )
                         RenzoButton(
                             text = if (savingPassword) "Changing…" else "Update password",
                             icon = Icons.Filled.Check,

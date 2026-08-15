@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.data.model.DownloadInfoDto
 import app.renzoshiori.client.data.model.QueueStatus
 import app.renzoshiori.client.data.network.absoluteUrl
+import app.renzoshiori.client.ui.home.dpadClickable
 import app.renzoshiori.client.ui.theme.RenzoColors
 import coil3.compose.AsyncImage
 
@@ -44,7 +46,12 @@ import coil3.compose.AsyncImage
  * active/queued/failed footer summary. Polls every 10s from the ViewModel.
  */
 @Composable
-fun SeriesDownloadsPanel(state: SeriesDetailUiState, baseUrl: String) {
+fun SeriesDownloadsPanel(
+    state: SeriesDetailUiState,
+    baseUrl: String,
+    /** Footer's "View full queue →" (downloads-panel.tsx:198-203); hidden when null. */
+    onOpenQueue: (() -> Unit)? = null,
+) {
     val sorted = state.downloads
     val visible = sorted.take(5)
     val activeCount = sorted.count { it.status == QueueStatus.RUNNING }
@@ -122,6 +129,18 @@ fun SeriesDownloadsPanel(state: SeriesDetailUiState, baseUrl: String) {
                         Text("All caught up", fontSize = 11.sp, color = Muted)
                     }
                 }
+                if (onOpenQueue != null) {
+                    Text(
+                        "View full queue →",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(MaterialTheme.shapes.extraSmall)
+                            .dpadClickable(radius = 4.dp, onClick = onOpenQueue)
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                    )
+                }
             }
         }
     }
@@ -158,10 +177,23 @@ private fun DownloadRow(download: DownloadInfoDto, baseUrl: String) {
         downloadRelativeTime(displayIso).startsWith("in ")
     val (icon, tint) = downloadStatusIcon(download.status, futureScheduled)
 
+    // download-item.tsx:79-104 — rows with a source url are themselves the
+    // "Open chapter in source" action.
+    val uriHandler = LocalUriHandler.current
+    val url = download.url?.takeIf { it.isNotEmpty() }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (url != null) {
+                    Modifier.dpadClickable(radius = 0.dp) { runCatching { uriHandler.openUri(url) } }
+                } else {
+                    Modifier
+                },
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Box(
             modifier = Modifier

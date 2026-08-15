@@ -33,6 +33,7 @@ import androidx.navigation.NavType
 import androidx.savedstate.read
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.renzoshiori.client.ui.auth.AuthStep
@@ -43,6 +44,8 @@ import app.renzoshiori.client.ui.home.AccountAction
 import app.renzoshiori.client.ui.home.AccountDialog
 import app.renzoshiori.client.ui.home.AccountDialogHost
 import app.renzoshiori.client.ui.home.HomeShell
+import app.renzoshiori.client.ui.home.Section
+import app.renzoshiori.client.ui.home.ShioriCommandBar
 import app.renzoshiori.client.ui.importwizard.ImportWizardScreen
 import app.renzoshiori.client.ui.reader.ReaderScreen
 import app.renzoshiori.client.ui.settings.AppearanceScreen
@@ -190,12 +193,80 @@ private fun SignedInNavHost(
     }
     var tourVisible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
+    // Hoisted section + search state: the persistent command bar (below) and
+    // HomeShell must agree on them across route changes.
+    var section by androidx.compose.runtime.saveable.rememberSaveable {
+        androidx.compose.runtime.mutableStateOf(Section.Library.name)
+    }
+    val libraryVm: app.renzoshiori.client.ui.library.LibraryViewModel =
+        androidx.lifecycle.viewmodel.compose.viewModel(
+            factory = app.renzoshiori.client.ui.library.LibraryViewModel.factory(),
+        )
+
+    // One handler for the account menu wherever it's opened from (the home
+    // shell's narrow panel or the persistent bar's dropdown on any route).
+    val handleAccountAction: (AccountAction) -> Unit = { action ->
+        when (action) {
+            AccountAction.Account -> nav.navigate("account")
+            AccountAction.Appearance -> nav.navigate("appearance")
+            AccountAction.Users -> nav.navigate("users")
+            AccountAction.ServerSettings -> nav.navigate("server-settings")
+            AccountAction.Trackers -> nav.navigate("trackers")
+            AccountAction.Tour -> tourVisible = true
+            is AccountAction.ImportSeries -> nav.navigate("import-wizard/${action.titleOnly}")
+            AccountAction.EditProfile -> dialog = AccountDialog.EditProfile
+            AccountAction.ChangePassword -> dialog = AccountDialog.ChangePassword
+            AccountAction.ImportBackup -> dialog = AccountDialog.ImportBackup
+            AccountAction.SignOut -> onLogout()
+            AccountAction.SwitchApp -> onSwitchApp?.invoke()
+        }
+    }
+
+    val isTv = LocalIsTv.current
+    val wide = !isTv && app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp
+    val backStackEntry by nav.currentBackStackEntryAsState()
+    val route = backStackEntry?.destination?.route
+    // The web keeps its CommandBar on every route EXCEPT the reader, which is
+    // deliberately chromeless full-screen.
+    val chromeless = route == null ||
+        route.startsWith("reader/") ||
+        route.startsWith("preview/")
+
+    androidx.compose.foundation.layout.Column(
+        modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+    ) {
+        if (wide && !chromeless) {
+            ShioriCommandBar(
+                user = user,
+                // Web pill highlighting: home shows its section; a series page
+                // keeps Library lit (its pathname starts with /library);
+                // settings-type routes light nothing.
+                activeSection = when {
+                    route == "home" -> Section.valueOf(section)
+                    route.startsWith("series/") || route.startsWith("offline-series/") -> Section.Library
+                    else -> null
+                },
+                onSelectSection = { s ->
+                    section = s.name
+                    if (route != "home") nav.popBackStack("home", inclusive = false)
+                },
+                libraryVm = libraryVm,
+                onAccountAction = handleAccountAction,
+                showSearch = route == "home",
+            )
+        }
+        androidx.compose.foundation.layout.Box(
+            modifier = androidx.compose.ui.Modifier.weight(1f),
+        ) {
     NavHost(navController = nav, startDestination = "home") {
         composable("home") {
             HomeShell(
                 user = user,
                 onOpenSeries = { id -> nav.navigate("series/$id") },
                 onOpenOfflineSeries = { id -> nav.navigate("offline-series/$id") },
+                section = section,
+                onSectionChange = { section = it },
+                libraryVm = libraryVm,
                 // Browse "Read": preview live from the source, nothing stored.
                 // The args ride the route; mihonIds and titles can contain
                 // anything (slashes, %, spaces), and nav does its own URI
@@ -206,26 +277,10 @@ private fun SignedInNavHost(
                         "preview/${encodeFilename(mihonId)}/${encodeFilename(title.ifBlank { "Preview" })}",
                     )
                 },
-                onAccountAction = { action ->
-                    when (action) {
-                        AccountAction.Account -> nav.navigate("account")
-                        AccountAction.Appearance -> nav.navigate("appearance")
-                        AccountAction.Users -> nav.navigate("users")
-                        AccountAction.ServerSettings -> nav.navigate("server-settings")
-                        AccountAction.Trackers -> nav.navigate("trackers")
-                        AccountAction.Tour -> tourVisible = true
-                        is AccountAction.ImportSeries -> nav.navigate("import-wizard/${action.titleOnly}")
-                        AccountAction.EditProfile -> dialog = AccountDialog.EditProfile
-                        AccountAction.ChangePassword -> dialog = AccountDialog.ChangePassword
-                        AccountAction.ImportBackup -> dialog = AccountDialog.ImportBackup
-                        AccountAction.SignOut -> onLogout()
-                        AccountAction.SwitchApp -> onSwitchApp?.invoke()
-                    }
-                },
+                onAccountAction = handleAccountAction,
                 showTour = tourVisible,
                 onTourFinish = { tourVisible = false },
             )
-            AccountDialogHost(dialog = dialog, onDismiss = { dialog = null })
         }
         composable("appearance") {
             ConfigRoute("Appearance", "/appearance") { AppearanceScreen(onBack = { nav.popBackStack() }) }
@@ -319,6 +374,12 @@ private fun SignedInNavHost(
             )
         }
     }
+        }
+    }
+
+    // Account dialogs are window-level overlays: the persistent bar can open
+    // them from ANY route, so they host outside the NavHost.
+    AccountDialogHost(dialog = dialog, onDismiss = { dialog = null })
 }
 
 /**

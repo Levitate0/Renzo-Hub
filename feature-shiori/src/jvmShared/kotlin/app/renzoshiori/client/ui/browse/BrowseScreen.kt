@@ -91,6 +91,7 @@ import app.renzoshiori.client.ui.library.LibraryViewModel
 import app.renzoshiori.client.ui.library.formatChapter
 import app.renzoshiori.client.ui.library.getStatusDisplay
 import app.renzoshiori.client.ui.library.persistedCardWidth
+import app.renzoshiori.client.ui.series.flagForLanguage
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.tv.focusRing
@@ -313,16 +314,67 @@ fun BrowseScreen(
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
-            // Source picker.
+            // Source picker — the web (page.tsx:575-592) leads each source with
+            // its language's country flag and keeps the globe only for "all".
+            // SelectOption's glyph slot is vector-only, so the emoji flag rides
+            // at the head of the label instead.
             RibbonSelect(
                 options = listOf(SelectOption("__ALL__", "All Sources", icon = Icons.Filled.Language)) +
                     sources.filter { it.mihonProviderId.isNotBlank() }.map {
-                        SelectOption(it.mihonProviderId, it.provider, icon = Icons.Filled.Language)
+                        if (it.language.isBlank() || it.language == "all") {
+                            SelectOption(it.mihonProviderId, it.provider, icon = Icons.Filled.Language)
+                        } else {
+                            SelectOption(it.mihonProviderId, "${flagForLanguage(it.language)} ${it.provider}")
+                        }
                     },
                 value = selectedSourceId,
                 onChange = { selectedSourceId = it },
                 placeholder = "All Sources",
             )
+
+            // 18+ visibility — mirrors the account menu's "Adult (18+)" item.
+            // Second chip on the web ribbon (page.tsx: Source → 18+ → Tags).
+            // The amber fill/border is the *state* (18+ shown) and stays put
+            // while the cursor moves; the ring is only ever focus.
+            val adultFocus = rememberFocusState()
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .height(if (isTv) 40.dp else 32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(
+                        1.dp,
+                        if (hideAdult) RenzoColors.Border else RenzoColors.Amber.copy(alpha = 0.5f),
+                        RoundedCornerShape(8.dp),
+                    )
+                    .background(if (hideAdult) RenzoColors.Card else RenzoColors.Amber.copy(alpha = 0.12f))
+                    .then(
+                        if (isTv) {
+                            Modifier
+                                .focusRing(adultFocus.focused, 8.dp)
+                                .tvClickable(onFocused = adultFocus::set, onClick = { adultFilter.toggle() })
+                        } else {
+                            Modifier.clickable { adultFilter.toggle() }
+                        },
+                    )
+                    .padding(horizontal = 10.dp),
+            ) {
+                Icon(
+                    if (hideAdult) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                    contentDescription = null,
+                    tint = if (hideAdult) RenzoColors.MutedForeground else RenzoColors.Amber,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    if (hideAdult) "18+ Hidden" else "18+ Shown",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (hideAdult) RenzoColors.Foreground else RenzoColors.Amber,
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+
+            Spacer(Modifier.width(4.dp))
 
             // Tag popover trigger — Box-wrapped so the desktop popover can
             // anchor to the chip (page.tsx tagButtonRef / tagPopoverPos).
@@ -405,49 +457,6 @@ fun BrowseScreen(
                         )
                     }
                 }
-            }
-
-            Spacer(Modifier.width(4.dp))
-
-            // 18+ visibility — mirrors the account menu's "Adult (18+)" item.
-            // The amber fill/border is the *state* (18+ shown) and stays put
-            // while the cursor moves; the ring is only ever focus.
-            val adultFocus = rememberFocusState()
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .height(if (isTv) 40.dp else 32.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(
-                        1.dp,
-                        if (hideAdult) RenzoColors.Border else RenzoColors.Amber.copy(alpha = 0.5f),
-                        RoundedCornerShape(8.dp),
-                    )
-                    .background(if (hideAdult) RenzoColors.Card else RenzoColors.Amber.copy(alpha = 0.12f))
-                    .then(
-                        if (isTv) {
-                            Modifier
-                                .focusRing(adultFocus.focused, 8.dp)
-                                .tvClickable(onFocused = adultFocus::set, onClick = { adultFilter.toggle() })
-                        } else {
-                            Modifier.clickable { adultFilter.toggle() }
-                        },
-                    )
-                    .padding(horizontal = 10.dp),
-            ) {
-                Icon(
-                    if (hideAdult) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                    contentDescription = null,
-                    tint = if (hideAdult) RenzoColors.MutedForeground else RenzoColors.Amber,
-                    modifier = Modifier.size(16.dp),
-                )
-                Text(
-                    if (hideAdult) "18+ Hidden" else "18+ Shown",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (hideAdult) RenzoColors.Foreground else RenzoColors.Amber,
-                    maxLines = 1,
-                    modifier = Modifier.padding(start = 6.dp),
-                )
             }
         }
 

@@ -46,7 +46,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DriveFolderUpload
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Menu
@@ -84,6 +86,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.onFocusChanged
@@ -164,7 +167,7 @@ sealed interface AccountAction {
  * native-only Downloads entry (section-pills.tsx gates it on `useIsNative()`,
  * which is always true here).
  */
-private enum class Section(val label: String, val icon: ImageVector) {
+enum class Section(val label: String, val icon: ImageVector) {
     Library("Library", Icons.AutoMirrored.Filled.LibraryBooks),
     Updates("Updates", Icons.Filled.Notifications),
     Browse("Browse", Icons.Filled.AutoAwesome),
@@ -187,12 +190,20 @@ fun HomeShell(
     onOpenSeries: (String) -> Unit,
     onOpenOfflineSeries: (String) -> Unit,
     onAccountAction: (AccountAction) -> Unit,
+    /**
+     * Hoisted to the nav host: the persistent wide command bar is rendered
+     * THERE (above every route, like the web's CommandBar), so the current
+     * section and the LibraryViewModel that carries search state must be
+     * shared rather than owned here.
+     */
+    section: String,
+    onSectionChange: (String) -> Unit,
+    libraryVm: LibraryViewModel,
     /** Browse "Read": preview (mihonId, title) live from the source. */
     onPreviewRead: (String, String) -> Unit = { _, _ -> },
     showTour: Boolean = false,
     onTourFinish: () -> Unit = {},
 ) {
-    var section by rememberSaveable { mutableStateOf(Section.Library.name) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     val current = Section.valueOf(section)
@@ -222,9 +233,6 @@ fun HomeShell(
         }
     }
 
-    val libraryVm: LibraryViewModel = viewModel(
-        factory = LibraryViewModel.factory(),
-    )
     val libraryState by libraryVm.state.collectAsState()
 
     // A drawer you must open before you can steer is hostile with a remote, so
@@ -241,15 +249,16 @@ fun HomeShell(
     // dropping out of the app; Library is home. Touch keeps its existing
     // behaviour untouched.
     HubBackHandler(enabled = isTv && current != Section.Library) {
-        section = Section.Library.name
+        onSectionChange(Section.Library.name)
     }
 
     val body: @Composable () -> Unit = {
         Box(modifier = Modifier.fillMaxSize().background(RenzoColors.Background)) {
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                // ── 56dp command bar ─────────────────────────────────────
-                // The avatar and its wide-mode anchored dropdown appear in both
-                // bar variants; defined once so the menu wiring can't drift.
+                // ── 56dp command bar (narrow/TV only) ────────────────────
+                // At wide the PERSISTENT bar lives in the nav host, above
+                // every route — see ShioriCommandBar below. This shell only
+                // draws the hamburger/mobile variant.
                 val avatarCluster: @Composable () -> Unit = {
                     Box {
                         UserAvatar(
@@ -258,70 +267,9 @@ fun HomeShell(
                             modifier = Modifier.padding(start = 6.dp, end = 4.dp).tourAnchor(TourAnchors.ACCOUNT),
                             onClick = { menuOpen = true },
                         )
-                        // Web ≥lg: the account menu is an anchored dropdown,
-                        // not the mobile right-slide sheet.
-                        if (wide) {
-                            AccountDropdown(
-                                expanded = menuOpen,
-                                user = user,
-                                externalDomain = externalDomain,
-                                importFolderConfigured = importFolder.isNotBlank(),
-                                onDismiss = { menuOpen = false },
-                                onAction = { action ->
-                                    menuOpen = false
-                                    onAccountAction(action)
-                                },
-                            )
-                        }
                     }
                 }
-                if (wide) {
-                    // Web: the section pills are absolutely centred in the bar
-                    // (`absolute left-1/2 -translate-x-1/2 max-w-[60vw]`), so
-                    // they sit at the bar's true centre no matter how wide the
-                    // logo or right cluster is. A window can be wide enough for
-                    // this chrome yet too narrow for 60vw of pills to clear the
-                    // right cluster, so the native bar measures both edge
-                    // clusters and clamps the pills to the space genuinely free
-                    // of them — scrolling inside it when squeezed (the web's
-                    // overflow-x-auto).
-                    CenterClampedBar(
-                        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
-                        left = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Image(
-                                    painter = painterResource(Res.drawable.splash_icon),
-                                    contentDescription = "Renzo Shiori home",
-                                    modifier = Modifier.size(28.dp),
-                                )
-                                Text(
-                                    "Renzo Shiori",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = RenzoColors.Foreground,
-                                    modifier = Modifier.padding(start = 8.dp),
-                                )
-                            }
-                        },
-                        center = {
-                            SectionPillsRow(current, metrics) { s -> section = s.name }
-                        },
-                        right = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                DesktopSearchField(
-                                    value = libraryState.searchTerm,
-                                    onValueChange = libraryVm::setSearch,
-                                    placeholder = searchPlaceholder(current),
-                                )
-                                ShellOnlineOfflinePill(
-                                    offline = libraryState.offlineMode,
-                                    onToggle = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
-                                )
-                                DownloadStatusBar(metrics) { section = Section.Queue.name }
-                                avatarCluster()
-                            }
-                        },
-                    )
-                } else {
+                if (!wide) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
@@ -426,8 +374,8 @@ fun HomeShell(
                     }
                     avatarCluster()
                 }
-                }
                 HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
+                }
 
                 Box(modifier = Modifier.weight(1f)) {
                     when (current) {
@@ -486,7 +434,7 @@ fun HomeShell(
                 metrics = metrics,
                 offline = libraryState.offlineMode,
                 onToggleOffline = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
-                onSelect = { s -> section = s.name },
+                onSelect = { s -> onSectionChange(s.name) },
                 onSwitchApp = { onAccountAction(AccountAction.SwitchApp) },
                 modifier = Modifier.tourAnchor(TourAnchors.NAV),
             )
@@ -506,7 +454,7 @@ fun HomeShell(
                         offline = libraryState.offlineMode,
                         onToggleOffline = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
                         onSelect = { s ->
-                            section = s.name
+                            onSectionChange(s.name)
                             scope.launch { drawerState.close() }
                         },
                         onClose = { scope.launch { drawerState.close() } },
@@ -1163,7 +1111,8 @@ private fun AccountMenuBody(
                     MenuRow(Icons.Filled.VpnKey, "Change password...") { onAction(AccountAction.ChangePassword) }
                 }
                 MenuRow(Icons.Filled.Sensors, "Trackers...") { onAction(AccountAction.Trackers) }
-                MenuRow(Icons.Filled.Download, "Import Suwayomi Backup...") { onAction(AccountAction.ImportBackup) }
+                // Web: FolderInput — Download here collided with Import Series.
+                MenuRow(Icons.Filled.DriveFolderUpload, "Import Suwayomi Backup...") { onAction(AccountAction.ImportBackup) }
 
                 HorizontalDivider(color = RenzoColors.Border)
 
@@ -1181,7 +1130,8 @@ private fun AccountMenuBody(
 
                 MenuRow(Icons.Filled.Palette, "Appearance") { onAction(AccountAction.Appearance) }
             }
-            MenuRow(Icons.Filled.Route, "Take a tour") { onAction(AccountAction.Tour) }
+            // Web: Compass — Route here duplicated the OPDS-path row's icon.
+            MenuRow(Icons.Filled.Explore, "Take a tour") { onAction(AccountAction.Tour) }
             MenuRow(
                 if (hideAdult.hidden.value) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                 "Adult (18+): ${if (hideAdult.hidden.value) "Hidden" else "Shown"}",
@@ -1215,7 +1165,8 @@ private fun AccountMenuBody(
  */
 @Composable
 private fun SectionPillsRow(
-    current: Section,
+    /** null = no active pill (a non-section route like settings). */
+    current: Section?,
     metrics: DownloadsMetricsDto,
     onSelect: (Section) -> Unit,
 ) {
@@ -1270,6 +1221,109 @@ private fun SectionPillsRow(
                 }
             }
         }
+    }
+}
+
+/**
+ * The persistent wide command bar — the web's CommandBar, which every route
+ * except the reader keeps (series pages, settings, account…). Rendered by the
+ * nav host ABOVE the NavHost; self-contained: polls its own queue metrics and
+ * shell settings so it works identically on every route.
+ *
+ * [activeSection] is null on routes that aren't a home section (settings,
+ * account…) — the web highlights no pill there; series pages pass Library.
+ */
+@Composable
+fun ShioriCommandBar(
+    user: UserDto,
+    activeSection: Section?,
+    onSelectSection: (Section) -> Unit,
+    libraryVm: LibraryViewModel,
+    onAccountAction: (AccountAction) -> Unit,
+    /** The search field + Online pill only mean something on the home sections. */
+    showSearch: Boolean,
+) {
+    val app = ShioriRuntime.app
+    var menuOpen by remember { mutableStateOf(false) }
+    val libraryState by libraryVm.state.collectAsState()
+
+    var metrics by remember { mutableStateOf(DownloadsMetricsDto()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            runCatching { app.network.currentApi()?.downloadMetrics() }
+                .getOrNull()?.let { metrics = it }
+            delay(10_000)
+        }
+    }
+    var externalDomain by remember { mutableStateOf("") }
+    var importFolder by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        runCatching { app.network.currentApi()?.shellSettings() }.getOrNull()?.let {
+            externalDomain = it.externalDomain
+            importFolder = it.importFolder
+        }
+    }
+
+    Column {
+        CenterClampedBar(
+            modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
+            left = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = painterResource(Res.drawable.splash_icon),
+                        contentDescription = "Renzo Shiori home",
+                        modifier = Modifier.size(28.dp),
+                    )
+                    Text(
+                        "Renzo Shiori",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = RenzoColors.Foreground,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+            },
+            center = {
+                SectionPillsRow(activeSection, metrics) { s -> onSelectSection(s) }
+            },
+            right = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (showSearch) {
+                        DesktopSearchField(
+                            value = libraryState.searchTerm,
+                            onValueChange = libraryVm::setSearch,
+                            placeholder = searchPlaceholder(activeSection ?: Section.Library),
+                        )
+                        ShellOnlineOfflinePill(
+                            offline = libraryState.offlineMode,
+                            onToggle = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
+                        )
+                    }
+                    DownloadStatusBar(metrics) { onSelectSection(Section.Queue) }
+                    Box {
+                        UserAvatar(
+                            user = user,
+                            size = 32.dp,
+                            modifier = Modifier.padding(start = 6.dp, end = 4.dp).tourAnchor(TourAnchors.ACCOUNT),
+                            onClick = { menuOpen = true },
+                        )
+                        // Web ≥lg: the account menu is an anchored dropdown,
+                        // not the mobile right-slide sheet.
+                        AccountDropdown(
+                            expanded = menuOpen,
+                            user = user,
+                            externalDomain = externalDomain,
+                            importFolderConfigured = importFolder.isNotBlank(),
+                            onDismiss = { menuOpen = false },
+                            onAction = { action ->
+                                menuOpen = false
+                                onAccountAction(action)
+                            },
+                        )
+                    }
+                }
+            },
+        )
+        HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
     }
 }
 
@@ -1489,27 +1543,45 @@ private fun ImportSeriesPicker(
                 description = "Scan the library folder for existing archives (CBZ/CBR).",
                 onClick = { onPick(false) },
             )
-            if (importFolderConfigured) {
-                ImportOption(
-                    icon = Icons.Filled.Download,
-                    title = "Import Titles Only (e.g. from Suwayomi)",
-                    description = "Register bare titles from a folder with no archives yet " +
-                        "(e.g. loose-image chapters), then auto-match them online.",
-                    onClick = { onPick(true) },
-                )
-            }
+            // Web (user-menu.tsx): always shown, disabled with an explanatory
+            // subtitle when no import folder is mounted — hiding it taught
+            // nobody that the feature exists.
+            ImportOption(
+                icon = Icons.Filled.Download,
+                title = "Import Titles Only (e.g. from Suwayomi)",
+                description = if (importFolderConfigured) {
+                    "Register bare titles from a folder with no archives yet " +
+                        "(e.g. loose-image chapters), then auto-match them online."
+                } else {
+                    "Not configured — no import folder is mounted."
+                },
+                enabled = importFolderConfigured,
+                onClick = { onPick(true) },
+            )
         }
     }
 }
 
 @Composable
-private fun ImportOption(icon: ImageVector, title: String, description: String, onClick: () -> Unit) {
+private fun ImportOption(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-            .dpadClickable(radius = 8.dp, fill = null, onClick = onClick)
+            .then(
+                if (enabled) {
+                    Modifier.dpadClickable(radius = 8.dp, fill = null, onClick = onClick)
+                } else {
+                    Modifier.alpha(0.5f)
+                },
+            )
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
