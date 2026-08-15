@@ -71,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -840,6 +841,10 @@ private fun ContinuousReader(
                                 },
                                 contentDescription = "Page ${item.pageIndex + 1}",
                                 contentScale = ContentScale.FillWidth,
+                                // Web-parity sharpness: Skia's default Low
+                                // filtering (linear, no mipmaps) pixelates any
+                                // scaled page; the browser resamples properly.
+                                filterQuality = FilterQuality.High,
                                 onSuccess = { success ->
                                     settled = true
                                     loadFailed[cacheKey] = false
@@ -1216,6 +1221,7 @@ private fun PageImage(
                 model = model,
                 contentDescription = "Page ${index + 1}",
                 contentScale = ContentScale.Fit,
+                filterQuality = FilterQuality.High,
                 onSuccess = onSuccess,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -1231,6 +1237,7 @@ private fun PageImage(
                     model = model,
                     contentDescription = "Page ${index + 1}",
                     contentScale = ContentScale.Fit,
+                    filterQuality = FilterQuality.High,
                     onSuccess = onSuccess,
                     modifier = Modifier.size(screenWidth * scale, screenHeight * scale),
                 )
@@ -1248,6 +1255,7 @@ private fun PageImage(
                 model = model,
                 contentDescription = "Page ${index + 1}",
                 contentScale = ContentScale.FillWidth,
+                filterQuality = FilterQuality.High,
                 onSuccess = onSuccess,
                 modifier = if (resized) Modifier.width(screenWidth * scale) else Modifier.fillMaxWidth(),
             )
@@ -1269,6 +1277,7 @@ private fun PageImage(
                 model = model,
                 contentDescription = "Page ${index + 1}",
                 contentScale = if (sized) ContentScale.Fit else ContentScale.None,
+                filterQuality = FilterQuality.High,
                 onSuccess = onSuccess,
                 modifier = if (sized && dims != null) {
                     with(density) {
