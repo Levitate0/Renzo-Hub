@@ -1,6 +1,10 @@
 package top.levitatemedia.renzo.hub.desktop
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.res.useResource
@@ -33,7 +37,18 @@ fun main() {
             icon = appIcon,
             state = rememberWindowState(width = 1280.dp, height = 820.dp),
         ) {
-            ShioriRoot(onSwitchApp = null)
+            // Windows-style middle-click autoscroll over the whole window
+            // (see AutoScroll.kt) — an AWT-level compat layer, so every
+            // scrollable in the app gets it without wiring.
+            val autoScroll = remember { MiddleClickAutoScroll(window) }
+            DisposableEffect(Unit) {
+                autoScroll.install()
+                onDispose { autoScroll.uninstall() }
+            }
+            Box(Modifier.fillMaxSize()) {
+                ShioriRoot(onSwitchApp = null)
+                autoScroll.anchor.value?.let { AutoScrollAnchorBadge(it) }
+            }
         }
     }
 }
