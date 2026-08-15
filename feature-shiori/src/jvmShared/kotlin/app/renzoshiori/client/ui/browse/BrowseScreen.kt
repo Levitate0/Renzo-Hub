@@ -1319,14 +1319,15 @@ private fun CloudLatestDetailsDialog(
     // height wouldn't fit the window. NOTE: a fillMaxWidth BEFORE a widthIn
     // pins the min constraint and the cap silently never applies — that
     // ordering bug is what stretched this card edge to edge.
-    // Shape measured off the web exe's card: ~1.78 wide-to-tall. The cover
-    // stays LARGER than the web's (26% of the card's width, not its ~16.5%)
-    // by user direction 2026-08-15 — the webgui will be changed to match the
-    // native card, not the other way round.
-    val cardRatio = 1.78f
-    val dialogWidth = (screenWidthDp() * 0.5f)
-        .coerceIn(640.dp, 1100.dp)
-        .coerceAtMost(screenHeightDp() * 0.9f * cardRatio)
+    // Synced to the updated webgui card (2026-08-15): md:w-[50vw]
+    // md:max-w-none md:min-w-[660px] md:aspect-[16/9] md:max-h-[85vh] —
+    // half the window with NO upper cap, floored at 660dp, 16:9, and the
+    // width backs off when 85% of the window's height can't hold the ratio.
+    val cardRatio = 16f / 9f
+    val dialogWidth = maxOf(screenWidthDp() * 0.5f, 660.dp)
+        .coerceAtMost(screenWidthDp() * 0.95f)
+        .coerceAtMost(screenHeightDp() * 0.85f * cardRatio)
+    // Cover pinned to 26% of the card (the webgui now matches the Hub here).
     val coverWidth = dialogWidth * 0.26f
     Column(
         modifier = Modifier
@@ -1337,7 +1338,14 @@ private fun CloudLatestDetailsDialog(
             .background(RenzoColors.Card),
     ) {
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            Row(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+            // Web: the content area scrolls internally when a long synopsis
+            // outgrows the 16:9 card (p-5 flex flex-1 overflow-y-auto).
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+            ) {
                 // ── Cover + source badge ──
                 Column(modifier = Modifier.width(coverWidth)) {
                     Box(
@@ -1402,7 +1410,7 @@ private fun CloudLatestDetailsDialog(
                 }
 
                 // ── Metadata ──
-                Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(start = 22.dp)) {
+                Column(modifier = Modifier.weight(1f).padding(start = 18.dp)) {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1427,7 +1435,7 @@ private fun CloudLatestDetailsDialog(
                     if (byline.isNotEmpty()) {
                         Text(
                             byline,
-                            fontSize = 13.sp,
+                            fontSize = 12.5.sp,
                             color = RenzoColors.MutedForeground,
                             modifier = Modifier.padding(top = 4.dp),
                         )
@@ -1453,21 +1461,18 @@ private fun CloudLatestDetailsDialog(
                             }
                         }
                     }
-                    // Web: the modal description is a plain <p> — HTML collapses
-                    // the raw newlines to spaces, so it reads as one continuous
-                    // block that fills the card's height and ellipsizes where
-                    // the room runs out (no fixed line clamp).
-                    Box(modifier = Modifier.weight(1f, fill = false).padding(top = 12.dp)) {
-                        Text(
-                            item.description?.takeIf { it.isNotBlank() }
-                                ?.replace(Regex("\\s+"), " ")
-                                ?: "No description available",
-                            fontSize = 12.5.sp,
-                            lineHeight = 20.sp,
-                            color = RenzoColors.MutedForeground,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    // Web: a plain <p> (newlines collapse to spaces) with NO
+                    // clamp at lg — the card's scrolling content area absorbs
+                    // a long synopsis instead of truncating it.
+                    Text(
+                        item.description?.takeIf { it.isNotBlank() }
+                            ?.replace(Regex("\\s+"), " ")
+                            ?: "No description available",
+                        fontSize = 12.5.sp,
+                        lineHeight = 20.sp,
+                        color = RenzoColors.MutedForeground,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
                     val meta = listOfNotNull(
                         chapters?.let { "$it chapters" },
                         formatFetchDate(item.fetchDate),
@@ -1475,7 +1480,7 @@ private fun CloudLatestDetailsDialog(
                     if (meta.isNotEmpty()) {
                         Text(
                             meta,
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             color = RenzoColors.MutedForeground.copy(alpha = 0.6f),
                             modifier = Modifier.padding(top = 12.dp),
                         )
@@ -1499,20 +1504,22 @@ private fun CloudLatestDetailsDialog(
 
         // ── Footer ──
         HorizontalDivider(color = RenzoColors.Border)
+        // Web: justify-between — provider hugs the left edge, the action
+        // buttons sit flush RIGHT. (A weight on the provider text too would
+        // split the leftover space and strand the buttons mid-card.)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
                 .background(RenzoColors.Muted.copy(alpha = 0.25f))
-                .padding(horizontal = 24.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Text(
                 item.provider,
-                fontSize = 12.sp,
+                fontSize = 11.5.sp,
                 color = RenzoColors.MutedForeground.copy(alpha = 0.6f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
             )
             Spacer(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
