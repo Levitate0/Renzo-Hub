@@ -3,9 +3,11 @@ package app.renzoshiori.client.ui.browse
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,6 +68,8 @@ import app.renzoshiori.client.ui.tv.focusRing
 import app.renzoshiori.client.ui.tv.rememberFocusState
 import app.renzoshiori.client.ui.tv.tvClickable
 import app.renzoshiori.client.ui.tv.tvContentColor
+import app.renzoshiori.client.ui.util.screenHeightDp
+import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -204,15 +209,11 @@ fun AddSeriesSheet(
         searching = false
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(RenzoColors.Background),
-        ) {
+    // Web: mobile keeps the full-screen sheet; a desktop window gets the
+    // centred glass command card (`cmd-card`: w-[min(980px,·)], top-[10vh],
+    // max-h min(88dvh, 900px)). One content stack serves both containers.
+    val deskDialog = !isTv && screenWidthDp() >= 768.dp
+    val sheetContent: @Composable ColumnScope.() -> Unit = {
             // ── Stage label + close ──────────────────────────────────────
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -582,6 +583,51 @@ fun AddSeriesSheet(
                         modifier = Modifier.padding(start = 12.dp).size(20.dp),
                     )
                 }
+            }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        if (deskDialog) {
+            Box(
+                contentAlignment = Alignment.TopCenter,
+                modifier = Modifier
+                    .fillMaxSize()
+                    // The web dialog's overlay: clicking outside the card closes.
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss,
+                    )
+                    .padding(top = maxOf(screenHeightDp() * 0.1f, 0.dp), bottom = 24.dp),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 980.dp)
+                        .fillMaxWidth(0.94f)
+                        .height(minOf(screenHeightDp() * 0.78f, 900.dp))
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, RenzoColors.Border, RoundedCornerShape(14.dp))
+                        .background(RenzoColors.Card)
+                        // Swallow clicks so interacting with the card never
+                        // falls through to the overlay's dismiss.
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) {},
+                ) {
+                    sheetContent()
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(RenzoColors.Background),
+            ) {
+                sheetContent()
             }
         }
     }

@@ -89,6 +89,7 @@ import app.renzoshiori.client.ui.components.tvFocusTarget
 import app.renzoshiori.client.ui.library.LibraryViewModel
 import app.renzoshiori.client.ui.library.formatChapter
 import app.renzoshiori.client.ui.library.getStatusDisplay
+import app.renzoshiori.client.ui.library.persistedCardWidth
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.tv.focusRing
@@ -157,9 +158,9 @@ fun BrowseScreen(
     val isTv = LocalIsTv.current
 
     var selectedSourceId by remember { mutableStateOf("__ALL__") }
-    // Couch distance: a television opens on L, a phone on S. Same ribbon
-    // control either way, so it stays changeable.
-    var cardWidth by remember { mutableStateOf(if (isTv) "w-58" else "w-32") }
+    // One size choice governs both grids: Browse mirrors the Library's
+    // persisted card size and has no size dropdown of its own.
+    val cardWidth = remember { persistedCardWidth(isTv) }
     val selectedGenres = remember { mutableStateListOf<String>() }
     // TV search draft — committed on the IME Search action (or a voice result)
     // rather than per keystroke, because every keystroke here is a live query
@@ -421,15 +422,6 @@ fun BrowseScreen(
                     modifier = Modifier.padding(start = 6.dp),
                 )
             }
-
-            // Card size.
-            RibbonSelect(
-                options = BROWSE_CARD_SIZES.map { SelectOption(it.value, it.label) },
-                value = cardWidth,
-                onChange = { cardWidth = it },
-                placeholder = "Card Size",
-                maxTriggerWidth = 32.dp,
-            )
         }
 
         // Selected-tag chips + Clear.

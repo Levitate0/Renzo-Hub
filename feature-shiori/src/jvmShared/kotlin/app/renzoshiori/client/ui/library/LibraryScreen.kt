@@ -109,6 +109,15 @@ private const val CARD_WIDTH_KEY = "renzo_card_width"
 /** Couch distance: a television opens on L, not the phone's S. */
 private const val TV_CARD_SIZE = "w-58"
 
+/**
+ * The persisted Library card size. Browse reads it too — one size choice
+ * governs both grids (user direction 2026-08-14; Browse has no size dropdown
+ * of its own).
+ */
+internal fun persistedCardWidth(isTv: Boolean): String =
+    top.levitatemedia.renzo.hub.core.keyValuePrefs(CARD_WIDTH_PREFS).getString(CARD_WIDTH_KEY, null)
+        ?: if (isTv) TV_CARD_SIZE else DEFAULT_CARD_SIZE
+
 private fun cardSizeOf(value: String): CardSize =
     CARD_SIZES.firstOrNull { it.value == value } ?: CARD_SIZES[1]
 
@@ -142,10 +151,7 @@ fun LibraryContent(
     // Default M; a television starts at L (an M card is unreadable across a
     // room). Whatever the user picks is persisted and wins on the next launch.
     var cardWidth by rememberSaveable {
-        mutableStateOf(
-            top.levitatemedia.renzo.hub.core.keyValuePrefs(CARD_WIDTH_PREFS).getString(CARD_WIDTH_KEY, null)
-                ?: if (isTv) TV_CARD_SIZE else DEFAULT_CARD_SIZE,
-        )
+        mutableStateOf(persistedCardWidth(isTv))
     }
     var addSeriesOpen by rememberSaveable { mutableStateOf(false) }
 

@@ -6,6 +6,7 @@ import app.renzoshiori.client.ui.browse.AddSeriesSheet
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -37,6 +40,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,17 +51,23 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import app.renzoshiori.client.data.network.ProviderExtendedDto
 import app.renzoshiori.client.data.network.absoluteUrl
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.tv.LocalIsTv
 import coil3.compose.AsyncImage
+import kotlin.math.roundToInt
 
 /**
  * Transliteration of sources-section.tsx + provider-card.tsx. Same header
@@ -78,6 +89,16 @@ fun SeriesSourcesSection(
 
     val orderIndex = state.providerOrder.withIndex().associate { (i, id) -> id to i }
     val ordered = state.providers.sortedBy { orderIndex[it.id] ?: 0 }
+
+    // ── Contained drag-and-drop reorder (web: dnd-kit sortable) ──
+    // The grip handle drags its row within the list; a sibling swaps places
+    // the moment the dragged row crosses its midpoint (vm.moveProvider, the
+    // same local buffer the arrows use — Apply persists). The offset is
+    // rebased after every swap so the row stays under the pointer.
+    val isTv = LocalIsTv.current
+    var draggingId by remember { mutableStateOf<String?>(null) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    val rowHeights = remember { mutableStateMapOf<String, Int>() }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -157,18 +178,98 @@ fun SeriesSourcesSection(
         // ── Source rows ──
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ordered.forEachIndexed { index, provider ->
-                ProviderCard(
-                    provider = provider,
-                    baseUrl = baseUrl,
-                    switches = state.providerSwitches[provider.id] ?: ProviderSwitchState(),
-                    isDisabled = state.providerDisabled[provider.id] ?: provider.isDisabled,
-                    fromChapter = state.providerFromChapters[provider.id] ?: "",
-                    canEdit = state.canEdit,
-                    canMoveUp = index > 0,
-                    canMoveDown = index < ordered.size - 1,
-                    vm = vm,
-                    onRequestDelete = { confirmDeleteProvider = provider },
-                )
+                // key() keeps each row's composition identity (drag state, the
+                // active pointer coroutine) attached to its provider while a
+                // swap re-slots the rows.
+                key(provider.id) {
+                    val dragging = draggingId == provider.id
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { rowHeights[provider.id] = it.height }
+                            .zIndex(if (dragging) 1f else 0f)
+                            .offset { IntOffset(0, if (dragging) dragOffsetY.roundToInt() else 0) }
+                            // Web: the dragged sortable row renders at opacity 0.5.
+                            .then(if (dragging) Modifier.alpha(0.5f) else Modifier),
+                    ) {
+                        if (state.canEdit && !isTv && ordered.size > 1) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .align(Alignment.CenterVertically)
+                                    .width(20.dp)
+                                    .height(48.dp)
+                                    .pointerInput(provider.id) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                draggingId = provider.id
+                                                dragOffsetY = 0f
+                                            },
+                                            onDragEnd = {
+                                                draggingId = null
+                                                dragOffsetY = 0f
+                                            },
+                                            onDragCancel = {
+                                                draggingId = null
+                                                dragOffsetY = 0f
+                                            },
+                                        ) { change, amount ->
+                                            change.consume()
+                                            dragOffsetY += amount.y
+                                            val spacingPx = 12.dp.toPx()
+                                            // Swap past every sibling whose midpoint
+                                            // the row has crossed (a fast drag can
+                                            // cross several in one event). Reading
+                                            // vm.state directly: moveProvider's
+                                            // update is synchronous there, while
+                                            // the composable's `ordered` is a
+                                            // frame behind.
+                                            while (true) {
+                                                val order = vm.state.value.providerOrder
+                                                val idx = order.indexOf(provider.id)
+                                                if (idx < 0) break
+                                                if (dragOffsetY > 0f) {
+                                                    val below = order.getOrNull(idx + 1) ?: break
+                                                    val step = (rowHeights[below] ?: break) + spacingPx
+                                                    if (dragOffsetY <= step / 2f) break
+                                                    vm.moveProvider(provider.id, up = false)
+                                                    dragOffsetY -= step
+                                                } else {
+                                                    val above = order.getOrNull(idx - 1) ?: break
+                                                    val step = (rowHeights[above] ?: break) + spacingPx
+                                                    if (dragOffsetY >= -step / 2f) break
+                                                    vm.moveProvider(provider.id, up = true)
+                                                    dragOffsetY += step
+                                                }
+                                            }
+                                        }
+                                    },
+                            ) {
+                                Icon(
+                                    Icons.Filled.DragIndicator,
+                                    contentDescription = "Drag to reorder ${provider.provider}",
+                                    tint = if (dragging) RenzoColors.Foreground else Muted.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                        Box(Modifier.weight(1f)) {
+                            ProviderCard(
+                                provider = provider,
+                                baseUrl = baseUrl,
+                                switches = state.providerSwitches[provider.id] ?: ProviderSwitchState(),
+                                isDisabled = state.providerDisabled[provider.id] ?: provider.isDisabled,
+                                fromChapter = state.providerFromChapters[provider.id] ?: "",
+                                canEdit = state.canEdit,
+                                canMoveUp = index > 0,
+                                canMoveDown = index < ordered.size - 1,
+                                vm = vm,
+                                onRequestDelete = { confirmDeleteProvider = provider },
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -239,8 +340,8 @@ fun SeriesSourcesSection(
             title = "Source order",
             onDismiss = { infoOpen = false },
             description = "Order sets source priority — the topmost source is preferred for " +
-                "reading, previews, and downloads. Use the ▲▼ arrows to reorder, then press " +
-                "Apply to save.",
+                "reading, previews, and downloads. Drag the ⠿ handle (or use the ▲▼ arrows) " +
+                "to reorder, then press Apply to save.",
             footer = { OutlineDialogButton(text = "Got it") { infoOpen = false } },
         )
     }
