@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -1099,10 +1100,16 @@ private fun ContinuousReader(
                         }
                     }
 
+                    // The strip is only as wide as the pages (native cap ×
+                    // zoom); the divider and end cells are viewport-wide
+                    // sections on the web, and squeezing their button rows
+                    // into a narrow strip wraps the labels one letter per
+                    // line — requiredWidth breaks out of the strip's
+                    // constraint and centers them on the screen.
                     item.kind == KIND_DIVIDER && seg != null -> ChapterDivider(
                         finishedLabel = segments.getOrNull(item.segIndex - 1)?.name ?: "",
                         nextLabel = seg.name,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.requiredWidth(screenWidth),
                     )
 
                     else -> {
@@ -1110,7 +1117,7 @@ private fun ContinuousReader(
                         // Full-screen like the web's sentinel page: guaranteed scroll
                         // distance below the final image is what lets the tracker
                         // register the last page and mark the chapter read.
-                        Box(modifier = Modifier.fillMaxWidth().fillParentMaxHeight()) {
+                        Box(modifier = Modifier.requiredWidth(screenWidth).fillParentMaxHeight()) {
                             EndOfChapter(
                                 chapterLabel = last?.name ?: "",
                                 nextLabel = state.nextChapterName,
