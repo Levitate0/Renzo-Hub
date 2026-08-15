@@ -70,3 +70,40 @@ data class DownloadsMetricsDto(
     val queued: Int = 0,
     val failed: Int = 0,
 )
+
+/** One chapter inside a stacked history entry (types.ts HistoryChapter). */
+@Serializable
+data class HistoryChapterDto(
+    val chapterNumber: Double? = null,
+    val chapterName: String? = null,
+    /** Archive filename, so a row can open the reader directly. */
+    val filename: String? = null,
+    val readAt: String = "",
+    /** 0..1. Below 1 means the chapter was left part-read. */
+    val progress: Double = 0.0,
+    val completed: Boolean = false,
+)
+
+/**
+ * One entry of the reading-history feed (types.ts HistoryFeedItem). A run of
+ * 5+ chapters read back-to-back from one series arrives as a single "stack"
+ * carrying its chapters — the SERVER stacks and caps (500 entries, stack = 1);
+ * the client renders the feed as given and must not re-stack or re-cap.
+ */
+@Serializable
+data class HistoryFeedItemDto(
+    val seriesId: String,
+    val seriesTitle: String = "",
+    val thumbnailUrl: String? = null,
+    /** "chapter" or "stack". */
+    val kind: String = "chapter",
+    /** For a stack: the most recent read in it — what the feed sorts on. */
+    val readAt: String = "",
+    val chapterNumber: Double? = null,
+    val chapterName: String? = null,
+    val filename: String? = null,
+    val progress: Double = 0.0,
+    val completed: Boolean = false,
+    /** Present only when kind == "stack"; highest chapter number first. */
+    val chapters: List<HistoryChapterDto>? = null,
+)

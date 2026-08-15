@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MilitaryTech
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.People
@@ -135,6 +136,7 @@ import app.renzoshiori.client.ui.tv.focusRing
 import app.renzoshiori.client.ui.tv.rememberFocusState
 import app.renzoshiori.client.ui.tv.tvClickable
 import app.renzoshiori.client.ui.tv.tvContentColor
+import app.renzoshiori.client.ui.history.HistoryScreen
 import app.renzoshiori.client.ui.updates.UpdatesScreen
 import app.renzoshiori.client.ui.util.rememberHideAdult
 import app.renzoshiori.client.ui.util.screenWidthDp
@@ -170,6 +172,9 @@ sealed interface AccountAction {
 enum class Section(val label: String, val icon: ImageVector) {
     Library("Library", Icons.AutoMirrored.Filled.LibraryBooks),
     Updates("Updates", Icons.Filled.Notifications),
+    // Next to Updates, like the web (section-pills.tsx): history is a view
+    // over the user's own library reads.
+    History("History", Icons.Filled.History),
     Browse("Browse", Icons.Filled.AutoAwesome),
     Queue("Queue", Icons.AutoMirrored.Filled.List),
     Status("Status", Icons.Filled.MonitorHeart),
@@ -385,6 +390,7 @@ fun HomeShell(
                             onOpenOfflineSeries = onOpenOfflineSeries,
                         )
                         Section.Updates -> UpdatesScreen(onOpenSeries = onOpenSeries)
+                        Section.History -> HistoryScreen(onOpenSeries = onOpenSeries)
                         Section.Browse -> BrowseScreen(onPreviewRead = onPreviewRead)
                         Section.Queue -> QueueScreen()
                         Section.Status -> StatusScreen(onOpenSeries = onOpenSeries)
