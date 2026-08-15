@@ -832,6 +832,11 @@ private fun ContinuousReader(
     val screenWidth = screenWidthDp()
     val contentWidth = screenWidth * (widthFraction * scale)
     val overflowing = widthFraction * scale > 1.001f
+    // Decode target for the strip's pages: the drawn column width in PHYSICAL
+    // px (containerSize is px — no dp/density conversion to get wrong).
+    val stripTargetPx = quantizePagePx(
+        (androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width * widthFraction * scale).toInt(),
+    )
     val hScroll = rememberScrollState()
     val panStepPx = with(LocalDensity.current) { (screenWidth * 0.35f).toPx() }
 
@@ -928,13 +933,14 @@ private fun ContinuousReader(
                                     } else {
                                         rawModel
                                     },
+                                    targetWidthPx = stripTargetPx,
                                 ),
                                 contentDescription = "Page ${item.pageIndex + 1}",
                                 contentScale = ContentScale.FillWidth,
                                 // Web-parity sharpness: Skia's default Low
                                 // filtering (linear, no mipmaps) pixelates any
                                 // scaled page; the browser resamples properly.
-                                filterQuality = FilterQuality.High,
+                                filterQuality = FilterQuality.Medium,
                                 onSuccess = { success ->
                                     settled = true
                                     loadFailed[cacheKey] = false
@@ -1257,20 +1263,44 @@ private fun PagedReader(
 }
 
 /**
- * Reader pages decode at ORIGINAL resolution on desktop. Coil sizes decodes to
- * the layout bounds, and that resized bitmap is what pixelated pages next to
- * the webgui — the browser keeps the original and only scales at draw time.
- * Desktop has the memory for the same; phones keep the sized decode (a full
- * webtoon strip page can be 40MB+ decoded, an OOM on Android).
+ * Desktop page decodes are sized to what is actually DRAWN, in PHYSICAL
+ * pixels (HANDOFF_renzo-hub_reader-image-quality.md). Two prior attempts both
+ * pixelated for opposite reasons: Coil's default layout-bounds sizing is in
+ * dp-derived px that undershoot a scaled Windows display (soft), and a
+ * Size.ORIGINAL decode made Skia minify a ~1500px page into a ~600px column
+ * every frame — cubic (High) minification without mipmaps is aliasing. With
+ * decode ≈ drawn size nothing is resampled in the common case. Targets are
+ * quantised (ceil to 128px, ~1.25× headroom) so zoom steps reuse cache
+ * entries instead of re-decoding per step. null/null = Size.ORIGINAL, which
+ * only the original-size fit mode wants — intrinsic pixels are its point.
+ * Android keeps Coil's own sizing (drawn ~1:1 there already).
  */
 @Composable
-private fun pageModel(model: Any?): Any? {
+private fun pageModel(
+    model: Any?,
+    targetWidthPx: Int? = null,
+    targetHeightPx: Int? = null,
+): Any? {
     if (model == null || !HubPlatform.isDesktop) return model
     val ctx = LocalPlatformContext.current
-    return remember(model) {
-        ImageRequest.Builder(ctx).data(model).size(coil3.size.Size.ORIGINAL).build()
+    return remember(model, targetWidthPx, targetHeightPx) {
+        val builder = ImageRequest.Builder(ctx).data(model)
+        when {
+            targetWidthPx != null -> builder.size(
+                coil3.size.Size(coil3.size.Dimension.Pixels(targetWidthPx), coil3.size.Dimension.Undefined),
+            )
+            targetHeightPx != null -> builder.size(
+                coil3.size.Size(coil3.size.Dimension.Undefined, coil3.size.Dimension.Pixels(targetHeightPx)),
+            )
+            else -> builder.size(coil3.size.Size.ORIGINAL)
+        }
+        builder.build()
     }
 }
+
+/** Headroom (~1.25×) then ceil to a 128px step — see [pageModel]. */
+private fun quantizePagePx(px: Int): Int =
+    (((px * 1.25f).toInt() + 127) / 128) * 128
 
 /**
  * One page honouring the Page fit setting (fit width / fit height / original
@@ -1308,6 +1338,11 @@ private fun PageImage(
     val screenSize = app.renzoshiori.client.ui.util.screenSizeDp()
     val screenWidth = screenSize.width
     val screenHeight = screenSize.height
+    // Decode targets in PHYSICAL px for the fit modes that draw at a viewport
+    // fraction — see pageModel. Original-size mode keeps intrinsic pixels.
+    val containerPx = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val fitWidthTargetPx = quantizePagePx((containerPx.width * scale).toInt())
+    val fitHeightTargetPx = quantizePagePx((containerPx.height * scale).toInt())
 
     var natural by remember(model) { mutableStateOf<Pair<Int, Int>?>(null) }
     val onSuccess: (AsyncImagePainter.State.Success) -> Unit = { success ->
@@ -1324,10 +1359,10 @@ private fun PageImage(
     when (fit) {
         FitMode.HEIGHT -> if (!resized) {
             AsyncImage(
-                model = pageModel(model),
+                model = pageModel(model, targetHeightPx = fitHeightTargetPx),
                 contentDescription = "Page ${index + 1}",
                 contentScale = ContentScale.Fit,
-                filterQuality = FilterQuality.High,
+                filterQuality = FilterQuality.Medium,
                 onSuccess = onSuccess,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -1340,10 +1375,10 @@ private fun PageImage(
                 contentAlignment = Alignment.Center,
             ) {
                 AsyncImage(
-                    model = pageModel(model),
+                    model = pageModel(model, targetHeightPx = fitHeightTargetPx),
                     contentDescription = "Page ${index + 1}",
                     contentScale = ContentScale.Fit,
-                    filterQuality = FilterQuality.High,
+                    filterQuality = FilterQuality.Medium,
                     onSuccess = onSuccess,
                     modifier = Modifier.size(screenWidth * scale, screenHeight * scale),
                 )
@@ -1358,10 +1393,10 @@ private fun PageImage(
             contentAlignment = Alignment.Center,
         ) {
             AsyncImage(
-                model = pageModel(model),
+                model = pageModel(model, targetWidthPx = fitWidthTargetPx),
                 contentDescription = "Page ${index + 1}",
                 contentScale = ContentScale.FillWidth,
-                filterQuality = FilterQuality.High,
+                filterQuality = FilterQuality.Medium,
                 onSuccess = onSuccess,
                 modifier = if (resized) Modifier.width(screenWidth * scale) else Modifier.fillMaxWidth(),
             )
@@ -1383,7 +1418,7 @@ private fun PageImage(
                 model = pageModel(model),
                 contentDescription = "Page ${index + 1}",
                 contentScale = if (sized) ContentScale.Fit else ContentScale.None,
-                filterQuality = FilterQuality.High,
+                filterQuality = FilterQuality.Medium,
                 onSuccess = onSuccess,
                 modifier = if (sized && dims != null) {
                     with(density) {
