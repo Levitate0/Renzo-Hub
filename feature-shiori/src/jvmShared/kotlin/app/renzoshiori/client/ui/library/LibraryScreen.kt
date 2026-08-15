@@ -117,15 +117,16 @@ private val CARD_SIZES = listOf(
     CardSize("w-70", "XL", 280.dp, 18.sp, 16.sp, 28.dp, 14.dp),
 )
 
-/** Default card size: M (user direction 2026-08-14, overriding the web's S). */
-private const val DEFAULT_CARD_SIZE = "w-45"
+// Unconfigured defaults, per platform (user direction 2026-08-15): a phone
+// opens on S, a desktop window on M, a couch-distance TV on L. Only the
+// fallback varies — once the user picks a size it's persisted and wins.
+private const val PHONE_CARD_SIZE = "w-32"
+private const val DESKTOP_CARD_SIZE = "w-45"
+private const val TV_CARD_SIZE = "w-58"
 
 /** The persisted card-size choice — survives restarts on every platform. */
 private const val CARD_WIDTH_PREFS = "renzo_prefs"
 private const val CARD_WIDTH_KEY = "renzo_card_width"
-
-/** Couch distance: a television opens on L, not the phone's S. */
-private const val TV_CARD_SIZE = "w-58"
 
 /**
  * The persisted Library card size. Browse reads it too — one size choice
@@ -134,7 +135,11 @@ private const val TV_CARD_SIZE = "w-58"
  */
 internal fun persistedCardWidth(isTv: Boolean): String =
     top.levitatemedia.renzo.hub.core.keyValuePrefs(CARD_WIDTH_PREFS).getString(CARD_WIDTH_KEY, null)
-        ?: if (isTv) TV_CARD_SIZE else DEFAULT_CARD_SIZE
+        ?: when {
+            isTv -> TV_CARD_SIZE
+            top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop -> DESKTOP_CARD_SIZE
+            else -> PHONE_CARD_SIZE
+        }
 
 private fun cardSizeOf(value: String): CardSize =
     CARD_SIZES.firstOrNull { it.value == value } ?: CARD_SIZES[1]
