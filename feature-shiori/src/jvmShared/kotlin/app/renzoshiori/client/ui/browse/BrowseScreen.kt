@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -1318,11 +1319,14 @@ private fun CloudLatestDetailsDialog(
     // height wouldn't fit the window. NOTE: a fillMaxWidth BEFORE a widthIn
     // pins the min constraint and the cap silently never applies — that
     // ordering bug is what stretched this card edge to edge.
-    val cardRatio = 1.5f
+    // Shape measured off the web exe's card: ~1.78 wide-to-tall. The cover
+    // stays LARGER than the web's (26% of the card's width, not its ~16.5%)
+    // by user direction 2026-08-15 — the webgui will be changed to match the
+    // native card, not the other way round.
+    val cardRatio = 1.78f
     val dialogWidth = (screenWidthDp() * 0.5f)
         .coerceIn(640.dp, 1100.dp)
         .coerceAtMost(screenHeightDp() * 0.9f * cardRatio)
-    // The cover scales with the card (web: 160/660 of the card's width).
     val coverWidth = dialogWidth * 0.26f
     Column(
         modifier = Modifier
@@ -1333,7 +1337,7 @@ private fun CloudLatestDetailsDialog(
             .background(RenzoColors.Card),
     ) {
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            Row(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+            Row(modifier = Modifier.fillMaxSize().padding(24.dp)) {
                 // ── Cover + source badge ──
                 Column(modifier = Modifier.width(coverWidth)) {
                     Box(
@@ -1398,16 +1402,16 @@ private fun CloudLatestDetailsDialog(
                 }
 
                 // ── Metadata ──
-                Column(modifier = Modifier.weight(1f).padding(start = 22.dp)) {
+                Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(start = 22.dp)) {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
                             item.title,
-                            fontSize = 20.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            lineHeight = 26.sp,
+                            lineHeight = 22.sp,
                             color = RenzoColors.Foreground,
                         )
                         Text(
@@ -1449,15 +1453,21 @@ private fun CloudLatestDetailsDialog(
                             }
                         }
                     }
-                    Text(
-                        item.description?.takeIf { it.isNotBlank() } ?: "No description available",
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp,
-                        color = RenzoColors.MutedForeground,
-                        maxLines = 7,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
+                    // Web: the modal description is a plain <p> — HTML collapses
+                    // the raw newlines to spaces, so it reads as one continuous
+                    // block that fills the card's height and ellipsizes where
+                    // the room runs out (no fixed line clamp).
+                    Box(modifier = Modifier.weight(1f, fill = false).padding(top = 12.dp)) {
+                        Text(
+                            item.description?.takeIf { it.isNotBlank() }
+                                ?.replace(Regex("\\s+"), " ")
+                                ?: "No description available",
+                            fontSize = 12.5.sp,
+                            lineHeight = 20.sp,
+                            color = RenzoColors.MutedForeground,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     val meta = listOfNotNull(
                         chapters?.let { "$it chapters" },
                         formatFetchDate(item.fetchDate),
