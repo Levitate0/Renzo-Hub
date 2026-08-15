@@ -76,7 +76,7 @@ import app.renzoshiori.client.ui.theme.RenzoTheme
  *   TV, where this half is deliberately unreachable.
  */
 @Composable
-fun ShioriRoot(onSwitchApp: (() -> Unit)? = null) {
+fun ShioriRoot(onSwitchApp: (() -> Unit)? = null, onBackToPicker: (() -> Unit)? = null) {
     val crashFile = androidx.compose.runtime.remember {
         top.levitatemedia.renzo.hub.core.hubCrashFile()
     }
@@ -107,6 +107,7 @@ fun ShioriRoot(onSwitchApp: (() -> Unit)? = null) {
                     loading = state.loading,
                     error = state.error,
                     onConnect = authViewModel::connect,
+                    onBackToPicker = onBackToPicker,
                 )
                 is AuthStep.Login -> LoginScreen(
                     step = step,
@@ -114,6 +115,7 @@ fun ShioriRoot(onSwitchApp: (() -> Unit)? = null) {
                     error = state.error,
                     onLogin = authViewModel::login,
                     onSelectUser = authViewModel::selectUser,
+                    onBackToPicker = onBackToPicker,
                 )
                 is AuthStep.SignedIn -> SignedInNavHost(
                     user = step.user,

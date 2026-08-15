@@ -56,7 +56,7 @@ private enum class Boot { Checking, NeedServer, NeedLogin, Ready }
  * [RenzoHost]; the theme and TV density scaling moved to [RenzoRoot].
  */
 @Composable
-internal fun RenzoBoot(app: AppServices, onSwitchApp: (() -> Unit)?) {
+internal fun RenzoBoot(app: AppServices, onSwitchApp: (() -> Unit)?, onBackToPicker: (() -> Unit)? = null) {
     var boot by remember { mutableStateOf(Boot.Checking) }
 
     // Fires on first composition, and again whenever Connect drops back to
@@ -80,11 +80,11 @@ internal fun RenzoBoot(app: AppServices, onSwitchApp: (() -> Unit)?) {
 
     when (boot) {
         Boot.Checking -> LoadingBox(label = "Connecting to your Renzo server…")
-        Boot.NeedServer -> ConnectScreen(app) { boot = Boot.Checking; /* re-probe */
+        Boot.NeedServer -> ConnectScreen(app, onBackToPicker = onBackToPicker) { boot = Boot.Checking; /* re-probe */
             // Re-run the boot check against the newly saved server.
             app.user.value = null
         }
-        Boot.NeedLogin -> LoginScreen(app) { u ->
+        Boot.NeedLogin -> LoginScreen(app, onBackToPicker = onBackToPicker) { u ->
             app.user.value = u
             app.prefs.ccLang = u.ccLang
             app.prefs.lastUsername = u.username

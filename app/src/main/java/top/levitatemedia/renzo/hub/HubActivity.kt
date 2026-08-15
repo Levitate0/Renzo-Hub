@@ -100,10 +100,15 @@ class HubActivity : ComponentActivity() {
                 HubTarget.Renzo -> RenzoRoot(
                     host = renzoHost(),
                     onSwitchApp = { choose(HubTarget.Shiori) },
+                    // The URL and login gates keep an escape hatch: a wrong
+                    // address or a one-service household must never be stuck
+                    // in the other half's sign-in.
+                    onBackToPicker = { target = null },
                 )
 
                 HubTarget.Shiori -> ShioriRoot(
                     onSwitchApp = { choose(HubTarget.Renzo) },
+                    onBackToPicker = { target = null },
                 )
             }
         }

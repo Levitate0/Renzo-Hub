@@ -28,7 +28,7 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
  * (gate-shell.tsx — see the shared Gate* pieces in LoginScreen.kt).
  */
 @Composable
-fun ConnectScreen(app: AppServices, onConnected: () -> Unit) {
+fun ConnectScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onConnected: () -> Unit) {
     var address by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -121,6 +121,9 @@ fun ConnectScreen(app: AppServices, onConnected: () -> Unit) {
                     lineHeight = 20.sp,
                 )
             }
+        }
+        if (onBackToPicker != null) {
+            GateLinkRow("Back to app picker", onClick = onBackToPicker)
         }
     }
 }

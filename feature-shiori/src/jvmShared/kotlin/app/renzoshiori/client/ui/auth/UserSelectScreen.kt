@@ -57,6 +57,8 @@ fun UserSelectScreen(
     loading: Boolean,
     error: String?,
     onSelectUser: (String) -> Unit,
+    /** Hub only: escape back to the app picker. */
+    onBackToPicker: (() -> Unit)? = null,
 ) {
     AuthPageScaffold {
         AuthCard {
@@ -100,6 +102,10 @@ fun UserSelectScreen(
                             )
                         }
                     }
+                }
+                if (onBackToPicker != null) {
+                    Spacer(Modifier.height(16.dp))
+                    AuthLinkRow("Back to app picker", onBackToPicker)
                 }
             }
         }

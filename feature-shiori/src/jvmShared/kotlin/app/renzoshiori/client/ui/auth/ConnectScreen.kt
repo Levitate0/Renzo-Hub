@@ -4,7 +4,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,6 +62,8 @@ fun ConnectScreen(
     loading: Boolean,
     error: String?,
     onConnect: (String) -> Unit,
+    /** Hub only: escape back to the app picker — a wrong URL must never strand anyone here. */
+    onBackToPicker: (() -> Unit)? = null,
 ) {
     var address by remember { mutableStateOf("") }
     val isTv = LocalIsTv.current
@@ -154,6 +158,10 @@ fun ConnectScreen(
                 modifier = Modifier.padding(top = 16.dp).size(28.dp),
                 strokeWidth = 3.dp,
             )
+        }
+        if (onBackToPicker != null) {
+            Spacer(Modifier.height(20.dp))
+            AuthLinkRow("Back to app picker", onBackToPicker)
         }
     }
 }

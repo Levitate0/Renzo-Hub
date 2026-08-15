@@ -73,7 +73,7 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
  * first-run setup notice, generic forgot-password reply, server address line.
  */
 @Composable
-fun LoginScreen(app: AppServices, onLoggedIn: (PublicUser) -> Unit) {
+fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onLoggedIn: (PublicUser) -> Unit) {
     val scope = rememberCoroutineScope()
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -201,6 +201,9 @@ fun LoginScreen(app: AppServices, onLoggedIn: (PublicUser) -> Unit) {
         GateButton(label = if (busy) "Logging in..." else "Log in", enabled = !busy) { submit() }
 
         ForgotPasswordLink(enabled = !busy) { forgot() }
+        if (onBackToPicker != null) {
+            GateLinkRow("Back to app picker", onClick = onBackToPicker)
+        }
         app.prefs.serverUrl?.let {
             Text(
                 it,
@@ -210,6 +213,25 @@ fun LoginScreen(app: AppServices, onLoggedIn: (PublicUser) -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+}
+
+/** Centred link row (Shiori AuthLinkRow) — shared by both gates. */
+@Composable
+internal fun GateLinkRow(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Text(
+            text,
+            color = if (focused) RenzoColors.Foreground else RenzoColors.MutedForeground,
+            fontSize = 14.sp,
+            textDecoration = if (focused) TextDecoration.Underline else null,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .focusRing(focused, 8.dp)
+                .let { m -> if (enabled) m.tvClickable(onFocused = { f -> focused = f }, onClick = onClick) else m.alpha(0.5f) }
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+        )
     }
 }
 

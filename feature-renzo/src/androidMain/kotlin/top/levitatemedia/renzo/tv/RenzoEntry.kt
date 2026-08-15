@@ -53,7 +53,7 @@ class RenzoHost(activity: ComponentActivity) {
  *   Null on TV, where the manga half is deliberately unreachable.
  */
 @Composable
-fun RenzoRoot(host: RenzoHost, onSwitchApp: (() -> Unit)? = null) {
+fun RenzoRoot(host: RenzoHost, onSwitchApp: (() -> Unit)? = null, onBackToPicker: (() -> Unit)? = null) {
     val app = host.services
     // TV: scale the whole UI down so a full row of tiles plus the page chrome
     // fits the panel's short layout height. One density change scales text,
@@ -67,7 +67,7 @@ fun RenzoRoot(host: RenzoHost, onSwitchApp: (() -> Unit)? = null) {
     ) {
         RenzoTvTheme {
             Box(Modifier.fillMaxSize().background(RenzoColors.Background)) {
-                RenzoBoot(app, onSwitchApp)
+                RenzoBoot(app, onSwitchApp, onBackToPicker)
             }
         }
     }
