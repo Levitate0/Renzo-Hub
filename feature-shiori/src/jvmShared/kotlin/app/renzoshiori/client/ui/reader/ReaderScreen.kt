@@ -717,6 +717,9 @@ private fun ContinuousReader(
     // resolution (reader-image-quality handoff correction: 720px sources were
     // being magnified into a ~900px column; detail can't be invented).
     val loadedWidth = remember { mutableStateMapOf<String, Int>() }
+    // Pages whose decoded height exceeded the texture-safe limit — rendered
+    // sliced (TallPages.kt) instead of as one over-limit bitmap.
+    val tallPages = remember { mutableStateMapOf<String, Boolean>() }
     // A page whose image never arrives used to leave an empty box with no
     // explanation and no way out — indistinguishable from the reader hanging.
     // These track per-page failure and a manual retry counter (bumping it
@@ -920,6 +923,13 @@ private fun ContinuousReader(
                         val attempt = retryTick[cacheKey] ?: 0
                         val failed = loadFailed[cacheKey] == true
                         var settled by remember(cacheKey, attempt) { mutableStateOf(false) }
+                        // Tall-page detection (TallPages.kt): branch on the
+                        // DECODED height, never on format — plenty of manhwa
+                        // sit under the texture limit and are unaffected.
+                        // Server dims flag it up front; streamed pages flag on
+                        // first decode.
+                        val serverTall = (seg.dims.getOrNull(item.pageIndex)?.second ?: 0) > TEXTURE_SAFE_HEIGHT_PX
+                        val isTall = HubPlatform.isDesktop && (serverTall || tallPages[cacheKey] == true)
                         // Desktop: never draw a page WIDER than its native
                         // pixels (times the explicit user zoom) — a 720px
                         // source stretched into a wider column can only blur.
@@ -950,15 +960,50 @@ private fun ContinuousReader(
                                 ),
                         ) {
                             val rawModel = seg.pages.getOrNull(item.pageIndex)
-                            AsyncImage(
-                                model = pageModel(
-                                    if (attempt > 0 && rawModel is String) {
-                                        rawModel + (if (rawModel.contains('?')) "&" else "?") + "retry=" + attempt
+                            val effectiveModel = if (attempt > 0 && rawModel is String) {
+                                rawModel + (if (rawModel.contains('?')) "&" else "?") + "retry=" + attempt
+                            } else {
+                                rawModel
+                            }
+                            if (isTall) {
+                                // Over the GPU texture limit: a single bitmap
+                                // would be power-of-two downsampled at upload
+                                // (720 wide becomes 360). CPU-decode once,
+                                // slice, and stack — every slice uploads as an
+                                // ordinary texture (Mihon's webtoon approach).
+                                var pageSlices by remember(cacheKey, attempt) {
+                                    mutableStateOf<PageSlices?>(null)
+                                }
+                                LaunchedEffect(cacheKey, attempt) {
+                                    val sliced = TallPageLoader.load("$cacheKey:$attempt", effectiveModel)
+                                    settled = true
+                                    if (sliced != null) {
+                                        loadFailed[cacheKey] = false
+                                        loadedAspect[cacheKey] = sliced.width.toFloat() / sliced.height.toFloat()
+                                        loadedWidth[cacheKey] = sliced.width
+                                        onImageLoaded(sliced.width, sliced.height)
+                                        pageSlices = sliced
                                     } else {
-                                        rawModel
-                                    },
-                                    targetWidthPx = stripTargetPx,
-                                ),
+                                        loadFailed[cacheKey] = true
+                                    }
+                                }
+                                val sliced = pageSlices
+                                if (sliced != null) {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        sliced.slices.forEach { slice ->
+                                            androidx.compose.foundation.Image(
+                                                bitmap = slice,
+                                                contentDescription = "Page ${item.pageIndex + 1}",
+                                                contentScale = ContentScale.FillWidth,
+                                                filterQuality = FilterQuality.Medium,
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                            AsyncImage(
+                                model = pageModel(effectiveModel, targetWidthPx = stripTargetPx),
                                 contentDescription = "Page ${item.pageIndex + 1}",
                                 contentScale = ContentScale.FillWidth,
                                 // Web-parity sharpness: Skia's default Low
@@ -971,9 +1016,17 @@ private fun ContinuousReader(
                                     val w = success.result.image.width
                                     val h = success.result.image.height
                                     if (w > 0 && h > 0) {
-                                        loadedAspect[cacheKey] = w.toFloat() / h.toFloat()
-                                        loadedWidth[cacheKey] = w
-                                        onImageLoaded(w, h)
+                                        if (HubPlatform.isDesktop && h > TEXTURE_SAFE_HEIGHT_PX) {
+                                            // Reported dims can already be the
+                                            // halved ones — don't feed them to
+                                            // the clamp; the slicer measures
+                                            // the real size on the CPU.
+                                            tallPages[cacheKey] = true
+                                        } else {
+                                            loadedAspect[cacheKey] = w.toFloat() / h.toFloat()
+                                            loadedWidth[cacheKey] = w
+                                            onImageLoaded(w, h)
+                                        }
                                     }
                                 },
                                 onError = {
@@ -982,6 +1035,7 @@ private fun ContinuousReader(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             )
+                            }
                             if (failed) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
