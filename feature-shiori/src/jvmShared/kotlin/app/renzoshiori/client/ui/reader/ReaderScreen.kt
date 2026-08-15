@@ -380,6 +380,7 @@ fun ReaderScreen(
                         onPosition = vm::onPosition,
                         onImageLoaded = vm::onImageLoaded,
                         onNearEnd = vm::maybeAppendNext,
+                        onNearStart = vm::maybePrependPrev,
                         onRetryAppend = vm::retryAppend,
                         onToggleChrome = { chromeVisible = !chromeVisible },
                         onNextChapter = { vm.goToChapter(1) },
@@ -700,6 +701,7 @@ private fun ContinuousReader(
     onPosition: (Int, Int) -> Unit,
     onImageLoaded: (Int, Int) -> Unit,
     onNearEnd: (Int) -> Unit,
+    onNearStart: () -> Unit,
     onRetryAppend: () -> Unit,
     onToggleChrome: () -> Unit,
     onNextChapter: () -> Unit,
@@ -747,9 +749,16 @@ private fun ContinuousReader(
         out
     }
 
-    // Land on the resume page when re-opening a partially-read chapter.
-    LaunchedEffect(segments.firstOrNull()?.key) {
-        if (state.resumePage > 0) listState.scrollToItem(state.resumePage)
+    // Land on the resume page when re-opening a partially-read chapter — ONCE
+    // per chapter. This used to key on the first segment, which any PREPEND
+    // replaces — refiring the scroll and yanking the view back to an old
+    // position mid-read.
+    var resumed by remember(state.chapterNumber) { mutableStateOf(false) }
+    LaunchedEffect(state.chapterNumber, segments.isNotEmpty()) {
+        if (!resumed && segments.isNotEmpty()) {
+            resumed = true
+            if (state.resumePage > 0) listState.scrollToItem(state.resumePage)
+        }
     }
 
     // Scrubber seek — relative to the segment currently on screen.
@@ -830,6 +839,29 @@ private fun ContinuousReader(
         }.collect { (near, pageSeg) ->
             if (near && pageSeg != null) onNearEnd(pageSeg)
         }
+    }
+    // Infinite scroll upward (web parity): once the reader has genuinely
+    // scrolled UP, nearing the top of what's loaded prepends the previous
+    // chapter. Requiring upward intent keeps a fresh chapter open — which
+    // starts at the very top — from instantly pulling chapter N-1. Unlike the
+    // downward pixel test, an index test can't chain-fire here: a prepend
+    // pushes this index deep into the strip, so the condition self-clears.
+    // The strip's item KEYS keep the viewport anchored through the insert.
+    LaunchedEffect(strip) {
+        var lastIndex = -1
+        var lastOffset = 0
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val up = lastIndex != -1 &&
+                    (index < lastIndex || (index == lastIndex && offset < lastOffset))
+                lastIndex = index
+                lastOffset = offset
+                if (!up) return@collect
+                val item = strip.getOrNull(index) ?: return@collect
+                if (item.segIndex == 0 && (item.kind != KIND_PAGE || item.pageIndex <= 1)) {
+                    onNearStart()
+                }
+            }
     }
 
     val widthFraction = (settings.maxWidthPct / 100f).coerceIn(0.2f, 1f)

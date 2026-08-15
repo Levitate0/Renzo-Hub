@@ -215,6 +215,8 @@ class ReaderViewModel(
         lastReportedPage = -1
         appendStopped = false
         appendAttempts = 0
+        prependStopped = false
+        prependAttempts = 0
         loadedDims.clear()
         progressArmedAt = System.currentTimeMillis() + 1200
 
@@ -539,6 +541,58 @@ class ReaderViewModel(
             _state.update { it.copy(appending = false) }
         }
     }
+
+    /**
+     * The upward twin (web: infinite scroll prepends the PREVIOUS chapter as
+     * the top approaches). The strip preserves the viewport by item key, so a
+     * prepend inserts above without moving what's on screen.
+     */
+    fun maybePrependPrev() {
+        val s = _state.value
+        if (!s.settings.infiniteScroll || prepending || prependStopped || s.loading) return
+        val sinceLast = (System.nanoTime() / 1_000_000) - lastPrependAt
+        if (sinceLast < APPEND_COOLDOWN_MS) return
+        val first = s.segments.firstOrNull() ?: return
+        val list = s.readable
+        val idx = list.indexOfFirst { it.number == first.chapterNumber }
+        val prev = if (idx < 0) null else list.getOrNull(idx - 1)
+        if (prev == null || prev.locked) { prependStopped = true; return }
+
+        prepending = true
+        viewModelScope.launch {
+            when (val result = buildSegment(prev)) {
+                is SegResult.Ok -> {
+                    prependAttempts = 0
+                    if (result.source == PageSource.STREAM) usedStream = true
+                    if (result.segment.pageCount > 0) {
+                        _state.update {
+                            it.copy(
+                                segments = listOf(result.segment) + it.segments,
+                                // Every segment index shifted down by one.
+                                activeSegIndex = it.activeSegIndex + 1,
+                            )
+                        }
+                    } else {
+                        prependStopped = true
+                    }
+                }
+                // Same backoff shape as appends; the dead end is silent here —
+                // there is no "Try again" block at the top of the strip.
+                is SegResult.Failed -> {
+                    prependAttempts += 1
+                    if (prependAttempts >= APPEND_MAX_ATTEMPTS) prependStopped = true
+                }
+                is SegResult.Locked -> prependStopped = true
+            }
+            lastPrependAt = (System.nanoTime() / 1_000_000)
+            prepending = false
+        }
+    }
+
+    private var prepending = false
+    private var prependStopped = false
+    private var prependAttempts = 0
+    private var lastPrependAt = 0L
 
     /** Minimum gap between infinite-scroll appends (see maybeAppendNext). */
     private var lastAppendAt = 0L
