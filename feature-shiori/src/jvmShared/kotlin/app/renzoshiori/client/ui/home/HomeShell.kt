@@ -91,6 +91,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -1357,12 +1358,26 @@ private fun DesktopSearchField(
     onValueChange: (String) -> Unit,
     placeholder: String,
 ) {
+    // ⌘K / Ctrl-K focuses this box on desktop (hub-desktop's window key
+    // handler calls the registered requester; the chip below is the hint).
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    if (top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) {
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            top.levitatemedia.renzo.hub.core.HubSearchFocus.requester = focusRequester
+            onDispose {
+                if (top.levitatemedia.renzo.hub.core.HubSearchFocus.requester === focusRequester) {
+                    top.levitatemedia.renzo.hub.core.HubSearchFocus.requester = null
+                }
+            }
+        }
+    }
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
         cursorBrush = SolidColor(RenzoColors.Foreground),
+        modifier = Modifier.focusRequester(focusRequester),
         decorationBox = { inner ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,

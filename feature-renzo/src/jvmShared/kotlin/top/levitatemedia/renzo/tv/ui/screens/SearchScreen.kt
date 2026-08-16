@@ -52,6 +52,9 @@ private object SearchState {
     val results = mutableStateOf<List<CardItem>>(emptyList())
     /** The query the current results are for; null = nothing searched yet. */
     val searchedFor = mutableStateOf<String?>(null)
+
+    /** The type filter the current results were fetched with. */
+    val searchedType = mutableStateOf("")
 }
 
 /**
@@ -64,6 +67,7 @@ fun SearchScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
     var query by SearchState.query
     var results by SearchState.results
     var searchedFor by SearchState.searchedFor
+    var searchedType by SearchState.searchedType
 
     var searching by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -77,8 +81,9 @@ fun SearchScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
             searching = true
             error = null
             try {
-                results = app.repo.search(q)
+                results = app.repo.search(q, app.searchType.value.takeIf { it.isNotBlank() })
                 searchedFor = q
+                searchedType = app.searchType.value
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -98,9 +103,10 @@ fun SearchScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
 
     // Queries submitted from the TOPBAR search box (web parity: the topbar
     // input is the primary search entry point; this screen shows the results).
-    LaunchedEffect(app.searchQuery.value) {
+    LaunchedEffect(app.searchQuery.value, app.searchType.value) {
         val q = app.searchQuery.value.trim()
-        if (q.isNotEmpty() && q != searchedFor) {
+        // Re-run on a type change too (web: changing #searchType re-queries).
+        if (q.isNotEmpty() && (q != searchedFor || app.searchType.value != searchedType)) {
             query = q
             submit()
         }

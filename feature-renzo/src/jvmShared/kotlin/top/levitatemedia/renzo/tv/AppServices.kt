@@ -37,6 +37,9 @@ class AppServices(
     /** Topbar search box → Search results screen (web parity). */
     val searchQuery = mutableStateOf("")
 
+    /** Topbar type select (web #searchType): "" = All, "series", "movie". */
+    val searchType = mutableStateOf("")
+
     /** Tab badges (web parity): updates-feed size + active download jobs. */
     val updatesCount = mutableStateOf(0)
     val activeJobs = mutableStateOf(0)

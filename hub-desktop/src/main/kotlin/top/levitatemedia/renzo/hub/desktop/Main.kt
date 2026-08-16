@@ -18,6 +18,11 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import app.renzoshiori.client.ShioriDesktop
 import app.renzoshiori.client.ShioriRoot
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import top.levitatemedia.renzo.hub.core.HubSearchFocus
 import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
 import top.levitatemedia.renzo.tv.RenzoDesktop
@@ -49,6 +54,19 @@ fun main() {
             title = "Renzo Hub",
             icon = appIcon,
             state = rememberWindowState(width = 1280.dp, height = 820.dp),
+            // ⌘K / Ctrl-K focuses the active half's topbar search (web parity;
+            // each half registers its field in HubSearchFocus).
+            onPreviewKeyEvent = { e ->
+                if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                    e.key == androidx.compose.ui.input.key.Key.K &&
+                    (e.isCtrlPressed || e.isMetaPressed)
+                ) {
+                    runCatching { HubSearchFocus.requester?.requestFocus() }
+                    true
+                } else {
+                    false
+                }
+            },
         ) {
             // Windows-style middle-click autoscroll over the whole window
             // (see AutoScroll.kt) — an AWT-level compat layer, so every

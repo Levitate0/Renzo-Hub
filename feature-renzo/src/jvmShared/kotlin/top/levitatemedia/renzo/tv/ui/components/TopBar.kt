@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -106,28 +108,28 @@ fun TopBar(
             }
             .padding(horizontal = horizontalPadding)
         if (wide) {
-            // Shiori's command-bar skeleton, same proportions: logo cluster
-            // hugs the start, the pills sit at the bar's TRUE centre (clamped
-            // so they never underlap the edge clusters, scrolling internally),
-            // search + Online + avatar hug the end.
-            top.levitatemedia.renzo.hub.core.CenterClampedBar(
-                modifier = barModifier,
-                left = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (showHamburger) {
-                            HamburgerButton(onClick = onMenu)
-                            Spacer(Modifier.width(10.dp))
-                        }
-                        Image(
-                            painter = painterResource(Res.drawable.renzo_wordmark),
-                            contentDescription = "Renzo",
-                            modifier = Modifier.height(30.dp),
-                        )
-                    }
-                },
-                center = {
+            // Web topbar.tsx, layout and rationale verbatim: pills centered
+            // IN-FLOW between the brand and the right cluster by twin flex
+            // spacers — Renzo's right cluster is wide (search + type + mode
+            // pill + status + avatar), and absolute centering would underlap
+            // it below ~2300px. In-flow centering keeps the balanced look and
+            // makes overlap geometrically impossible; the tabs scroll when
+            // squeezed.
+            Row(barModifier, verticalAlignment = Alignment.CenterVertically) {
+                if (showHamburger) {
+                    HamburgerButton(onClick = onMenu)
+                    Spacer(Modifier.width(10.dp))
+                }
+                Image(
+                    painter = painterResource(Res.drawable.renzo_wordmark),
+                    contentDescription = "Renzo",
+                    modifier = Modifier.height(28.dp),
+                )
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Row(
-                        Modifier.horizontalScroll(rememberScrollState()),
+                        Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -144,27 +146,27 @@ fun TopBar(
                             ) { onTab(tab) }
                         }
                     }
-                },
-                right = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SearchBox(onSearch = onSearch, modifier = Modifier.width(224.dp))
-                        Spacer(Modifier.width(8.dp))
-                        OnlinePill()
-                        // Service-status line (HANDOFFrenzohub_topbarstatusline.md):
-                        // display-only chrome — hidden on TV, and below the
-                        // width where this cluster still fits beside the
-                        // centred tabs (the bar's own 1800px analogue).
-                        if (!app.isTv &&
-                            top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 1280
-                        ) {
-                            Spacer(Modifier.width(8.dp))
-                            StatusLine(app)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        AvatarButton(user = user, onClick = onAccount)
-                    }
-                },
-            )
+                }
+                SearchBox(onSearch = onSearch, modifier = Modifier.width(256.dp))
+                if (!app.isTv) {
+                    Spacer(Modifier.width(8.dp))
+                    TypeSelect(app)
+                }
+                Spacer(Modifier.width(8.dp))
+                OnlinePill()
+                // Service-status line (HANDOFFrenzohub_topbarstatusline.md):
+                // display-only chrome — hidden on TV, and below the width
+                // where this cluster still fits beside the centred tabs (the
+                // bar's own 1800px analogue).
+                if (!app.isTv &&
+                    top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 1280
+                ) {
+                    Spacer(Modifier.width(8.dp))
+                    StatusLine(app)
+                }
+                Spacer(Modifier.width(8.dp))
+                AvatarButton(user = user, onClick = onAccount)
+            }
         } else {
             Row(barModifier, verticalAlignment = Alignment.CenterVertically) {
                 if (showHamburger) {
@@ -198,12 +200,34 @@ private fun tabIcon(tab: Tab) = when (tab) {
     Tab.Search -> Icons.Filled.Search
 }
 
-/** The web topbar's search input: rounded-full, card bg, leading icon; submit
- *  via the keyboard's Search action. */
+/** The web topbar's search input (search-box.tsx): rounded-full, card bg,
+ *  leading icon, "Search anime…" placeholder, the ⌘K kbd chip, and LIVE
+ *  search — 320ms debounce like the web's search context, with the keyboard
+ *  Search action still submitting immediately. */
 @Composable
 private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier) {
     var text by remember { mutableStateOf("") }
     var focused by remember { mutableStateOf(false) }
+    val isDesktop = top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    if (isDesktop) {
+        // ⌘K / Ctrl-K from anywhere focuses this box (hub-desktop's window
+        // key handler calls the registered requester).
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            top.levitatemedia.renzo.hub.core.HubSearchFocus.requester = focusRequester
+            onDispose {
+                if (top.levitatemedia.renzo.hub.core.HubSearchFocus.requester === focusRequester) {
+                    top.levitatemedia.renzo.hub.core.HubSearchFocus.requester = null
+                }
+            }
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(text) {
+        val q = text.trim()
+        if (q.isEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(320)
+        onSearch(q)
+    }
     Row(
         modifier
             .height(36.dp)
@@ -232,17 +256,78 @@ private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier)
                 if (text.isNotBlank()) onSearch(text.trim())
             }),
             modifier = Modifier
-                .fillMaxWidth()
+                .weight(1f)
+                .focusRequester(focusRequester)
                 .onFocusChanged { focused = it.isFocused },
             decorationBox = { inner ->
                 Box {
                     if (text.isEmpty()) {
-                        Text("Search…", color = RenzoColors.MutedForeground, fontSize = 14.sp)
+                        Text("Search anime…", color = RenzoColors.MutedForeground, fontSize = 14.sp, maxLines = 1)
                     }
                     inner()
                 }
             },
         )
+        if (isDesktop && text.isEmpty()) {
+            Box(
+                Modifier
+                    .padding(start = 6.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(RenzoColors.Secondary.copy(alpha = 0.6f))
+                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
+            ) {
+                Text("⌘K", color = RenzoColors.MutedForeground, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+/** Web #searchType: All / Series / Movies, a rounded-full card pill. */
+@Composable
+private fun TypeSelect(app: top.levitatemedia.renzo.tv.AppServices) {
+    var open by remember { mutableStateOf(false) }
+    val label = when (app.searchType.value) {
+        "series" -> "Series"
+        "movie" -> "Movies"
+        else -> "All"
+    }
+    Box {
+        var focused by remember { mutableStateOf(false) }
+        Row(
+            Modifier
+                .height(36.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .focusRing(focused, 999.dp)
+                .background(RenzoColors.Card, RoundedCornerShape(999.dp))
+                .border(1.dp, RenzoColors.Border, RoundedCornerShape(999.dp))
+                .tvClickable(onFocused = { focused = it }, onClick = { open = true })
+                .padding(start = 12.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = RenzoColors.MutedForeground, fontSize = 14.sp)
+            Icon(
+                Icons.Filled.ArrowDropDown,
+                contentDescription = "Type",
+                tint = RenzoColors.MutedForeground,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        androidx.compose.material3.DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            modifier = Modifier.background(RenzoColors.Popover),
+        ) {
+            listOf("" to "All", "series" to "Series", "movie" to "Movies").forEach { (v, l) ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(l, color = RenzoColors.Foreground, fontSize = 14.sp) },
+                    onClick = {
+                        app.searchType.value = v
+                        open = false
+                    },
+                )
+            }
+        }
     }
 }
 
