@@ -963,29 +963,20 @@ private fun ContinuousReader(
                         // first decode.
                         val serverTall = (seg.dims.getOrNull(item.pageIndex)?.second ?: 0) > TEXTURE_SAFE_HEIGHT_PX
                         val isTall = HubPlatform.isDesktop && (serverTall || tallPages[cacheKey] == true)
-                        // Desktop: never draw a page WIDER than its native
-                        // pixels (times the explicit user zoom) — a 720px
-                        // source stretched into a wider column can only blur.
-                        // The remainder letterboxes; phones keep the web's
-                        // mobile fill-the-column behaviour.
-                        val naturalW = loadedWidth[cacheKey]
-                            ?: seg.dims.getOrNull(item.pageIndex)?.first?.takeIf { it > 0 }
-                        val nativeCap = if (HubPlatform.isDesktop && naturalW != null && naturalW > 0) {
-                            with(LocalDensity.current) {
-                                Modifier.widthIn(max = (naturalW * scale).toDp())
-                            }
-                        } else {
-                            Modifier
-                        }
+                        // Web parity: the page fills the CONFIGURED column
+                        // (settings width × zoom) even past its native pixels
+                        // — the width setting must visibly do what it says,
+                        // and sliced tall pages already fill the column, so a
+                        // native cap here left mixed widths in one chapter.
+                        // Crispness is handled where the real defect was:
+                        // sized decodes + texture-limit slicing.
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            // The strip is sized to page width × scale; the
-                            // page fills it up to its native-resolution cap.
-                            modifier = nativeCap
+                            modifier = Modifier
                                 .fillMaxWidth()
                                 .then(
                                     if (aspect != null && aspect > 0f) Modifier.aspectRatio(aspect)
@@ -1462,26 +1453,12 @@ private fun PageImage(
     val containerPx = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
     val fitWidthTargetPx = quantizePagePx((containerPx.width * scale).toInt())
     val fitHeightTargetPx = quantizePagePx((containerPx.height * scale).toInt())
+    // Captured once for onImageLoaded's aspect bookkeeping. No native-size
+    // clamp here any more: the fit modes must visibly match the reader
+    // settings (web parity — the browser scales pages to the fit box), and
+    // the actual quality defect was fixed at its cause (sized decodes +
+    // texture-limit slicing), not by refusing to scale.
     var natural by remember(model) { mutableStateOf<Pair<Int, Int>?>(null) }
-    // Native-resolution clamp (reader-image-quality handoff correction): never
-    // draw a page LARGER than its own pixels × the explicit zoom — magnifying
-    // past native can only blur. The fit modes letterbox the remainder;
-    // phones keep the web's mobile fill behaviour. `natural` lands after the
-    // first load, so the first frame draws unclamped and settles immediately.
-    val naturalCapW = if (HubPlatform.isDesktop) {
-        natural?.first?.takeIf { it > 0 }?.let {
-            with(density) { Modifier.widthIn(max = (it * scale).toDp()) }
-        } ?: Modifier
-    } else {
-        Modifier
-    }
-    val naturalCapH = if (HubPlatform.isDesktop) {
-        natural?.second?.takeIf { it > 0 }?.let {
-            with(density) { Modifier.heightIn(max = (it * scale).toDp()) }
-        } ?: Modifier
-    } else {
-        Modifier
-    }
 
     val onSuccess: (AsyncImagePainter.State.Success) -> Unit = { success ->
         val w = success.result.image.width
@@ -1502,7 +1479,7 @@ private fun PageImage(
                 contentScale = ContentScale.Fit,
                 filterQuality = FilterQuality.Medium,
                 onSuccess = onSuccess,
-                modifier = naturalCapH.fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             Box(
@@ -1518,7 +1495,7 @@ private fun PageImage(
                     contentScale = ContentScale.Fit,
                     filterQuality = FilterQuality.Medium,
                     onSuccess = onSuccess,
-                    modifier = naturalCapH.then(Modifier.size(screenWidth * scale, screenHeight * scale)),
+                    modifier = Modifier.size(screenWidth * scale, screenHeight * scale),
                 )
             }
         }
@@ -1536,7 +1513,7 @@ private fun PageImage(
                 contentScale = ContentScale.FillWidth,
                 filterQuality = FilterQuality.Medium,
                 onSuccess = onSuccess,
-                modifier = naturalCapW.then(if (resized) Modifier.width(screenWidth * scale) else Modifier.fillMaxWidth()),
+                modifier = if (resized) Modifier.width(screenWidth * scale) else Modifier.fillMaxWidth(),
             )
         }
 
