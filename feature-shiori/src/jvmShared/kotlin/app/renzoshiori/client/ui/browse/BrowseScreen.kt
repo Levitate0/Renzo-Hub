@@ -135,6 +135,7 @@ private const val ITEMS_PER_PAGE = 40
  * strip, provider badge, latest-chapter badge and in-library heart. Tapping a
  * card opens the details sheet with Add to Library / View Source.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(
     /** "Read" in the details view: preview (mihonId, title) live from the source. */
@@ -184,6 +185,12 @@ fun BrowseScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Pull-to-refresh (touch-only, so effectively mobile): re-runs the same
+    // query from page 0. The grid stays on screen while it refreshes — only
+    // the indicator spins — and the first page replaces the accumulated list
+    // (which also re-shuffles the spotlight pool).
+    var refreshing by remember { mutableStateOf(false) }
+    var refreshTick by remember { mutableStateOf(0) }
 
     var tagPopoverOpen by remember { mutableStateOf(false) }
     var detailsItem by remember { mutableStateOf<LatestSeriesRowDto?>(null) }
@@ -207,8 +214,14 @@ fun BrowseScreen(
         hasMore = true
     }
 
-    LaunchedEffect(searchTerm, selectedSourceId, genreSignature, currentPage) {
-        if (currentPage == 0) isLoading = true else isLoadingMore = true
+    LaunchedEffect(searchTerm, selectedSourceId, genreSignature, currentPage, refreshTick) {
+        if (currentPage == 0) {
+            // A pull-refresh keeps the grid up; only a cold/filtered load
+            // swaps to the full-screen spinner.
+            if (!refreshing) isLoading = true
+        } else {
+            isLoadingMore = true
+        }
         error = null
         runCatching {
             api?.latest(
@@ -234,6 +247,7 @@ fun BrowseScreen(
             .onFailure { error = it.message ?: "Error loading latest series" }
         isLoading = false
         isLoadingMore = false
+        refreshing = false
     }
 
     // Spotlight pool — first-page rows not already in the library, shuffled,
@@ -285,6 +299,17 @@ fun BrowseScreen(
         }
     }
 
+    // The pull gesture is touch-driven, so wrapping unconditionally keeps the
+    // desktop/TV builds untouched in practice while phones get the refresh.
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            refreshing = true
+            hasMore = true
+            if (currentPage != 0) currentPage = 0 else refreshTick++
+        },
+        modifier = Modifier.fillMaxSize(),
+    ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // ── TV search ────────────────────────────────────────────────────
         // The shell's command-bar field is a 176dp target behind the chrome —
@@ -634,6 +659,7 @@ fun BrowseScreen(
                 }
             }
         }
+    }
     }
 
     // ── Tag filter popover ───────────────────────────────────────────────
