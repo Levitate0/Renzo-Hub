@@ -63,6 +63,21 @@ class LibraryViewModel : ViewModel() {
     init {
         refresh()
         loadSideData()
+        // Cross-device sync: a series added from another device/app shows up
+        // within 15s without a manual refresh. Silent — no loading flash, no
+        // error surfacing; a failed poll just tries again next tick.
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(15_000)
+                if (_state.value.offlineMode || _state.value.loading) continue
+                val api = extras() ?: continue
+                runCatching { api.library(_state.value.viewAllLibraries) }
+                    .onSuccess { rows ->
+                        val seen = HashSet<String>()
+                        _state.value = _state.value.copy(series = rows.filter { seen.add(it.id) })
+                    }
+            }
+        }
     }
 
     fun refresh() {
