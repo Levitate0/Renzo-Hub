@@ -130,15 +130,16 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
 
     /**
      * Offset from the anchor → target speed in px/s, SIGNED so above/left of
-     * the anchor pans up/left and below/right pans down/right. Zero inside
-     * the dead zone, then a power curve like Windows' autoscroll: creeping
-     * near the anchor, clearly faster the further the cursor gets.
-     * ~90 px/s at 50px past the dead zone, ~420 at 150px, capped at 1600.
+     * the anchor pans up/left and below/right pans down/right. Windows'
+     * native panning model (Explorer/Chromium autoscroll): zero inside the
+     * anchor badge's dead zone, then LINEAR in distance — fine control close
+     * to the anchor, whole pages flying by at arm's reach. ~380 px/s at 50px
+     * past the dead zone, ~880 at 100px, ~2380 at 250px.
      */
     private fun targetVelocity(offsetPx: Double): Double {
         if (abs(offsetPx) <= DEAD_ZONE_PX) return 0.0
         val distance = abs(offsetPx) - DEAD_ZONE_PX
-        val magnitude = (SPEED_K * Math.pow(distance, SPEED_EXP)).coerceAtMost(MAX_PX_PER_SECOND)
+        val magnitude = (distance * SPEED_PX_PER_SEC_PER_PX).coerceAtMost(MAX_PX_PER_SECOND)
         return magnitude * sign(offsetPx)
     }
 
@@ -175,13 +176,15 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
         const val TICK_MS = 10
         const val DEAD_ZONE_PX = 12.0
         const val DRAG_THRESHOLD_PX = 8.0
-        /** Power curve: v = K * distance^EXP px/s. Sub-linear-feeling close
-         *  to the anchor, accelerating with reach. */
-        const val SPEED_K = 0.38
-        const val SPEED_EXP = 1.4
-        const val MAX_PX_PER_SECOND = 1600.0
-        /** Per-tick approach toward the target speed (exponential ease). */
-        const val EASING = 0.12
+        /** Linear gain, the Windows/Chromium autoscroll model: each px of
+         *  reach past the dead zone adds this many px/s. */
+        const val SPEED_PX_PER_SEC_PER_PX = 10.0
+        /** High ceiling — native panning is effectively uncapped; this only
+         *  guards against a cursor parked at the far edge of a big monitor. */
+        const val MAX_PX_PER_SECOND = 6000.0
+        /** Per-tick approach toward the target speed. Native panning reacts
+         *  immediately; this is just enough smoothing to avoid 100Hz jitter. */
+        const val EASING = 0.35
         /** One preciseWheelRotation unit scrolls roughly this many px in Compose lists. */
         const val PX_PER_WHEEL_UNIT = 64.0
     }
