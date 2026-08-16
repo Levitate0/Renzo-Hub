@@ -67,6 +67,7 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
  */
 @Composable
 fun TopBar(
+    app: top.levitatemedia.renzo.tv.AppServices,
     active: Tab,
     onTab: (Tab) -> Unit,
     onAccount: () -> Unit,
@@ -149,6 +150,16 @@ fun TopBar(
                         SearchBox(onSearch = onSearch, modifier = Modifier.width(224.dp))
                         Spacer(Modifier.width(8.dp))
                         OnlinePill()
+                        // Service-status line (HANDOFFrenzohub_topbarstatusline.md):
+                        // display-only chrome — hidden on TV, and below the
+                        // width where this cluster still fits beside the
+                        // centred tabs (the bar's own 1800px analogue).
+                        if (!app.isTv &&
+                            top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 1280
+                        ) {
+                            Spacer(Modifier.width(8.dp))
+                            StatusLine(app)
+                        }
                         Spacer(Modifier.width(8.dp))
                         AvatarButton(user = user, onClick = onAccount)
                     }
@@ -233,6 +244,60 @@ private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier)
             },
         )
     }
+}
+
+/**
+ * Web topbar's StatusLine: one line of small muted text showing the debrid
+ * provider and the linked trackers, e.g. `RD ✓  ·  ⇄ AniList+MAL`.
+ * Re-fetched on an interval (the web uses a TanStack query) so a fixed token
+ * doesn't keep reading "RD ✗" until restart.
+ */
+@Composable
+private fun StatusLine(app: top.levitatemedia.renzo.tv.AppServices) {
+    var text by remember { mutableStateOf("…") }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            text = try {
+                statusLineText(app.repo.health())
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: top.levitatemedia.renzo.tv.api.ApiError) {
+                // A dead session is NOT "offline" — that word sent people
+                // hunting for a network problem (web source, verbatim).
+                if (e.status == 401) "signed out" else "offline"
+            } catch (_: Exception) {
+                "offline"
+            }
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
+    Text(
+        text,
+        color = RenzoColors.MutedForeground,
+        fontSize = 12.sp,
+        maxLines = 1,
+    )
+}
+
+/**
+ * `/health` names the resolved provider in `.debrid` — reading only
+ * `realdebrid` left an AllDebrid-only account permanently on "RD ✗" next to
+ * working playback (confirmed audit finding on the old app).
+ */
+private fun statusLineText(h: top.levitatemedia.renzo.tv.api.HealthResponse): String {
+    val debrid = if (h.debrid == "alldebrid") {
+        if (h.alldebrid == "invalid" || h.alldebrid == "not-connected") "AD ✗" else "AD ✓"
+    } else when (h.realdebrid) {
+        "premium", "connected" -> "RD ✓"
+        "not-premium" -> "RD ⚠ (free)"
+        else -> "RD ✗"
+    }
+    val trackers = listOfNotNull(
+        "AniList".takeIf { h.trackers.anilist },
+        "MAL".takeIf { h.trackers.mal },
+    ).joinToString("+")
+    return listOfNotNull(debrid, trackers.takeIf { it.isNotEmpty() }?.let { "⇄ $it" })
+        .joinToString("  ·  ")
 }
 
 /** Web topbar's mode pill: "● Online" — display-only (native is always online). */

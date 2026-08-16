@@ -231,7 +231,11 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
         onError = { m -> error = m; msg = m },
     )
 
-    val (rdState, rdLabel) = debridPill(health?.realdebrid)
+    // /health names the resolved provider in `.debrid` — reading only
+    // realdebrid showed an AllDebrid-only account as "Not connected" here
+    // (the exact defect the web already fixed).
+    val debridIsAd = health?.debrid == "alldebrid"
+    val (rdState, rdLabel) = debridPill(if (debridIsAd) health?.alldebrid else health?.realdebrid)
     val ani = health?.trackers?.anilist == true
     val mal = health?.trackers?.mal == true
 
@@ -365,9 +369,12 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
 
             // Connection overview (old "Account" pane conn rows).
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ConnRow(Icons.Outlined.Link, "Real-Debrid", "Required to stream & download", pill = {
-                    StatePill(rdState, rdLabel)
-                })
+                ConnRow(
+                    Icons.Outlined.Link,
+                    if (debridIsAd) "AllDebrid" else "Real-Debrid",
+                    "Required to stream & download",
+                    pill = { StatePill(rdState, rdLabel) },
+                )
                 ConnRow(Icons.Outlined.MenuBook, "AniList", "List import & scrobbling", pill = {
                     StatePill(
                         if (health == null) PillState.Muted else if (ani) PillState.Ok else PillState.Warn,

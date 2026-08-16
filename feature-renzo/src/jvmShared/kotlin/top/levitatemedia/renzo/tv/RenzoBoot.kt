@@ -241,6 +241,7 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
                     ),
             ) {
                 TopBar(
+                    app = app,
                     horizontalPadding = contentHPad,
                     active = nav.tab.value,
                     onTab = { nav.tab.value = it },

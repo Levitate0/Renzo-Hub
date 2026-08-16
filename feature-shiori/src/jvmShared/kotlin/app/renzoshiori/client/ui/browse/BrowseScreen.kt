@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,6 +27,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -299,16 +301,16 @@ fun BrowseScreen(
         }
     }
 
-    // The pull gesture is touch-driven, so wrapping unconditionally keeps the
-    // desktop/TV builds untouched in practice while phones get the refresh.
-    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+    // Strictly mobile: the pull container exists only on a touch phone/tablet.
+    // Desktop and TV get a plain Box — no pull mechanics at all.
+    MobilePullToRefresh(
+        enabled = !isTv && !top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop,
         isRefreshing = refreshing,
         onRefresh = {
             refreshing = true
             hasMore = true
             if (currentPage != 0) currentPage = 0 else refreshTick++
         },
-        modifier = Modifier.fillMaxSize(),
     ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // ── TV search ────────────────────────────────────────────────────
@@ -621,7 +623,13 @@ fun BrowseScreen(
                     }
                 }
 
-                items(visibleItems, key = { "${it.mihonId}-${it.provider}" }) { row ->
+                // Index-salted keys: sources can return DUPLICATE listings for
+                // the same series, so mihonId+provider alone crashed with
+                // "Key ... was already used".
+                itemsIndexed(
+                    visibleItems,
+                    key = { i, it -> "${it.mihonId}-${it.provider}#$i" },
+                ) { _, row ->
                     CloudLatestCard(row, baseUrl, size) { detailsItem = row }
                 }
 
@@ -710,6 +718,31 @@ fun BrowseScreen(
                 libraryVm.refresh()
             },
         )
+    }
+}
+
+/**
+ * Pull-to-refresh, strictly mobile: on a touch phone/tablet this is the
+ * Material PullToRefreshBox; on TV and desktop it's a plain Box with no pull
+ * mechanics at all.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MobilePullToRefresh(
+    enabled: Boolean,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    if (enabled) {
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+            content = content,
+        )
+    } else {
+        Box(modifier = Modifier.fillMaxSize(), content = content)
     }
 }
 
