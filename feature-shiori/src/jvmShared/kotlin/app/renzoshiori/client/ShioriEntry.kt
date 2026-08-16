@@ -125,6 +125,7 @@ fun ShioriRoot(onSwitchApp: (() -> Unit)? = null, onBackToPicker: (() -> Unit)? 
                 is AuthStep.SignedIn -> SignedInNavHost(
                     user = step.user,
                     onLogout = authViewModel::logout,
+                    onSwitchServer = authViewModel::switchServer,
                     onSwitchApp = onSwitchApp,
                 )
             }
@@ -167,6 +168,7 @@ private fun CrashReportScreen(trace: String, onDismiss: () -> Unit) {
 private fun SignedInNavHost(
     user: app.renzoshiori.client.data.model.UserDto,
     onLogout: () -> Unit,
+    onSwitchServer: () -> Unit,
     onSwitchApp: (() -> Unit)?,
 ) {
     val nav = rememberNavController()
@@ -218,6 +220,7 @@ private fun SignedInNavHost(
             AccountAction.ChangePassword -> dialog = AccountDialog.ChangePassword
             AccountAction.ImportBackup -> dialog = AccountDialog.ImportBackup
             AccountAction.SignOut -> onLogout()
+            AccountAction.SwitchServer -> onSwitchServer()
             AccountAction.SwitchApp -> onSwitchApp?.invoke()
         }
     }

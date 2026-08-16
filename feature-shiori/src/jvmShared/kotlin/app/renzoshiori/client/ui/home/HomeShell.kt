@@ -1,5 +1,6 @@
 package app.renzoshiori.client.ui.home
 
+import top.levitatemedia.renzo.hub.core.CenterClampedBar
 import top.levitatemedia.renzo.hub.core.HubForeground
 import app.renzoshiori.client.ui.util.HubBackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DriveFolderUpload
 import androidx.compose.material.icons.filled.Edit
@@ -162,6 +164,8 @@ sealed interface AccountAction {
     data object SignOut : AccountAction
     /** Hub: hop to the anime half. */
     data object SwitchApp : AccountAction
+    /** Sign out and go back to "which server?" (Connect). */
+    data object SwitchServer : AccountAction
 }
 
 /**
@@ -1144,8 +1148,18 @@ private fun AccountMenuBody(
             ) { hideAdult.toggle() }
 
             HorizontalDivider(color = RenzoColors.Border)
-            // "Switch to Renzo" is in the nav drawer/rail, not here — the
-            // account panel matches the web's user-menu.tsx contents.
+            // Narrow/TV keep the web's user-menu.tsx contents: "Switch to
+            // Renzo" lives in the nav drawer/rail there. At wide there IS no
+            // drawer (the bar is the nav), so the app switch and the server
+            // switch surface here instead — otherwise they're unreachable.
+            val wide = !isTv && screenWidthDp() >= 1024.dp
+            if (wide) {
+                // Labels match the Renzo half's account menu ("Change server",
+                // "Switch to …") so the two menus read as one app.
+                MenuRow(Icons.Filled.SwapHoriz, "Switch to Renzo") { onAction(AccountAction.SwitchApp) }
+                MenuRow(Icons.Filled.Dns, "Change server") { onAction(AccountAction.SwitchServer) }
+                HorizontalDivider(color = RenzoColors.Border)
+            }
             MenuRow(Icons.AutoMirrored.Filled.Logout, "Sign out") { onAction(AccountAction.SignOut) }
             HorizontalDivider(color = RenzoColors.Border)
             Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
@@ -1333,49 +1347,8 @@ fun ShioriCommandBar(
     }
 }
 
-/**
- * The wide command bar's skeleton: [left] hugs the start, [right] hugs the
- * end, and [center] (the section pills) sits at the bar's TRUE horizontal
- * centre — capped at 60% of the bar (web max-w-[60vw]) and at the free span
- * between the edge clusters. When even a full-span centred block would
- * underlap an edge cluster, the pills give up exact centring rather than
- * overlap: they slide just far enough to stay clear, scrolling internally.
- */
-@Composable
-private fun CenterClampedBar(
-    left: @Composable () -> Unit,
-    center: @Composable () -> Unit,
-    right: @Composable () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Layout(
-        content = {
-            Box { left() }
-            Box { center() }
-            Box { right() }
-        },
-        modifier = modifier,
-    ) { measurables, constraints ->
-        val width = constraints.maxWidth
-        val height = constraints.maxHeight
-        val loose = Constraints(maxHeight = height)
-        val leftBar = measurables[0].measure(loose)
-        val rightBar = measurables[2].measure(loose)
-        // Web gap-3: the minimum air between the pills and either cluster.
-        val gap = 12.dp.roundToPx()
-        val free = (width - leftBar.width - rightBar.width - 2 * gap).coerceAtLeast(0)
-        val centerMax = minOf((width * 0.6f).roundToInt(), free)
-        val pills = measurables[1].measure(Constraints(maxWidth = centerMax, maxHeight = height))
-        val minX = leftBar.width + gap
-        val maxX = width - rightBar.width - gap - pills.width
-        val pillsX = ((width - pills.width) / 2).coerceIn(minX, maxOf(minX, maxX))
-        layout(width, height) {
-            leftBar.placeRelative(0, (height - leftBar.height) / 2)
-            rightBar.placeRelative(width - rightBar.width, (height - rightBar.height) / 2)
-            pills.placeRelative(pillsX, (height - pills.height) / 2)
-        }
-    }
-}
+// CenterClampedBar moved to :core (top.levitatemedia.renzo.hub.core) so the
+// Renzo half's wide bar can share the exact same skeleton and proportions.
 
 /** The web's always-visible desktop search input (w-56, h-9, muted well). */
 @Composable

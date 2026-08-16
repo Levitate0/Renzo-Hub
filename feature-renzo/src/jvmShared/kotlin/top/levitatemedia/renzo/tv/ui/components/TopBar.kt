@@ -22,8 +22,13 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -85,69 +90,101 @@ fun TopBar(
         // the pills are visible. It comes back if the window shrinks below
         // the pill break (otherwise a narrow window would have no nav at all).
         val showHamburger = !(top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop && wide)
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .background(RenzoColors.Background)
-                // A hairline under the bar so page content never reads as
-                // overlapping it on a short/small screen (web: topbar border-b).
-                .drawBehind {
-                    drawRect(
-                        color = borderColor,
-                        topLeft = Offset(0f, size.height - 1.dp.toPx()),
-                        size = Size(size.width, 1.dp.toPx()),
-                    )
-                }
-                .padding(horizontal = horizontalPadding),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (showHamburger) {
-                HamburgerButton(onClick = onMenu)
-                Spacer(Modifier.width(10.dp))
+        val barModifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .background(RenzoColors.Background)
+            // A hairline under the bar so page content never reads as
+            // overlapping it on a short/small screen (web: topbar border-b).
+            .drawBehind {
+                drawRect(
+                    color = borderColor,
+                    topLeft = Offset(0f, size.height - 1.dp.toPx()),
+                    size = Size(size.width, 1.dp.toPx()),
+                )
             }
-            Image(
-                painter = painterResource(Res.drawable.renzo_wordmark),
-                contentDescription = "Renzo",
-                modifier = Modifier.height(30.dp),
-            )
-            if (wide) {
-                // The pills live in the FLEXIBLE slot and scroll if they don't
-                // fit: fixed-width children (pills + search + pill + avatar)
-                // used to add up past the screen and overflow off the right
-                // edge on a TV once overscan padding was applied.
-                Row(
-                    Modifier
-                        .weight(1f)
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Tab.BAR_TABS.forEach { tab ->
-                        TabPill(
-                            label = tab.label,
-                            active = tab == active,
-                            badge = when (tab) {
-                                Tab.Updates -> updatesBadge
-                                Tab.Downloads -> downloadsBadge
-                                else -> 0
-                            },
-                        ) { onTab(tab) }
+            .padding(horizontal = horizontalPadding)
+        if (wide) {
+            // Shiori's command-bar skeleton, same proportions: logo cluster
+            // hugs the start, the pills sit at the bar's TRUE centre (clamped
+            // so they never underlap the edge clusters, scrolling internally),
+            // search + Online + avatar hug the end.
+            top.levitatemedia.renzo.hub.core.CenterClampedBar(
+                modifier = barModifier,
+                left = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (showHamburger) {
+                            HamburgerButton(onClick = onMenu)
+                            Spacer(Modifier.width(10.dp))
+                        }
+                        Image(
+                            painter = painterResource(Res.drawable.renzo_wordmark),
+                            contentDescription = "Renzo",
+                            modifier = Modifier.height(30.dp),
+                        )
                     }
+                },
+                center = {
+                    Row(
+                        Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Tab.BAR_TABS.forEach { tab ->
+                            TabPill(
+                                label = tab.label,
+                                icon = tabIcon(tab),
+                                active = tab == active,
+                                badge = when (tab) {
+                                    Tab.Updates -> updatesBadge
+                                    Tab.Downloads -> downloadsBadge
+                                    else -> 0
+                                },
+                            ) { onTab(tab) }
+                        }
+                    }
+                },
+                right = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SearchBox(onSearch = onSearch, modifier = Modifier.width(224.dp))
+                        Spacer(Modifier.width(8.dp))
+                        OnlinePill()
+                        Spacer(Modifier.width(8.dp))
+                        AvatarButton(user = user, onClick = onAccount)
+                    }
+                },
+            )
+        } else {
+            Row(barModifier, verticalAlignment = Alignment.CenterVertically) {
+                if (showHamburger) {
+                    HamburgerButton(onClick = onMenu)
+                    Spacer(Modifier.width(10.dp))
                 }
-                SearchBox(onSearch = onSearch, modifier = Modifier.width(168.dp))
-            } else {
+                Image(
+                    painter = painterResource(Res.drawable.renzo_wordmark),
+                    contentDescription = "Renzo",
+                    modifier = Modifier.height(30.dp),
+                )
                 Spacer(Modifier.width(8.dp))
                 // Flexible: it gives up space so the pill and avatar keep theirs.
                 SearchBox(onSearch = onSearch, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                OnlinePill()
+                Spacer(Modifier.width(8.dp))
+                AvatarButton(user = user, onClick = onAccount)
             }
-            Spacer(Modifier.width(8.dp))
-            OnlinePill()
-            Spacer(Modifier.width(8.dp))
-            AvatarButton(user = user, onClick = onAccount)
         }
     }
+}
+
+/** Web/Shiori parity: every nav pill leads with its section icon. */
+private fun tabIcon(tab: Tab) = when (tab) {
+    Tab.Discover -> Icons.Filled.AutoAwesome
+    Tab.Library -> Icons.Filled.VideoLibrary
+    Tab.Updates -> Icons.Filled.Notifications
+    Tab.History -> Icons.Filled.History
+    Tab.Downloads -> Icons.Filled.Download
+    Tab.Search -> Icons.Filled.Search
 }
 
 /** The web topbar's search input: rounded-full, card bg, leading icon; submit
@@ -264,8 +301,16 @@ private fun HamburgerButton(onClick: () -> Unit) {
     }
 }
 
+/** Shiori's SectionPillsRow pill, metric for metric: 16dp leading icon,
+ *  14sp label 6dp after it, 12/7 padding, rounded-full. */
 @Composable
-private fun TabPill(label: String, active: Boolean, badge: Int = 0, onClick: () -> Unit) {
+private fun TabPill(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    active: Boolean,
+    badge: Int = 0,
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     val bg = when {
         active -> RenzoColors.Primary
@@ -283,10 +328,18 @@ private fun TabPill(label: String, active: Boolean, badge: Int = 0, onClick: () 
             .focusRing(focused, 999.dp)
             .background(bg, RoundedCornerShape(999.dp))
             .tvClickable(onFocused = { focused = it }, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+        Text(
+            label,
+            color = fg,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 6.dp),
+        )
         PillBadge(badge, onActivePill = active)
     }
 }

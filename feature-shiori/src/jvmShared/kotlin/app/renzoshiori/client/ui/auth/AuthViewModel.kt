@@ -374,6 +374,21 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    /**
+     * "Change server" from inside the signed-in app: revoke + clear the
+     * session like [logout], but land on Connect ("which server?") instead of
+     * this server's Login step.
+     */
+    fun switchServer() {
+        val currentApi = api
+        viewModelScope.launch {
+            runCatching { currentApi?.logout() }
+            tokenStore.clearSession()
+            _passwordFlow.value = PasswordFlowState()
+            _state.value = AuthUiState(step = AuthStep.Connect)
+        }
+    }
+
     companion object {
         fun factory() = viewModelFactory {
             initializer { AuthViewModel() }

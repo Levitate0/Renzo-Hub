@@ -270,11 +270,15 @@ fun tileWidthFor(available: Dp): Dp {
     } else {
         (logicalHeight * 0.58f).dp
     }
-    val byHeight = ((h.value - CAPTION_ALLOWANCE_DP) * 2f / 3f).dp
     // Desktop Discover bounds each row to a third of the window and must not
-    // overflow it (the page deliberately doesn't scroll there) — honour the
-    // height budget instead of the phone floor.
-    val floor = if (top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) 64.dp else 108.dp
+    // overflow it (the page deliberately doesn't scroll there) — budget for
+    // the caption's REAL worst case there (two-line title + meta + paddings,
+    // ~96dp; the shared 74 assumes the scrolling layouts' typical single
+    // line) and honour the height budget instead of the phone floor.
+    val desktop = top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop
+    val caption = if (desktop) 96f else CAPTION_ALLOWANCE_DP
+    val byHeight = ((h.value - caption) * 2f / 3f).dp
+    val floor = if (desktop) 64.dp else 108.dp
     return minOf(tier, byHeight).coerceAtLeast(floor)
 }
 
