@@ -122,6 +122,15 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
 
     private fun tick() {
         val a = anchor.value ?: return
+        // Poll the GLOBAL pointer instead of trusting the last AWT event:
+        // native Windows panning keeps going when the cursor leaves the
+        // window (mouse events stop arriving there), and the offset must
+        // keep growing with it.
+        java.awt.MouseInfo.getPointerInfo()?.location?.let { loc ->
+            SwingUtilities.convertPointFromScreen(loc, window.contentPane)
+            current = loc
+            if (a.distance(loc) > DRAG_THRESHOLD_PX) moved = true
+        }
         velY += (targetVelocity((current.y - a.y).toDouble()) - velY) * EASING
         velX += (targetVelocity((current.x - a.x).toDouble()) - velX) * EASING
         dispatch(rotationFor(velY), horizontal = false)
@@ -151,8 +160,15 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
     private fun dispatch(rotation: Double, horizontal: Boolean) {
         if (rotation == 0.0) return
         val contentPane = window.contentPane
-        val target = SwingUtilities.getDeepestComponentAt(contentPane, current.x, current.y) ?: contentPane
-        val pt = SwingUtilities.convertPoint(contentPane, current, target)
+        // A cursor outside the window must still scroll SOMETHING: clamp the
+        // hit point into the content pane so the wheel event always lands on
+        // the scrollable nearest the exit edge.
+        val hit = Point(
+            current.x.coerceIn(0, (contentPane.width - 1).coerceAtLeast(0)),
+            current.y.coerceIn(0, (contentPane.height - 1).coerceAtLeast(0)),
+        )
+        val target = SwingUtilities.getDeepestComponentAt(contentPane, hit.x, hit.y) ?: contentPane
+        val pt = SwingUtilities.convertPoint(contentPane, hit, target)
         target.dispatchEvent(
             MouseWheelEvent(
                 target,
