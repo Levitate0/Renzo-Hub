@@ -30,6 +30,9 @@ import top.levitatemedia.renzo.tv.RenzoDesktopRoot
  * do not fork screens).
  */
 fun main() {
+    // Before any window exists: bind the process to the app's Windows
+    // taskbar identity so pinning works (see WindowsIntegration).
+    WindowsIntegration.installAppUserModelId()
     // Both halves' signers and download sources exist before any UI, so a
     // restart with a pending download queue fetches authenticated — the
     // mirror of RenzoApp.onCreate + HubApplication on Android.

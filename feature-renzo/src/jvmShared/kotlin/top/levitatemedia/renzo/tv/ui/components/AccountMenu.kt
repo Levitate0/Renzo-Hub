@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.runtime.Composable
@@ -106,6 +107,9 @@ fun AccountMenu(
     onLogout: () -> Unit,
     onChangeServer: () -> Unit,
     onClose: () -> Unit,
+    /** Desktop only: with the hamburger gone at wide, the app switch lives
+     *  here (the drawer keeps it everywhere the hamburger still shows). */
+    onSwitchApp: (() -> Unit)? = null,
 ) {
     RenzoBackHandler(enabled = true) { onClose() }
     Box(Modifier.fillMaxSize()) {
@@ -195,6 +199,11 @@ fun AccountMenu(
                 onClick = onCycleContentLevel,
             )
             SheetDivider()
+
+            if (onSwitchApp != null && top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) {
+                SheetItem("Switch to Renzo Shiori", Icons.Filled.SwapHoriz) { onSwitchApp(); onClose() }
+                SheetDivider()
+            }
 
             // Log out stays destructive — a deliberate Renzo choice.
             SheetItem("Log out", Icons.AutoMirrored.Filled.Logout, destructive = true) { onLogout(); onClose() }

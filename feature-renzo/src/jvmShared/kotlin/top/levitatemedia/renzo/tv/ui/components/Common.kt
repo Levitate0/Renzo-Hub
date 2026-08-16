@@ -271,7 +271,11 @@ fun tileWidthFor(available: Dp): Dp {
         (logicalHeight * 0.58f).dp
     }
     val byHeight = ((h.value - CAPTION_ALLOWANCE_DP) * 2f / 3f).dp
-    return minOf(tier, byHeight).coerceAtLeast(108.dp)
+    // Desktop Discover bounds each row to a third of the window and must not
+    // overflow it (the page deliberately doesn't scroll there) — honour the
+    // height budget instead of the phone floor.
+    val floor = if (top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) 64.dp else 108.dp
+    return minOf(tier, byHeight).coerceAtLeast(floor)
 }
 
 /** Screen-only variant for callers with no measured box. */

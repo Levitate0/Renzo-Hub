@@ -81,6 +81,10 @@ fun TopBar(
         // pushing this under the breakpoint and hiding the tab pills.
         val wide = top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 800 &&
             maxWidth >= 700.dp
+        // Desktop matches the web: the bar IS the nav, so no hamburger while
+        // the pills are visible. It comes back if the window shrinks below
+        // the pill break (otherwise a narrow window would have no nav at all).
+        val showHamburger = !(top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop && wide)
         Row(
             Modifier
                 .fillMaxWidth()
@@ -98,8 +102,10 @@ fun TopBar(
                 .padding(horizontal = horizontalPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            HamburgerButton(onClick = onMenu)
-            Spacer(Modifier.width(10.dp))
+            if (showHamburger) {
+                HamburgerButton(onClick = onMenu)
+                Spacer(Modifier.width(10.dp))
+            }
             Image(
                 painter = painterResource(Res.drawable.renzo_wordmark),
                 contentDescription = "Renzo",

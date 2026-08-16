@@ -40,6 +40,9 @@ dependencies {
     implementation(compose.components.resources)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
+    // Windows taskbar identity: SetCurrentProcessExplicitAppUserModelID, so
+    // the javaw-hosted window groups with (and pins as) the app's shortcut.
+    implementation("net.java.dev.jna:jna:5.14.0")
 }
 
 kotlin {

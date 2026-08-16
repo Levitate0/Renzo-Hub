@@ -52,6 +52,15 @@ Section "Install"
   File /r "${SRC}/*"
   CreateShortcut "$SMPROGRAMS\${APPNAME}.lnk" "$INSTDIR\RenzoHub.exe" "" "$INSTDIR\RenzoHub.exe" 0
   CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\RenzoHub.exe" "" "$INSTDIR\RenzoHub.exe" 0
+  ; Taskbar-pin support: stamp the shortcuts with the same AppUserModelID the
+  ; app sets on its process (WindowsIntegration.kt). The window is javaw.exe,
+  ; and this id match is what lets Windows group it with — and relaunch it
+  ; from — the pinned shortcut instead of a bare javaw.
+  File "/oname=set-aumid.ps1" "${__FILEDIR__}/set-aumid.ps1"
+  nsExec::Exec `powershell -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\set-aumid.ps1" -Lnk "$SMPROGRAMS\${APPNAME}.lnk"`
+  Pop $0
+  nsExec::Exec `powershell -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\set-aumid.ps1" -Lnk "$DESKTOP\${APPNAME}.lnk"`
+  Pop $0
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "${UNINSTKEY}" "DisplayName" "${APPNAME}"
   WriteRegStr HKCU "${UNINSTKEY}" "DisplayVersion" "${VERSION}"

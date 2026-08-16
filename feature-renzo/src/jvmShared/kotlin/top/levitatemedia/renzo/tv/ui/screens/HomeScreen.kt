@@ -134,10 +134,15 @@ fun HomeScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
         }
     } else {
         // Browse mode: the three rows in the web's order (#browseWrap mt-2).
+        // Desktop keeps the dashboard feel: the three rows split the window
+        // height evenly and the page never scrolls vertically — the rows'
+        // bounded height sizes their cards to fit (tileWidthFor). Phones/TV
+        // keep the web's scrolling column.
+        val fitToWindow = top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop
         Column(
             Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+                .then(if (fitToWindow) Modifier else Modifier.verticalScroll(rememberScrollState())),
         ) {
             ContentChips(app)
             Notes(malNote, partialFail)
@@ -149,9 +154,10 @@ fun HomeScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
                     onOpen = open,
                     onMore = { category = key },
                     loading = loading,
+                    modifier = if (fitToWindow) Modifier.weight(1f) else Modifier,
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            if (!fitToWindow) Spacer(Modifier.height(16.dp))
         }
     }
 }

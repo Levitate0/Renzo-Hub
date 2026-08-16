@@ -354,6 +354,7 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
             onLogout = doLogout,
             onChangeServer = doChangeServer,
             onClose = { accountMenuOpen = false },
+            onSwitchApp = onSwitchApp,
         )
     }
 }
