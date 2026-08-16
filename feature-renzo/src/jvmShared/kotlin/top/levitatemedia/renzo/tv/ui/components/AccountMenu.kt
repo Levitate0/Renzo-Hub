@@ -112,104 +112,151 @@ fun AccountMenu(
     onSwitchApp: (() -> Unit)? = null,
 ) {
     RenzoBackHandler(enabled = true) { onClose() }
+    // Shiori's wide layout anchors this under the avatar as a dropdown; the
+    // sheet remains the narrow/TV shape. Same items either way.
+    val wide = top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop &&
+        top.levitatemedia.renzo.tv.renzoScreenWidthDp() >= 800
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
+                .background(if (wide) Color.Transparent else Color.Black.copy(alpha = 0.55f))
                 .clickable(onClick = onClose),
         )
-        Column(
-            Modifier
-                .align(Alignment.CenterEnd)
-                .width(300.dp)
-                .fillMaxHeight()
-                .background(RenzoColors.Popover)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            // --- header: avatar + "Account" + circled close ------------------
-            Row(
-                Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        if (wide) {
+            // Dropdown card matching Shiori's AccountDropdown: 300dp wide,
+            // pinned under the bar's avatar (top-right), full natural height —
+            // deliberately never scrolls.
+            Column(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 58.dp, end = 12.dp)
+                    .width(300.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
+                    .background(RenzoColors.Popover),
             ) {
-                UserAvatar(user, 28.dp)
-                Text(
-                    "Account",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = RenzoColors.Foreground,
-                    modifier = Modifier.padding(start = 10.dp).weight(1f),
-                )
-                var closeFocused by remember { mutableStateOf(false) }
-                Box(
-                    Modifier
-                        .clip(CircleShape)
-                        .focusRing(closeFocused, 999.dp)
-                        .background(if (closeFocused) RenzoColors.Card else Color.Transparent, CircleShape)
-                        .tvClickable(onFocused = { closeFocused = it }, onClick = onClose),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Filled.Close, contentDescription = "Close",
-                        tint = RenzoColors.MutedForeground,
-                        modifier = Modifier.border(1.dp, RenzoColors.Border, CircleShape).padding(6.dp),
-                    )
-                }
-            }
-            SheetDivider()
-
-            // --- identity: username + role pill ------------------------------
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    user?.username ?: "…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = RenzoColors.Foreground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                RolePill(user?.role ?: "user")
-            }
-            SheetDivider()
-
-            // --- account actions ---------------------------------------------
-            SheetItem("Edit avatar…", Icons.Filled.ImageIcon) { onOpenSection("account"); onClose() }
-            SheetItem("Change password…", Icons.Filled.VpnKey) { onOpenSection("account"); onClose() }
-            SheetDivider()
-
-            // --- navigation --------------------------------------------------
-            if (user?.role == "owner" || user?.role == "manager") {
-                SheetItem("Users", Icons.Filled.People) { onOpenSection("users"); onClose() }
-            }
-            SheetItem("Account", Icons.Filled.VpnKey) { onOpenSection("account"); onClose() }
-            if (user?.role == "owner") {
-                SheetItem("Settings", Icons.Filled.Settings) { onOpenSection("settings"); onClose() }
-            }
-            SheetItem("Change server", Icons.Filled.Dns) { onChangeServer(); onClose() }
-            SheetDivider()
-
-            // --- personalization ---------------------------------------------
-            SheetItem("Appearance", Icons.Filled.Palette) { onOpenSection("appearance"); onClose() }
-            SheetItem(
-                "Show up to: " + contentLevel.replaceFirstChar { it.uppercase() },
-                Icons.Filled.Visibility,
-                onClick = onCycleContentLevel,
-            )
-            SheetDivider()
-
-            if (onSwitchApp != null && top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) {
-                SheetItem("Switch to Renzo Shiori", Icons.Filled.SwapHoriz) { onSwitchApp(); onClose() }
+                IdentityRow(user)
                 SheetDivider()
+                MenuItems(
+                    user, contentLevel, onOpenSection, onCycleContentLevel,
+                    onLogout, onChangeServer, onClose, onSwitchApp,
+                )
             }
-
-            // Log out stays destructive — a deliberate Renzo choice.
-            SheetItem("Log out", Icons.AutoMirrored.Filled.Logout, destructive = true) { onLogout(); onClose() }
-            Spacer(Modifier.height(16.dp))
+        } else {
+            Column(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(300.dp)
+                    .fillMaxHeight()
+                    .background(RenzoColors.Popover)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                // --- header: avatar + "Account" + circled close --------------
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    UserAvatar(user, 28.dp)
+                    Text(
+                        "Account",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = RenzoColors.Foreground,
+                        modifier = Modifier.padding(start = 10.dp).weight(1f),
+                    )
+                    var closeFocused by remember { mutableStateOf(false) }
+                    Box(
+                        Modifier
+                            .clip(CircleShape)
+                            .focusRing(closeFocused, 999.dp)
+                            .background(if (closeFocused) RenzoColors.Card else Color.Transparent, CircleShape)
+                            .tvClickable(onFocused = { closeFocused = it }, onClick = onClose),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.Close, contentDescription = "Close",
+                            tint = RenzoColors.MutedForeground,
+                            modifier = Modifier.border(1.dp, RenzoColors.Border, CircleShape).padding(6.dp),
+                        )
+                    }
+                }
+                SheetDivider()
+                IdentityRow(user)
+                SheetDivider()
+                MenuItems(
+                    user, contentLevel, onOpenSection, onCycleContentLevel,
+                    onLogout, onChangeServer, onClose, onSwitchApp,
+                )
+                Spacer(Modifier.height(16.dp))
+            }
         }
     }
+}
+
+/** Username + role pill. */
+@Composable
+private fun IdentityRow(user: PublicUser?) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            user?.username ?: "…",
+            style = MaterialTheme.typography.bodyMedium,
+            color = RenzoColors.Foreground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        RolePill(user?.role ?: "user")
+    }
+}
+
+/** The item list, shared by the dropdown (wide) and the sheet (narrow/TV). */
+@Composable
+private fun MenuItems(
+    user: PublicUser?,
+    contentLevel: String,
+    onOpenSection: (String) -> Unit,
+    onCycleContentLevel: () -> Unit,
+    onLogout: () -> Unit,
+    onChangeServer: () -> Unit,
+    onClose: () -> Unit,
+    onSwitchApp: (() -> Unit)?,
+) {
+    // --- account actions ---------------------------------------------------
+    SheetItem("Edit avatar…", Icons.Filled.ImageIcon) { onOpenSection("account"); onClose() }
+    SheetItem("Change password…", Icons.Filled.VpnKey) { onOpenSection("account"); onClose() }
+    SheetDivider()
+
+    // --- navigation --------------------------------------------------------
+    if (user?.role == "owner" || user?.role == "manager") {
+        SheetItem("Users", Icons.Filled.People) { onOpenSection("users"); onClose() }
+    }
+    SheetItem("Account", Icons.Filled.VpnKey) { onOpenSection("account"); onClose() }
+    if (user?.role == "owner") {
+        SheetItem("Settings", Icons.Filled.Settings) { onOpenSection("settings"); onClose() }
+    }
+    SheetItem("Change server", Icons.Filled.Dns) { onChangeServer(); onClose() }
+    SheetDivider()
+
+    // --- personalization ---------------------------------------------------
+    SheetItem("Appearance", Icons.Filled.Palette) { onOpenSection("appearance"); onClose() }
+    SheetItem(
+        "Show up to: " + contentLevel.replaceFirstChar { it.uppercase() },
+        Icons.Filled.Visibility,
+        onClick = onCycleContentLevel,
+    )
+    SheetDivider()
+
+    if (onSwitchApp != null && top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) {
+        SheetItem("Switch to Renzo Shiori", Icons.Filled.SwapHoriz) { onSwitchApp(); onClose() }
+        SheetDivider()
+    }
+
+    // Log out stays destructive — a deliberate Renzo choice.
+    SheetItem("Log out", Icons.AutoMirrored.Filled.Logout, destructive = true) { onLogout(); onClose() }
 }
 
 /**

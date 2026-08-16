@@ -1456,10 +1456,13 @@ private fun AccountDropdown(
     androidx.compose.material3.DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
+        // No explicit height cap: the menu grew past the old 620dp (owner
+        // accounts + the wide-only Switch/Change-server rows) and a fixed cap
+        // just cut it mid-item. DropdownMenu already clamps itself to the
+        // window and scrolls internally when it can't fit.
         modifier = Modifier
             .width(300.dp)
-            .background(RenzoColors.Popover)
-            .heightIn(max = 620.dp),
+            .background(RenzoColors.Popover),
     ) {
         AccountMenuBody(
             user = user,
