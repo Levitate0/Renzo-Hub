@@ -222,9 +222,19 @@ private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier)
             }
         }
     }
+    var hadText by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(text) {
         val q = text.trim()
-        if (q.isEmpty()) return@LaunchedEffect
+        if (q.isEmpty()) {
+            // Erasing a previously-typed query exits search immediately
+            // (web: active flips false and the browse rows return).
+            if (hadText) {
+                hadText = false
+                onSearch("")
+            }
+            return@LaunchedEffect
+        }
+        hadText = true
         kotlinx.coroutines.delay(320)
         onSearch(q)
     }

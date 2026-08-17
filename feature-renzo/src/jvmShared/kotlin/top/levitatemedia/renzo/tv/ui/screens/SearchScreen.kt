@@ -35,6 +35,7 @@ import top.levitatemedia.renzo.tv.AppServices
 import top.levitatemedia.renzo.tv.api.ApiError
 import top.levitatemedia.renzo.tv.api.CardItem
 import top.levitatemedia.renzo.tv.ui.components.BackHeading
+import top.levitatemedia.renzo.tv.ui.components.ContentChips
 import top.levitatemedia.renzo.tv.ui.components.ErrorBox
 import top.levitatemedia.renzo.tv.ui.components.GridSkeleton
 import top.levitatemedia.renzo.tv.ui.components.MediaGrid
@@ -63,7 +64,12 @@ private object SearchState {
  * wrapping MediaGrid with the web's skeleton / "Nothing here yet." states.
  */
 @Composable
-fun SearchScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
+fun SearchScreen(
+    app: AppServices,
+    onOpen: (CardItem) -> Unit,
+    /** ‹ Back / cleared query: return to Discover (web clearSearch parity). */
+    onExit: () -> Unit = {},
+) {
     var query by SearchState.query
     var results by SearchState.results
     var searchedFor by SearchState.searchedFor
@@ -93,8 +99,10 @@ fun SearchScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
         }
     }
 
-    // Old #discoverBack: leaving search clears the query and the results.
+    // Old #discoverBack: leaving search clears the query and the results —
+    // including the topbar-driven query, or its effect would just re-submit.
     fun clearSearch() {
+        app.searchQuery.value = ""
         query = ""
         results = emptyList()
         searchedFor = null
@@ -113,67 +121,78 @@ fun SearchScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        // TV text input: BasicTextField inside a bordered card-surface box.
-        Box(
-            Modifier
-                .widthIn(max = 560.dp)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .focusRing(fieldFocused, 10.dp)
-                .background(RenzoColors.Card, RoundedCornerShape(10.dp))
-                .border(1.dp, RenzoColors.Border, RoundedCornerShape(10.dp))
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        ) {
-            BasicTextField(
-                value = query,
-                onValueChange = { query = it },
-                singleLine = true,
-                textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 15.sp, fontFamily = top.levitatemedia.renzo.hub.core.GeistFamily),
-                cursorBrush = SolidColor(RenzoColors.Primary),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(
-                    onSearch = { submit() },
-                    onDone = { submit() },
-                ),
-                modifier = Modifier
+        // The in-page input is TV-only: with a D-pad the topbar box is a tiny
+        // target behind the chrome. Everywhere else the web's model applies —
+        // the TOPBAR search is the entry point and this view is purely the
+        // results (page.tsx searchWrap: ContentChips + BackHeading + grid,
+        // updating live as the query changes).
+        if (app.isTv) {
+            Box(
+                Modifier
+                    .widthIn(max = 560.dp)
                     .fillMaxWidth()
-                    .onFocusChanged { fieldFocused = it.isFocused },
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (query.isEmpty()) {
-                            Text(
-                                "Search anime…",
-                                color = RenzoColors.MutedForeground,
-                                fontSize = 15.sp,
-                            )
+                    .clip(RoundedCornerShape(10.dp))
+                    .focusRing(fieldFocused, 10.dp)
+                    .background(RenzoColors.Card, RoundedCornerShape(10.dp))
+                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 15.sp, fontFamily = top.levitatemedia.renzo.hub.core.GeistFamily),
+                    cursorBrush = SolidColor(RenzoColors.Primary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = { submit() },
+                        onDone = { submit() },
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { fieldFocused = it.isFocused },
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (query.isEmpty()) {
+                                Text(
+                                    "Search anime…",
+                                    color = RenzoColors.MutedForeground,
+                                    fontSize = 15.sp,
+                                )
+                            }
+                            innerTextField()
                         }
-                        innerTextField()
-                    }
-                },
-            )
+                    },
+                )
+            }
         }
 
-        Column(Modifier.fillMaxSize().padding(top = 20.dp)) {
+        Column(Modifier.fillMaxSize().padding(top = if (app.isTv) 20.dp else 0.dp)) {
+            // Web parity: the chips row stays above the results, exactly as on
+            // the browse rows it replaced.
+            ContentChips(app)
             when {
-                searching -> GridSkeleton()
                 error != null -> ErrorBox(message = error!!, onRetry = { submit() })
-                searchedFor == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                searchedFor == null && !searching -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "Type a title and press Search.",
+                        if (app.isTv) "Type a title and press Search." else "Type in the search box above.",
                         color = RenzoColors.MutedForeground,
                         fontSize = 14.sp,
                     )
                 }
                 else -> {
-                    // page.tsx search mode: BackHeading + MediaGrid.
+                    // page.tsx search mode: BackHeading + MediaGrid; the grid
+                    // shows its skeleton under the heading while a query is
+                    // in flight, instead of blanking the whole view.
                     BackHeading(
-                        heading = "Results for “$searchedFor”",
-                        onBack = { clearSearch() },
+                        heading = "Results for “${searchedFor ?: query.trim()}”",
+                        onBack = { clearSearch(); onExit() },
                     )
                     val level = app.contentLevel.value
                     MediaGrid(
                         items = results.filter { !isHidden(it, level) },
                         onOpen = onOpen,
+                        loading = searching,
                         empty = "Nothing here yet.",
                     )
                 }

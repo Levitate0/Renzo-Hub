@@ -248,8 +248,16 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
                     onAccount = { accountMenuOpen = true },
                     onMenu = { drawerOpen = true },
                     onSearch = { q ->
-                        app.searchQuery.value = q
-                        nav.tab.value = Tab.Search
+                        if (q.isBlank()) {
+                            // Erasing the box leaves search (web: active=false
+                            // returns the browse rows) — but only from Search,
+                            // never hijacking whatever other tab is open.
+                            app.searchQuery.value = ""
+                            if (nav.tab.value == Tab.Search) nav.tab.value = Tab.Discover
+                        } else {
+                            app.searchQuery.value = q
+                            nav.tab.value = Tab.Search
+                        }
                     },
                     user = app.user.value,
                     updatesBadge = app.updatesCount.value,
@@ -283,7 +291,11 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
                         Tab.Updates -> UpdatesScreen(app, openCard)
                         Tab.History -> HistoryScreen(app, openCard)
                         Tab.Downloads -> DownloadsScreen(app, openCard)
-                        Tab.Search -> SearchScreen(app, openCard)
+                        Tab.Search -> SearchScreen(
+                            app,
+                            openCard,
+                            onExit = { nav.tab.value = Tab.Discover },
+                        )
                     }
                 }
             }
