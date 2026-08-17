@@ -68,6 +68,10 @@ fun ActivityDock(
     onOpenQueue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Desktop-only (user direction 2026-08-17): phones and TV never show the
+    // dock — and never open its SignalR connection either (gate before any
+    // state, so the client coroutine simply doesn't exist off desktop).
+    if (!top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) return
     val app = ShioriRuntime.app
     val serverUrl = app.tokenStore.serverUrl ?: return
     val client = remember(serverUrl) {
