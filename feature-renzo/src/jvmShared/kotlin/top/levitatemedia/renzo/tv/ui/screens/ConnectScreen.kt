@@ -73,7 +73,7 @@ fun ConnectScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onConn
         }
     }
 
-    GateCard {
+    GateCard(isTv = app.isTv) {
         GateBanner()
         Text(
             "Connect to your Renzo server",

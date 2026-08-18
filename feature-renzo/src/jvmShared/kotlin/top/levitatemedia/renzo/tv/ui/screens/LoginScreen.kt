@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -143,7 +144,7 @@ fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onChange
         }
     }
 
-    GateCard {
+    GateCard(isTv = app.isTv) {
         // ── header: banner + description (Shiori AuthCardHeader) ──
         GateBanner()
         Text(
@@ -301,32 +302,64 @@ private fun RememberRow(checked: Boolean, onToggle: () -> Unit) {
  * column with gap-3.
  */
 @Composable
-internal fun GateCard(content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(RenzoColors.Background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
+internal fun GateCard(isTv: Boolean, content: @Composable ColumnScope.() -> Unit) {
+    // A 1080p television reports only ~540dp of height (and the panel's
+    // overscan crops the edges on top of that), so the web-parity card
+    // overflowed the screen there. Same cure as the Shiori half's auth pages:
+    // on TV the whole page SCALES down to fit (TvFit) instead of scrolling —
+    // there is nothing to flick with — plus overscan margins. Touch/desktop
+    // keep the scroller and the 1:1 metrics.
+    TvGateFit(isTv) {
         Column(
             Modifier
-                .widthIn(max = 448.dp)
-                .fillMaxWidth(),
+                .fillMaxSize()
+                .background(RenzoColors.Background)
+                // The hub window is edge-to-edge (decorFitsSystemWindows =
+                // false), so adjustResize does NOT shrink the window for the
+                // keyboard — without this inset the IME simply paints over
+                // the focused field.
+                .imePadding()
+                // The scroller stays on TV too: TvFit means it's inert
+                // normally, but when the keyboard eats half the height it is
+                // what lets the focused field bring itself into view.
+                .verticalScroll(rememberScrollState())
+                // TV: the panel crops roughly 5% of every edge (Shiori's
+                // AuthPageScaffold uses the same margins).
+                .padding(
+                    horizontal = if (isTv) 48.dp else 16.dp,
+                    vertical = if (isTv) 27.dp else 32.dp,
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
             Column(
                 Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(RenzoColors.Card, RoundedCornerShape(12.dp))
-                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                content = content,
-            )
+                    .widthIn(max = 448.dp)
+                    .fillMaxWidth(),
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(RenzoColors.Card, RoundedCornerShape(12.dp))
+                        .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    content = content,
+                )
+            }
         }
+    }
+}
+
+/** TV: lay the gate out at a lower density so it fits the panel; else 1:1.
+ *  640dp covers the tallest gate (login with every link row + server line). */
+@Composable
+private fun TvGateFit(isTv: Boolean, content: @Composable () -> Unit) {
+    if (isTv) {
+        top.levitatemedia.renzo.hub.core.TvFit(designHeightDp = 640) { content() }
+    } else {
+        content()
     }
 }
 

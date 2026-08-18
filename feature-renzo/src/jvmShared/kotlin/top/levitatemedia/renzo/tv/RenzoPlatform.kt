@@ -22,6 +22,13 @@ fun renzoScreenWidthDp(): Int =
         androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width.toDp().value.toInt()
     }
 
+/** Viewport height in dp — a 1080p television is only ~540dp tall. */
+@Composable
+fun renzoScreenHeightDp(): Int =
+    with(androidx.compose.ui.platform.LocalDensity.current) {
+        androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height.toDp().value.toInt()
+    }
+
 /**
  * Avatar picker: opens the platform image chooser, centre-crops to a square,
  * scales to 128px and hands back a base64 JPEG + content type — the web

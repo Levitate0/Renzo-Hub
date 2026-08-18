@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -54,7 +55,6 @@ import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import top.levitatemedia.renzo.hub.core.TvFit
-import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.tv.focusRing
 import app.renzoshiori.client.ui.tv.rememberFocusState
 import app.renzoshiori.client.ui.tv.tvClickable
@@ -93,10 +93,15 @@ fun AuthPageScaffold(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(RenzoColors.Background)
-            // No imePadding(): the activity is adjustResize and the card lives
-            // in a scroller, so a focused field brings itself into view without
-            // double-counting the keyboard inset.
-            .then(if (isTv) Modifier else Modifier.verticalScroll(rememberScrollState()))
+            // The hub window is edge-to-edge (decorFitsSystemWindows = false),
+            // which turns adjustResize OFF in practice — the window never
+            // shrinks for the keyboard, so without this inset the IME paints
+            // straight over the focused field.
+            .imePadding()
+            // The scroller stays on TV too: TvFit means it's inert normally,
+            // but when the keyboard eats half the height it is what lets the
+            // focused field bring itself into view.
+            .verticalScroll(rememberScrollState())
             // The panel crops roughly 5% of every edge.
             .padding(vertical = if (isTv) 27.dp else 24.dp, horizontal = if (isTv) 48.dp else 0.dp),
         contentAlignment = Alignment.Center,
