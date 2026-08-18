@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.HistoryChapterDto
 import app.renzoshiori.client.data.model.HistoryFeedItemDto
@@ -108,14 +107,15 @@ private fun progressLabel(progress: Double, completed: Boolean): String? {
  * history row is by definition already read.
  */
 @Composable
-fun HistoryScreen(onOpenSeries: (String) -> Unit) {
+fun HistoryScreen(
+    onOpenSeries: (String) -> Unit,
+    // The shell's SHARED LibraryViewModel — the command bar's search box
+    // writes into it. A locally-created viewModel() lives in the nav
+    // back-stack entry's store, not the root's, so it never saw the term.
+    libraryVm: LibraryViewModel,
+) {
     val renzoApp = ShioriRuntime.app
 
-    // The command bar's search box is bound to LibraryViewModel — the web's
-    // history page reads that very same shared search context.
-    val libraryVm: LibraryViewModel = viewModel(
-        factory = LibraryViewModel.factory(),
-    )
     val libraryState by libraryVm.state.collectAsState()
     val search = libraryState.searchTerm.trim()
 

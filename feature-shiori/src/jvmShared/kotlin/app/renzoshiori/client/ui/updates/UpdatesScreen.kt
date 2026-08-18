@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.ui.util.screenWidthDp
 import app.renzoshiori.client.data.model.UpdateFeedItemDto
@@ -110,15 +109,16 @@ private sealed interface DisplayGroup {
  * chapters for one series into a single expandable stack.
  */
 @Composable
-fun UpdatesScreen(onOpenSeries: (String) -> Unit) {
+fun UpdatesScreen(
+    onOpenSeries: (String) -> Unit,
+    // The shell's SHARED LibraryViewModel — the command bar's search box
+    // writes into it. A locally-created viewModel() lives in the nav
+    // back-stack entry's store, not the root's, so it never saw the term.
+    libraryVm: LibraryViewModel,
+) {
     val renzoApp = ShioriRuntime.app
     val scope = rememberCoroutineScope()
 
-    // The command bar's search box is bound to LibraryViewModel — the web's
-    // updates page reads that very same shared search context.
-    val libraryVm: LibraryViewModel = viewModel(
-        factory = LibraryViewModel.factory(),
-    )
     val libraryState by libraryVm.state.collectAsState()
     val search = libraryState.searchTerm.trim()
 

@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.ui.util.screenWidthDp
 import app.renzoshiori.client.data.model.DownloadInfoDto
@@ -125,15 +124,17 @@ private fun dotColor(status: RowStatus): Color = when (status) {
  * Running queue on the same 5s cadence the web polls the other three lists.
  */
 @Composable
-fun QueueScreen() {
+fun QueueScreen(
+    // The shell's SHARED LibraryViewModel — the command bar writes the search
+    // term into it. Creating one here via viewModel() scopes to the nav
+    // back-stack entry, a DIFFERENT owner than the root's, so the term typed
+    // in the bar never arrived (search silently dead on this tab).
+    libraryVm: LibraryViewModel,
+) {
     val renzoApp = ShioriRuntime.app
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
 
-    // Shared search context — the shell's command bar writes into LibraryViewModel.
-    val libraryVm: LibraryViewModel = viewModel(
-        factory = LibraryViewModel.factory(),
-    )
     val libraryState by libraryVm.state.collectAsState()
     val search = libraryState.searchTerm.trim()
 

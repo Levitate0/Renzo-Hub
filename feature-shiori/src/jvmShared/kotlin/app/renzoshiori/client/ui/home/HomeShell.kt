@@ -394,10 +394,10 @@ fun HomeShell(
                             onOpenSeries = onOpenSeries,
                             onOpenOfflineSeries = onOpenOfflineSeries,
                         )
-                        Section.Updates -> UpdatesScreen(onOpenSeries = onOpenSeries)
-                        Section.History -> HistoryScreen(onOpenSeries = onOpenSeries)
-                        Section.Browse -> BrowseScreen(onPreviewRead = onPreviewRead)
-                        Section.Queue -> QueueScreen()
+                        Section.Updates -> UpdatesScreen(onOpenSeries = onOpenSeries, libraryVm = libraryVm)
+                        Section.History -> HistoryScreen(onOpenSeries = onOpenSeries, libraryVm = libraryVm)
+                        Section.Browse -> BrowseScreen(libraryVm = libraryVm, onPreviewRead = onPreviewRead)
+                        Section.Queue -> QueueScreen(libraryVm = libraryVm)
                         Section.Status -> StatusScreen(onOpenSeries = onOpenSeries)
                         // Sources is 36 clicks over extension-repository URLs —
                         // deliberately not ported to the remote. It stays in the

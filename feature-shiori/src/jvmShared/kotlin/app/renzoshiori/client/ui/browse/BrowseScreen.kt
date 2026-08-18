@@ -76,7 +76,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.InLibraryStatus
 import app.renzoshiori.client.data.model.LatestGenreDto
@@ -140,16 +139,17 @@ private const val ITEMS_PER_PAGE = 40
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(
+    // The shell's SHARED LibraryViewModel — the command bar writes the search
+    // term into it. Creating one here via viewModel() scopes to the nav
+    // back-stack entry, a DIFFERENT owner than the root's, so the term typed
+    // in the bar never arrived (search silently dead on this tab).
+    libraryVm: LibraryViewModel,
     /** "Read" in the details view: preview (mihonId, title) live from the source. */
     onPreviewRead: (String, String) -> Unit = { _, _ -> },
 ) {
     val renzoApp = ShioriRuntime.app
     val uriHandler = LocalUriHandler.current
 
-    // Shared search context — the shell's command bar writes into LibraryViewModel.
-    val libraryVm: LibraryViewModel = viewModel(
-        factory = LibraryViewModel.factory(),
-    )
     val libraryState by libraryVm.state.collectAsState()
     val searchTerm = libraryState.searchTerm.trim()
 
