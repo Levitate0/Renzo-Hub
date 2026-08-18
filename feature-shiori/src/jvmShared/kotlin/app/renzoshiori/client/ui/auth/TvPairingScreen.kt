@@ -25,6 +25,7 @@ import app.renzoshiori.client.data.model.UserDto
 import app.renzoshiori.client.ui.theme.RenzoColors
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import top.levitatemedia.renzo.hub.core.tv.TvCodeResult
 import top.levitatemedia.renzo.hub.core.tv.TvPairingClient
 import top.levitatemedia.renzo.hub.core.tv.TvPollState
 
@@ -58,12 +59,21 @@ fun TvPairingScreen(
     LaunchedEffect(attempt) {
         error = null
         code = null
-        val requested = client.requestCode(deviceName)
-        if (requested == null) {
-            // Either the server predates pairing, or it is unreachable. Either
-            // way the password form is the only way in.
-            error = "This server doesn't support sign-in by code."
-            return@LaunchedEffect
+        val requested = when (val r = client.requestCode(deviceName)) {
+            is TvCodeResult.Granted -> r.code
+            // Transient: the server's pairing table is full. Its own message
+            // says so, and the Try-again button below is the recovery — this
+            // must NOT present as a missing feature.
+            is TvCodeResult.Busy -> {
+                error = r.message
+                return@LaunchedEffect
+            }
+            // The server predates pairing, or it is unreachable. Either way
+            // the password form is the only way in.
+            TvCodeResult.Unsupported -> {
+                error = "This server doesn't support sign-in by code."
+                return@LaunchedEffect
+            }
         }
         code = requested.userCode
         verificationUrl = requested.verificationUrl

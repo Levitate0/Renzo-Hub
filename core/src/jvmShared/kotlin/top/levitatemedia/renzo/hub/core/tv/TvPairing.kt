@@ -48,6 +48,26 @@ data class TvCode(
     val interval: Int = 5,
 )
 
+sealed interface TvCodeResult {
+    /** The server issued a code — show it and start polling. */
+    data class Granted(val code: TvCode) : TvCodeResult
+
+    /**
+     * The server predates pairing (404) or is unreachable — callers hide the
+     * option (fall back to the password form) rather than showing a broken one.
+     * Any unexpected non-2xx lands here too, to stay conservative.
+     */
+    data object Unsupported : TvCodeResult
+
+    /**
+     * 503: the server's live-pairing table is full. Transient and
+     * self-clearing — keep the option visible, show [message], offer a retry.
+     * Collapsing this into [Unsupported] presented a busy minute as a
+     * permanently missing feature.
+     */
+    data class Busy(val message: String) : TvCodeResult
+}
+
 sealed interface TvPollState {
     /** Not approved yet; keep waiting. */
     data object Pending : TvPollState
@@ -76,10 +96,11 @@ class TvPairingClient(private val baseUrl: String) {
      * Ask for a pairing code. [deviceName] is what the user will see in their
      * account's device list, so it should say which television this is.
      *
-     * Returns null when the server has no pairing support (404) or is
-     * unreachable — callers hide the option rather than showing a broken one.
+     * The three outcomes are deliberately distinct ([TvCodeResult]): a 503 —
+     * the server's pending-pairing table is full — must NOT read as "this
+     * server has no pairing support", because it clears itself in a minute.
      */
-    suspend fun requestCode(deviceName: String): TvCode? = withContext(Dispatchers.IO) {
+    suspend fun requestCode(deviceName: String): TvCodeResult = withContext(Dispatchers.IO) {
         val body = json.encodeToString(DeviceNameBody(deviceName))
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
@@ -88,10 +109,24 @@ class TvPairingClient(private val baseUrl: String) {
             .build()
         runCatching {
             http.newCall(request).execute().use { res ->
-                if (!res.isSuccessful) return@use null
-                res.body?.string()?.let { json.decodeFromString<TvCode>(it) }
+                val text = res.body?.string().orEmpty()
+                when {
+                    res.isSuccessful ->
+                        runCatching { json.decodeFromString<TvCode>(text) }.getOrNull()
+                            ?.let { TvCodeResult.Granted(it) }
+                            ?: TvCodeResult.Unsupported
+                    res.code == 503 -> {
+                        // The wording is a server concern and will drift —
+                        // read it from the body, never hardcode it.
+                        val msg = runCatching { json.decodeFromString<ErrorBody>(text).error }
+                            .getOrNull()?.takeIf { it.isNotBlank() }
+                            ?: "Too many devices are pairing right now. Try again in a minute."
+                        TvCodeResult.Busy(msg)
+                    }
+                    else -> TvCodeResult.Unsupported
+                }
             }
-        }.getOrNull()
+        }.getOrElse { TvCodeResult.Unsupported }
     }
 
     /**
@@ -155,6 +190,7 @@ class TvPairingClient(private val baseUrl: String) {
     private fun url(path: String) = baseUrl.trimEnd('/') + path
 
     @Serializable private data class DeviceNameBody(val deviceName: String)
+    @Serializable private data class ErrorBody(val error: String = "")
     @Serializable private data class DeviceCodeBody(val deviceCode: String)
     @Serializable private data class PollStatus(val status: String = "pending")
 }
