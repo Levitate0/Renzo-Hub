@@ -257,7 +257,7 @@ fun BrowseScreen(
     val spotlightItems = remember(firstPageItems, hideAdult) {
         firstPageItems
             .filter { it.inLibrary == InLibraryStatus.NOT_IN_LIBRARY }
-            .filter { !hideAdult || !AdultFilter.isAdultItem(it.isNsfw.takeIf { flag -> flag }, it.genre) }
+            .filter { !hideAdult || !AdultFilter.isAdultItem(it.isNsfw, it.genre) }
             .shuffled()
             .take(7)
             .map { s ->
@@ -278,7 +278,7 @@ fun BrowseScreen(
     // Temporary 18+ view filter — purely client-side, pages stay intact.
     val visibleItems = remember(items, hideAdult) {
         if (hideAdult) {
-            items.filter { !AdultFilter.isAdultItem(it.isNsfw.takeIf { flag -> flag }, it.genre) }
+            items.filter { !AdultFilter.isAdultItem(it.isNsfw, it.genre) }
         } else {
             items
         }
@@ -926,7 +926,7 @@ private fun TagFilterBody(
     val filtered = remember(genres, tagSearch, hideAdult) {
         var list = genres.orEmpty()
         // Keep adult rating tags out of the picker when the filter is on.
-        if (hideAdult) list = list.filter { !AdultFilter.isAdultItem(null, listOf(it.name)) }
+        if (hideAdult) list = list.filter { !AdultFilter.isAdultTag(it.name) }
         val term = tagSearch.trim().lowercase()
         (if (term.isEmpty()) list else list.filter { it.name.lowercase().contains(term) })
             .take(MAX_VISIBLE_GENRES)

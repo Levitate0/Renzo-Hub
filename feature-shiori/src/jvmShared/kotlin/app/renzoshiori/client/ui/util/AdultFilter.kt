@@ -53,9 +53,18 @@ object AdultFilter {
         keyValuePrefs(PREFS).putBoolean(KEY, hidden)
     }
 
-    /** Web `isAdultItem`: prefer the server's flag, fall back to the tags. */
+    /**
+     * Web `isAdultItem`: the server flag OR the tags — never one instead of
+     * the other. The flag is absent on older cached payloads and a series can
+     * carry an adult tag from a source the flag computation didn't see, so an
+     * `isNsfw == false` must still fall through to the tags (the web's
+     * `item.isNsfw === true || isAdultSeries(item.genre)`).
+     */
     fun isAdultItem(isNsfw: Boolean?, genres: List<String>): Boolean =
-        isNsfw ?: genres.any { it.trim().lowercase() in ADULT_TAGS }
+        isNsfw == true || genres.any { it.trim().lowercase() in ADULT_TAGS }
+
+    /** Web `isAdultTag`: a single tag name is an explicit 18+ rating. */
+    fun isAdultTag(tag: String): Boolean = tag.trim().lowercase() in ADULT_TAGS
 }
 
 /** Compose-friendly handle mirroring the web's `useHideAdult()` hook. */

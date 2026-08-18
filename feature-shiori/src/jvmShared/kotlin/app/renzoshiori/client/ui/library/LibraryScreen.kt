@@ -180,6 +180,18 @@ fun LibraryContent(
 
     val hideAdult = AdultFilter.isHidden()
 
+    // The series the grid actually renders. Every filter option and tab count
+    // in the ribbon derives from this rather than state.series — otherwise the
+    // ribbon advertises genres, sources and counts belonging to series you
+    // cannot see, and picking one of them lands you on an empty grid.
+    val visibleSeries = remember(state.series, hideAdult) {
+        if (hideAdult) {
+            state.series.filter { !AdultFilter.isAdultItem(it.isNsfw, it.genre) }
+        } else {
+            state.series
+        }
+    }
+
     // Search lives in the shell's command bar (like the web app) — this view
     // only renders the ribbon + grid.
     //
@@ -208,6 +220,7 @@ fun LibraryContent(
         if (!state.offlineMode) {
             LibraryRibbon(
                 state = state,
+                visibleSeries = visibleSeries,
                 statusFilter = statusFilter,
                 onStatusFilter = { statusFilter = it },
                 selectedGenre = selectedGenre,
@@ -260,6 +273,7 @@ fun LibraryContent(
             state.offlineMode -> OfflineGrid(state, cardWidth, onOpenOfflineSeries)
             else -> OnlineGrid(
                 state = state,
+                visibleSeries = visibleSeries,
                 baseUrl = vm.baseUrl,
                 statusFilter = statusFilter,
                 selectedGenre = selectedGenre,
@@ -268,7 +282,6 @@ fun LibraryContent(
                 favoriteFilterIds = favoriteFilterIds(state, selectedFavList),
                 orderBy = orderBy,
                 cardWidth = cardWidth,
-                hideAdult = hideAdult,
                 onOpenSeries = onOpenSeries,
             )
         }
@@ -305,6 +318,9 @@ private fun favoriteFilterIds(state: LibraryUiState, selected: String): Set<Stri
 @Composable
 private fun LibraryRibbon(
     state: LibraryUiState,
+    /** What the grid renders (18+ already dropped when hidden) — the option
+     *  lists and counts must describe THIS set, not state.series. */
+    visibleSeries: List<LibraryRowDto>,
     statusFilter: String,
     onStatusFilter: (String) -> Unit,
     selectedGenre: String,
@@ -327,9 +343,11 @@ private fun LibraryRibbon(
     val favIds = favoriteFilterIds(state, selectedFavList)
 
     // Live counts per status tab with genre/provider/category/favourites
-    // already applied — the web's baseFilter, verbatim.
-    val counts = remember(state.series, selectedGenre, selectedProvider, selectedCategory, selectedFavList) {
-        val base = state.series.filter { s ->
+    // already applied — the web's baseFilter, verbatim. Derived from the
+    // VISIBLE set (hideAdult kept as an explicit key even though visibleSeries
+    // covers it — these blocks are read far more often than they are edited).
+    val counts = remember(visibleSeries, hideAdult, selectedGenre, selectedProvider, selectedCategory, selectedFavList) {
+        val base = visibleSeries.filter { s ->
             (selectedGenre == "__ALL__" || s.genre.contains(selectedGenre)) &&
                 (selectedProvider == "__ALL__" || s.providers.any { it.provider == selectedProvider }) &&
                 (selectedCategory == "__ALL__" || s.category == selectedCategory) &&
@@ -349,16 +367,36 @@ private fun LibraryRibbon(
         )
     }
 
-    val genres = remember(state.series, hideAdult) {
-        state.series.flatMap { it.genre }
+    val genres = remember(visibleSeries, hideAdult) {
+        visibleSeries.flatMap { it.genre }
             .filter { it.isNotBlank() }
-            .filter { !hideAdult || !AdultFilter.isAdultItem(null, listOf(it)) }
+            // Belt-and-braces on top of visibleSeries: a series carrying an
+            // 18+ tag the server never flagged is exactly the case the toggle
+            // exists for. The web keeps both layers too.
+            .filter { !hideAdult || !AdultFilter.isAdultTag(it) }
             .distinct()
             .sortedBy { it.lowercase() }
     }
-    val providers = remember(state.series) {
-        state.series.flatMap { it.providers }.map { it.provider }
+    val providers = remember(visibleSeries, hideAdult) {
+        visibleSeries.flatMap { it.providers }.map { it.provider }
             .filter { it.isNotBlank() }.distinct().sortedBy { it.lowercase() }
+    }
+
+    // Drop a selection the ribbon no longer offers. Both persist across
+    // process death via rememberSaveable, so without this, hiding 18+ while
+    // "Hentai" (or a source whose only titles were adult) is selected leaves
+    // the filter silently applied to an option that is no longer in its own
+    // dropdown: the grid comes up empty and the select shows its placeholder,
+    // with nothing on screen to undo it. The isNotEmpty() guard is
+    // load-bearing: state.series is empty while the library loads, and
+    // without it every cold start would reset a valid saved filter to "All".
+    LaunchedEffect(genres, providers) {
+        if (genres.isNotEmpty() && selectedGenre != "__ALL__" && selectedGenre !in genres) {
+            onGenre("__ALL__")
+        }
+        if (providers.isNotEmpty() && selectedProvider != "__ALL__" && selectedProvider !in providers) {
+            onProvider("__ALL__")
+        }
     }
     val categories = remember(state.settings) {
         (state.settings?.categories ?: emptyList()).filter { it.isNotBlank() }.sortedBy { it.lowercase() }
@@ -525,6 +563,9 @@ private fun LibraryRibbon(
 @Composable
 private fun OnlineGrid(
     state: LibraryUiState,
+    /** ONE place decides what's visible: the 18+ cut happens in
+     *  LibraryContent's visibleSeries, shared with the ribbon. */
+    visibleSeries: List<LibraryRowDto>,
     baseUrl: String,
     statusFilter: String,
     selectedGenre: String,
@@ -533,19 +574,17 @@ private fun OnlineGrid(
     favoriteFilterIds: Set<String>?,
     orderBy: String,
     cardWidth: String,
-    hideAdult: Boolean,
     onOpenSeries: (String) -> Unit,
 ) {
     val size = cardSizeOf(cardWidth)
     val search = state.searchTerm.trim()
 
-    // ListSeries' own filtering (adult + search) then the page's filterFn/sortFn.
+    // ListSeries' own search filter then the page's filterFn/sortFn.
     val filtered = remember(
-        state.series, search, statusFilter, selectedGenre, selectedProvider,
-        selectedCategory, favoriteFilterIds, orderBy, hideAdult,
+        visibleSeries, search, statusFilter, selectedGenre, selectedProvider,
+        selectedCategory, favoriteFilterIds, orderBy,
     ) {
-        state.series
-            .filter { !hideAdult || !AdultFilter.isAdultItem(it.isNsfw.takeIf { flag -> flag }, it.genre) }
+        visibleSeries
             .filter { search.isEmpty() || it.title.contains(search, ignoreCase = true) }
             .filter { s ->
                 val matchesTab = when (statusFilter) {
