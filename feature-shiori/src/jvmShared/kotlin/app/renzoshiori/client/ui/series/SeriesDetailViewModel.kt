@@ -20,6 +20,8 @@ import app.renzoshiori.client.data.model.ReaderMarkRequestDto
 import app.renzoshiori.client.data.model.SeriesStatus
 import app.renzoshiori.client.data.model.UserLevel
 import app.renzoshiori.client.data.network.ApiService
+import app.renzoshiori.client.data.network.ReaderApi
+import app.renzoshiori.client.data.network.ReaderBookmarkRequestDto
 import app.renzoshiori.client.data.network.CreateFavoriteListDto
 import app.renzoshiori.client.data.network.DeleteDownloadsRequestDto
 import app.renzoshiori.client.data.network.DisableLinkRequestDto
@@ -116,6 +118,9 @@ data class SeriesDetailUiState(
     val selected: Set<Double> = emptySet(),
     val pending: Set<Double> = emptySet(),
     val readPending: Set<Double> = emptySet(),
+    // Separate from readPending on purpose: sharing one set would grey out
+    // the read toggle while a bookmark is saving.
+    val bookmarkPending: Set<Double> = emptySet(),
     val markingAll: Boolean = false,
     val bulkPending: Boolean = false,
     val downloadAllPending: Boolean = false,
@@ -799,6 +804,42 @@ class SeriesDetailViewModel(
                 )
             }
         _state.update { it.copy(readPending = it.readPending - number) }
+        loadChapters()
+    }
+
+    /**
+     * Bookmark toggle — toggleRead's shape, with two deliberate differences:
+     * the optimistic copy sets ONLY `bookmarked` (a bookmark is independent of
+     * read state and never scrobbles), and it tracks in its own pending set.
+     */
+    fun toggleBookmark(number: Double, bookmarked: Boolean) = viewModelScope.launch {
+        val a = app.network.currentServiceOf<ReaderApi>() ?: return@launch
+        _state.update { it.copy(bookmarkPending = it.bookmarkPending + number) }
+        val previous = _state.value.chapters
+        _state.update { s ->
+            s.copy(
+                chapters = s.chapters.map {
+                    if (it.number == number) it.copy(bookmarked = bookmarked) else it
+                },
+            )
+        }
+        runCatching {
+            a.setBookmark(
+                ReaderBookmarkRequestDto(
+                    seriesId = seriesId,
+                    chapterNumber = number,
+                    bookmarked = bookmarked,
+                ),
+            )
+        }.onFailure {
+            _state.update { s -> s.copy(chapters = previous) }
+            toast(
+                if (bookmarked) "Couldn't bookmark" else "Couldn't remove bookmark",
+                "Please try again.",
+                destructive = true,
+            )
+        }
+        _state.update { it.copy(bookmarkPending = it.bookmarkPending - number) }
         loadChapters()
     }
 

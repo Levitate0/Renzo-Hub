@@ -453,12 +453,6 @@ fun ChapterRow(
                         modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false),
                     )
                 }
-                if (chapter.bookmarked) {
-                    Icon(
-                        Icons.Filled.Bookmark, contentDescription = "Bookmarked",
-                        tint = Pink500, modifier = Modifier.padding(start = 6.dp).size(12.dp),
-                    )
-                }
                 if (!chapter.isCompleted && chapter.progress > 0f) {
                     Text(
                         "${(chapter.progress * 100).toInt()}%",
@@ -527,6 +521,20 @@ fun ChapterRow(
                     background = Color.Transparent,
                     enabled = !readPending,
                     onClick = { vm.toggleRead(chapter.number, !chapter.isCompleted) },
+                )
+
+                // Bookmark toggle — beside the read toggle and behaving the
+                // same way: the icon IS the control, so the state is readable
+                // at a glance and one click away (chapter-row.tsx; the passive
+                // marker that used to sit in the title line is gone).
+                SquareIconButton(
+                    icon = Icons.Filled.Bookmark,
+                    contentDescription = if (chapter.bookmarked) "Remove bookmark" else "Bookmark chapter",
+                    tint = if (chapter.bookmarked) Pink500 else Muted.copy(alpha = 0.5f),
+                    borderColor = Color.Transparent,
+                    background = Color.Transparent,
+                    enabled = chapter.number !in state.bookmarkPending,
+                    onClick = { vm.toggleBookmark(chapter.number, !chapter.bookmarked) },
                 )
             }
 
