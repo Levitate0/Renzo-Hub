@@ -245,15 +245,14 @@ fun HomeShell(
 
     val libraryState by libraryVm.state.collectAsState()
 
-    // A drawer you must open before you can steer is hostile with a remote, so
-    // TV gets a persistent left rail instead. Same sections, same state, same
-    // composable below it — only the container differs (see ui/tv/TvFocus.kt on
-    // why there is no second screen tree).
     val isTv = LocalIsTv.current
     // The web's lg breakpoint: a wide window gets the DESKTOP chrome — inline
     // section pills, an always-visible search input, download counters, and
     // the account menu as an anchored dropdown. No hamburger, no sheet.
-    val wide = !isTv && screenWidthDp() >= 1024.dp
+    // TV counts as wide too (user direction 2026-08-17): the set uses the same
+    // top command bar as desktop, not the old persistent left rail — a 1080p
+    // set reports ~960dp, so the isTv term is what makes it qualify.
+    val wide = isTv || screenWidthDp() >= 1024.dp
 
     // On a set-top box, Back from a section must land somewhere rather than
     // dropping out of the app; Library is home. Touch keeps its existing
@@ -438,20 +437,10 @@ fun HomeShell(
         }
     }
 
-    if (isTv) {
-        Row(modifier = Modifier.fillMaxSize().background(RenzoColors.Background)) {
-            TvNavRail(
-                current = current,
-                metrics = metrics,
-                offline = libraryState.offlineMode,
-                onToggleOffline = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
-                onSelect = { s -> onSectionChange(s.name) },
-                onSwitchApp = { onAccountAction(AccountAction.SwitchApp) },
-                modifier = Modifier.tourAnchor(TourAnchors.NAV),
-            )
-            Box(modifier = Modifier.weight(1f)) { body() }
-        }
-    } else {
+    // TV used to keep a persistent left rail here; it now rides the same wide
+    // command bar as desktop (the drawer below is inert at wide — no hamburger
+    // ever opens it).
+    run {
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
@@ -475,140 +464,6 @@ fun HomeShell(
             },
             content = body,
         )
-    }
-}
-
-/**
- * The TV navigation rail — the drawer's SectionList, always on screen.
- *
- * Selection and focus are on separate channels (§2.1 of the TV spec): the
- * active section keeps its accent colour, left accent bar and check mark
- * wherever the cursor goes, while the ring and fill follow the cursor. Both can
- * be true on the same row and stay tellable apart.
- */
-@Composable
-private fun TvNavRail(
-    current: Section,
-    metrics: DownloadsMetricsDto,
-    offline: Boolean,
-    onToggleOffline: () -> Unit,
-    onSelect: (Section) -> Unit,
-    onSwitchApp: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .width(232.dp)
-            .fillMaxHeight()
-            .background(RenzoColors.Popover)
-            .statusBarsPadding()
-            .padding(horizontal = 10.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Image(
-            painter = painterResource(Res.drawable.renzo_login_banner),
-            contentDescription = "Renzo Shiori",
-            modifier = Modifier.height(30.dp).padding(start = 8.dp, bottom = 14.dp),
-        )
-        Section.entries.forEach { s ->
-            val active = s == current
-            val focus = rememberFocusState()
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        when {
-                            active -> RenzoColors.Primary.copy(alpha = 0.10f)
-                            focus.focused -> RenzoColors.Card
-                            else -> Color.Transparent
-                        },
-                        RoundedCornerShape(10.dp),
-                    )
-                    .focusRing(focus.focused, 10.dp)
-                    .tvClickable(onFocused = focus::set) { onSelect(s) },
-            ) {
-                if (active) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(vertical = 10.dp)
-                            .width(3.dp)
-                            .height(26.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(RenzoColors.Primary),
-                    )
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
-                ) {
-                    Icon(
-                        s.icon,
-                        contentDescription = null,
-                        tint = tvContentColor(active, focus.focused),
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        s.label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = tvContentColor(active, focus.focused),
-                        modifier = Modifier.padding(start = 12.dp).weight(1f),
-                    )
-                    if (s == Section.Queue) {
-                        val badge = metrics.downloads + metrics.failed
-                        if (badge > 0) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .padding(end = 4.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(RenzoColors.Primary)
-                                    .padding(horizontal = 7.dp, vertical = 2.dp),
-                            ) {
-                                Text(
-                                    if (badge > 99) "99+" else badge.toString(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = RenzoColors.PrimaryForeground,
-                                )
-                            }
-                        }
-                    }
-                    TvSelectedMark(active)
-                }
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        // The rail is the TV's drawer, so the app switch lives here too —
-        // same placement contract as the phone drawer and the Renzo half.
-        run {
-            val focus = rememberFocusState()
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        if (focus.focused) RenzoColors.Card else Color.Transparent,
-                        RoundedCornerShape(10.dp),
-                    )
-                    .focusRing(focus.focused, 10.dp)
-                    .tvClickable(onFocused = focus::set, onClick = onSwitchApp)
-                    .padding(horizontal = 12.dp, vertical = 11.dp),
-            ) {
-                Icon(
-                    Icons.Filled.SwapHoriz,
-                    contentDescription = null,
-                    tint = tvContentColor(false, focus.focused),
-                    modifier = Modifier.size(20.dp),
-                )
-                Text(
-                    "Switch to Renzo",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = tvContentColor(false, focus.focused),
-                    modifier = Modifier.padding(start = 12.dp),
-                )
-            }
-        }
-        ShellOnlineOfflinePill(offline = offline, onToggle = onToggleOffline)
     }
 }
 
@@ -1149,11 +1004,12 @@ private fun AccountMenuBody(
             ) { hideAdult.toggle() }
 
             HorizontalDivider(color = RenzoColors.Border)
-            // Narrow/TV keep the web's user-menu.tsx contents: "Switch to
-            // Renzo" lives in the nav drawer/rail there. At wide there IS no
-            // drawer (the bar is the nav), so the app switch and the server
-            // switch surface here instead — otherwise they're unreachable.
-            val wide = !isTv && screenWidthDp() >= 1024.dp
+            // Narrow keeps the web's user-menu.tsx contents: "Switch to
+            // Renzo" lives in the nav drawer there. At wide — which now
+            // includes TV, whose rail is gone — there IS no drawer (the bar is
+            // the nav), so the app switch and the server switch surface here
+            // instead; otherwise they're unreachable.
+            val wide = isTv || screenWidthDp() >= 1024.dp
             if (wide) {
                 // Labels match the Renzo half's account menu ("Change server",
                 // "Switch to …") so the two menus read as one app.
@@ -1205,7 +1061,9 @@ private fun SectionPillsRow(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(if (active) RenzoColors.Primary else Color.Transparent)
-                    .clickable { onSelect(s) }
+                    // fill = null: the active pill paints its own primary
+                    // background; on TV only the ring marks the cursor.
+                    .dpadClickable(radius = 50.dp, fill = null) { onSelect(s) }
                     .padding(horizontal = 12.dp, vertical = 7.dp),
             ) {
                 Icon(
@@ -1309,11 +1167,16 @@ fun ShioriCommandBar(
             right = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (showSearch) {
-                        DesktopSearchField(
-                            value = libraryState.searchTerm,
-                            onValueChange = libraryVm::setSearch,
-                            placeholder = searchPlaceholder(activeSection ?: Section.Library),
-                        )
+                        // TV keeps its ONE search — the in-screen TvSearchBar
+                        // with the microphone. A second box up here would be a
+                        // near-identical twin that can't take speech.
+                        if (!LocalIsTv.current) {
+                            DesktopSearchField(
+                                value = libraryState.searchTerm,
+                                onValueChange = libraryVm::setSearch,
+                                placeholder = searchPlaceholder(activeSection ?: Section.Library),
+                            )
+                        }
                         ShellOnlineOfflinePill(
                             offline = libraryState.offlineMode,
                             onToggle = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
@@ -1446,7 +1309,7 @@ private fun DownloadStatusBar(metrics: DownloadsMetricsDto, onOpenQueue: () -> U
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onOpenQueue)
+            .dpadClickable(radius = 8.dp, onClick = onOpenQueue)
             .padding(horizontal = 8.dp, vertical = 8.dp),
     ) {
         StatChip(Icons.Filled.Download, metrics.downloads.toString(), RenzoColors.Blue)

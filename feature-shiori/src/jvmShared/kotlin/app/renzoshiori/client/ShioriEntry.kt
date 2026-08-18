@@ -226,7 +226,10 @@ private fun SignedInNavHost(
     }
 
     val isTv = LocalIsTv.current
-    val wide = !isTv && app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp
+    // TV counts as wide (user direction 2026-08-17): the set gets the SAME
+    // desktop chrome — top command bar with section pills — not a left rail.
+    // (A 1080p set reports ~960dp, so the isTv term matters, not just width.)
+    val wide = isTv || app.renzoshiori.client.ui.util.screenWidthDp() >= 1024.dp
     val backStackEntry by nav.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route
     // The web keeps its CommandBar on every route EXCEPT the reader, which is
