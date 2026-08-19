@@ -43,27 +43,51 @@ actual fun decodePageSlices(bytes: ByteArray, sliceHeightPx: Int, targetWidthPx:
     } ?: return null
 
     return try {
-        val opts = BitmapFactory.Options().apply {
-            inSampleSize = sampleSize
-            inPreferredConfig = Bitmap.Config.ARGB_8888
+        // Heap pressure must degrade RESOLUTION, not drop the page: a decode
+        // that OOMs retries at the next power-of-two sample size (¼ the
+        // memory each step) — a softer page beats a "didn't load" hole in
+        // the middle of the chapter being read.
+        var attempt = sampleSize
+        while (true) {
+            try {
+                return decodeAt(decoder, srcW, srcH, sliceHeightPx, attempt)
+            } catch (e: OutOfMemoryError) {
+                if (attempt >= 16) throw e
+                attempt *= 2
+            }
         }
-        // Regions are cut in SOURCE px; the decoder scales each by the sample
-        // size, so a slice arrives already at drawing resolution.
-        val sliceSrcH = sliceHeightPx * sampleSize
-        val slices = ArrayList<androidx.compose.ui.graphics.ImageBitmap>()
-        var outW = 0
-        var outH = 0
-        var y = 0
-        while (y < srcH) {
-            val h = minOf(sliceSrcH, srcH - y)
-            val bmp = decoder.decodeRegion(Rect(0, y, srcW, y + h), opts) ?: return null
-            outW = maxOf(outW, bmp.width)
-            outH += bmp.height
-            slices += bmp.asImageBitmap()
-            y += h
-        }
-        PageSlices(outW, outH, slices)
+        @Suppress("UNREACHABLE_CODE")
+        null
     } finally {
         decoder.recycle()
     }
+}
+
+private fun decodeAt(
+    decoder: BitmapRegionDecoder,
+    srcW: Int,
+    srcH: Int,
+    sliceHeightPx: Int,
+    sampleSize: Int,
+): PageSlices? {
+    val opts = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    }
+    // Regions are cut in SOURCE px; the decoder scales each by the sample
+    // size, so a slice arrives already at drawing resolution.
+    val sliceSrcH = sliceHeightPx * sampleSize
+    val slices = ArrayList<androidx.compose.ui.graphics.ImageBitmap>()
+    var outW = 0
+    var outH = 0
+    var y = 0
+    while (y < srcH) {
+        val h = minOf(sliceSrcH, srcH - y)
+        val bmp = decoder.decodeRegion(Rect(0, y, srcW, y + h), opts) ?: return null
+        outW = maxOf(outW, bmp.width)
+        outH += bmp.height
+        slices += bmp.asImageBitmap()
+        y += h
+    }
+    return PageSlices(outW, outH, slices)
 }
