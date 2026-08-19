@@ -34,10 +34,13 @@ class PageSlices(
 
 /**
  * CPU-decode [bytes] and cut into slices of at most [sliceHeightPx].
- * Desktop implements with Skia; Android returns null (its pipeline draws to
- * layout bounds and isn't on this path).
+ *
+ * [targetWidthPx] is the drawn column width in physical px: the desktop
+ * ignores it (full-resolution decode, plenty of heap), Android uses it to
+ * pick a power-of-two sample size — a phone must not hold a 12k-px page at
+ * full source resolution just to draw a 1080px-wide column.
  */
-expect fun decodePageSlices(bytes: ByteArray, sliceHeightPx: Int): PageSlices?
+expect fun decodePageSlices(bytes: ByteArray, sliceHeightPx: Int, targetWidthPx: Int): PageSlices?
 
 /**
  * Fetch + decode + slice, with a small most-recently-used cache so scrolling
@@ -45,7 +48,9 @@ expect fun decodePageSlices(bytes: ByteArray, sliceHeightPx: Int): PageSlices?
  * the shared Coil loader (Bearer token from the token store).
  */
 object TallPageLoader {
-    private const val CACHE_ENTRIES = 6
+    // Sliced pages are big (a 12k-px webtoon page is tens of MB of slices);
+    // the desktop JVM can afford a deeper back-scroll cache than a phone.
+    private val CACHE_ENTRIES = if (top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) 6 else 2
 
     private val cache = object : LinkedHashMap<String, PageSlices>(CACHE_ENTRIES, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PageSlices>): Boolean =
@@ -54,14 +59,14 @@ object TallPageLoader {
 
     private val client by lazy { okhttp3.OkHttpClient.Builder().build() }
 
-    suspend fun load(cacheKey: String, model: Any?): PageSlices? = withContext(Dispatchers.IO) {
+    suspend fun load(cacheKey: String, model: Any?, targetWidthPx: Int): PageSlices? = withContext(Dispatchers.IO) {
         synchronized(cache) { cache[cacheKey] }?.let { return@withContext it }
         val bytes = when (model) {
             is ByteArray -> model
             is String -> fetch(model)
             else -> null
         } ?: return@withContext null
-        val sliced = runCatching { decodePageSlices(bytes, PAGE_SLICE_HEIGHT_PX) }.getOrNull()
+        val sliced = runCatching { decodePageSlices(bytes, PAGE_SLICE_HEIGHT_PX, targetWidthPx) }.getOrNull()
             ?: return@withContext null
         synchronized(cache) { cache[cacheKey] = sliced }
         sliced

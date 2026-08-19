@@ -7,7 +7,10 @@ import org.jetbrains.skia.Image
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.SamplingMode
 
-actual fun decodePageSlices(bytes: ByteArray, sliceHeightPx: Int): PageSlices? {
+// targetWidthPx deliberately unused: the desktop decodes at full source
+// resolution (the JVM heap can afford it, and the window can be resized wider
+// after the decode).
+actual fun decodePageSlices(bytes: ByteArray, sliceHeightPx: Int, targetWidthPx: Int): PageSlices? {
     val full = runCatching { Image.makeFromEncoded(bytes) }.getOrNull() ?: return null
     return try {
         val w = full.width

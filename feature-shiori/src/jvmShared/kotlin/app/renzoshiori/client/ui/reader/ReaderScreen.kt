@@ -961,8 +961,12 @@ private fun ContinuousReader(
                         // sit under the texture limit and are unaffected.
                         // Server dims flag it up front; streamed pages flag on
                         // first decode.
+                        // Both platforms slice (2026-08-19): Android was just
+                        // as blurry — Coil 3 clamps decodes to its max bitmap
+                        // size, so a 12k-px strip page came back 4096 tall and
+                        // a fraction of its width.
                         val serverTall = (seg.dims.getOrNull(item.pageIndex)?.second ?: 0) > TEXTURE_SAFE_HEIGHT_PX
-                        val isTall = HubPlatform.isDesktop && (serverTall || tallPages[cacheKey] == true)
+                        val isTall = serverTall || tallPages[cacheKey] == true
                         // Web parity: the page fills the CONFIGURED column
                         // (settings width × zoom) even past its native pixels
                         // — the width setting must visibly do what it says,
@@ -995,11 +999,19 @@ private fun ContinuousReader(
                                 // (720 wide becomes 360). CPU-decode once,
                                 // slice, and stack — every slice uploads as an
                                 // ordinary texture (Mihon's webtoon approach).
-                                var pageSlices by remember(cacheKey, attempt) {
+                                var pageSlices by remember(cacheKey, attempt, stripTargetPx) {
                                     mutableStateOf<PageSlices?>(null)
                                 }
-                                LaunchedEffect(cacheKey, attempt) {
-                                    val sliced = TallPageLoader.load("$cacheKey:$attempt", effectiveModel)
+                                LaunchedEffect(cacheKey, attempt, stripTargetPx) {
+                                    // Width in the key: Android decodes at the
+                                    // column's resolution, so a width/zoom
+                                    // change must re-slice, not replay a
+                                    // narrower cached decode.
+                                    val sliced = TallPageLoader.load(
+                                        "$cacheKey:$attempt:$stripTargetPx",
+                                        effectiveModel,
+                                        stripTargetPx,
+                                    )
                                     settled = true
                                     if (sliced != null) {
                                         loadFailed[cacheKey] = false
@@ -1040,11 +1052,15 @@ private fun ContinuousReader(
                                     val w = success.result.image.width
                                     val h = success.result.image.height
                                     if (w > 0 && h > 0) {
-                                        if (HubPlatform.isDesktop && h > TEXTURE_SAFE_HEIGHT_PX) {
+                                        // >= not >: Coil's own clamp lands a
+                                        // downsampled page at EXACTLY 4096
+                                        // tall, which is the tell for a page
+                                        // that needs the sliced path.
+                                        if (h >= TEXTURE_SAFE_HEIGHT_PX) {
                                             // Reported dims can already be the
-                                            // halved ones — don't feed them to
-                                            // the clamp; the slicer measures
-                                            // the real size on the CPU.
+                                            // clamped ones — don't feed them to
+                                            // the aspect map; the slicer
+                                            // measures the real size itself.
                                             tallPages[cacheKey] = true
                                         } else {
                                             loadedAspect[cacheKey] = w.toFloat() / h.toFloat()
