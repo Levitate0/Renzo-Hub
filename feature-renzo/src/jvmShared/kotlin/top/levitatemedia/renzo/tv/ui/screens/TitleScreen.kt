@@ -400,6 +400,7 @@ private fun TitleHero(
                         .clip(RoundedCornerShape(12.dp))
                         .background(RenzoColors.EpThumbWell),
                 )
+                androidx.compose.foundation.text.selection.SelectionContainer {
                 Text(
                     d.displayTitle,
                     color = RenzoColors.Foreground,
@@ -411,6 +412,7 @@ private fun TitleHero(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 14.dp),
                 )
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -441,6 +443,7 @@ private fun TitleHero(
                     }
                 }
                 if (!desc.isNullOrBlank()) {
+                    androidx.compose.foundation.text.selection.SelectionContainer {
                     Text(
                         desc,
                         color = RenzoColors.Foreground.copy(alpha = 0.9f),
@@ -451,6 +454,7 @@ private fun TitleHero(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 10.dp),
                     )
+                    }
                     var moreFocused by remember { mutableStateOf(false) }
                     Text(
                         if (descExpanded) "Less" else "More details",
@@ -506,6 +510,7 @@ private fun TitleHero(
             )
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {
+                androidx.compose.foundation.text.selection.SelectionContainer {
                 Text(
                     d.displayTitle,
                     color = RenzoColors.Foreground,
@@ -515,6 +520,7 @@ private fun TitleHero(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                }
                 // Metaline: TYPE · year · N ep · first 3 genres
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -545,6 +551,7 @@ private fun TitleHero(
                     }
                 }
                 if (!desc.isNullOrBlank()) {
+                    androidx.compose.foundation.text.selection.SelectionContainer {
                     Text(
                         desc,
                         color = RenzoColors.Foreground.copy(alpha = 0.9f),
@@ -554,6 +561,7 @@ private fun TitleHero(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 8.dp),
                     )
+                    }
                 }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),

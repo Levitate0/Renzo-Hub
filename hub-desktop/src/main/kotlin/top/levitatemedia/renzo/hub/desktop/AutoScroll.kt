@@ -42,9 +42,14 @@ import kotlin.math.sign
  * whole wheel lines. `isShiftDown` routes a rotation to the horizontal axis,
  * which is how sideways panning rides along.
  *
- * An [AWTEventListener] cannot consume events, but a tertiary press means
- * nothing to any Compose control in this app, so letting it fall through is
- * harmless.
+ * Exit-click swallowing (Windows 11 behaviour, user direction 2026-08-19):
+ * the click that LEAVES the mode must not also act on the UI — on Windows,
+ * left-clicking out of a pan never opens what was under the cursor; the NEXT
+ * click is the first normal one. An [AWTEventListener] cannot consume events,
+ * so while the mode is active a glass pane sits over the root: every button
+ * press ends the pan and both the press and its release die on the glass.
+ * The synthetic wheel events are dispatched straight to the component under
+ * the cursor, bypassing picking, so scrolling is unaffected by the glass.
  */
 internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
 
@@ -54,14 +59,46 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
     private var sticky = false
     private var moved = false
     private var current = Point()
+    /** A button press ended the pan; its release still dies on the glass. */
+    private var exiting = false
+    private var originalGlass: java.awt.Component? = null
 
     private val timer = Timer(TICK_MS) { tick() }
     private val listener = AWTEventListener { event -> onEvent(event) }
 
+    /** Covers the window while the mode is active so the exiting click (and
+     *  everything else the mouse does) never reaches the app underneath. */
+    private val glass = object : javax.swing.JComponent() {}.apply {
+        isOpaque = false
+        cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
+        addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) {
+                // ANY button ends the pan — Windows 11: the press is consumed,
+                // only the release remains to swallow.
+                exiting = true
+                endPan()
+            }
+
+            override fun mouseReleased(e: MouseEvent) {
+                // The exiting click's release — the press above happened on
+                // this glass, so the grab routes its release here too. Swallow
+                // it and take the glass down: the NEXT click is a normal one.
+                if (exiting) {
+                    exiting = false
+                    removeGlass()
+                }
+            }
+        })
+        // Registered so the glass intercepts these event types too; the pan
+        // itself polls the global pointer, so nothing to do here.
+        addMouseMotionListener(object : java.awt.event.MouseAdapter() {})
+        addMouseWheelListener { /* physical wheel is inert during the mode */ }
+    }
+
     fun install() {
         Toolkit.getDefaultToolkit().addAWTEventListener(
             listener,
-            AWTEvent.MOUSE_EVENT_MASK or AWTEvent.MOUSE_MOTION_EVENT_MASK,
+            AWTEvent.MOUSE_EVENT_MASK,
         )
     }
 
@@ -72,26 +109,26 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
 
     private fun onEvent(event: AWTEvent) {
         val e = event as? MouseEvent ?: return
-        val component = e.component ?: return
-        if (component !== window && SwingUtilities.getWindowAncestor(component) !== window) return
-        val p = SwingUtilities.convertPoint(component, e.point, window.contentPane)
+        if (e.button != MouseEvent.BUTTON2) return
         when (e.id) {
-            MouseEvent.MOUSE_PRESSED -> when {
-                e.button == MouseEvent.BUTTON2 && anchor.value == null -> start(p)
-                // Second middle press, or any other button: leave the mode.
-                anchor.value != null -> stop()
+            // The ENTRY press. Everything after it lives on the glass — except
+            // the release below.
+            MOUSE_PRESSED_ID -> {
+                if (anchor.value != null || exiting) return
+                val component = e.component ?: return
+                if (component !== window && SwingUtilities.getWindowAncestor(component) !== window) return
+                start(SwingUtilities.convertPoint(component, e.point, window.contentPane))
             }
-            MouseEvent.MOUSE_RELEASED -> {
-                if (e.button == MouseEvent.BUTTON2 && anchor.value != null) {
-                    // Press-drag-release pans once; press-and-release in place
-                    // arms sticky mode (both are how browsers behave).
+            // AWT's implicit mouse grab delivers this release to the component
+            // that took the entry press — NOT the glass — so it is handled
+            // here: press-drag-release pans once; press-and-release in place
+            // arms sticky mode (both are how Windows behaves). A middle
+            // release means nothing to any Compose control, so letting it
+            // fall through is harmless.
+            MOUSE_RELEASED_ID -> {
+                if (anchor.value != null && !exiting && e.component !== glass) {
                     if (moved) stop() else sticky = true
                 }
-            }
-            MouseEvent.MOUSE_MOVED, MouseEvent.MOUSE_DRAGGED -> {
-                val a = anchor.value ?: return
-                current = p
-                if (a.distance(p) > DRAG_THRESHOLD_PX) moved = true
             }
         }
     }
@@ -109,15 +146,29 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
         moved = false
         velX = 0.0
         velY = 0.0
-        window.contentPane.cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
+        originalGlass = window.rootPane.glassPane
+        window.rootPane.glassPane = glass
+        glass.isVisible = true
         timer.start()
     }
 
-    private fun stop() {
+    /** Ends the panning; the glass stays up until the exiting release. */
+    private fun endPan() {
         anchor.value = null
         sticky = false
-        window.contentPane.cursor = Cursor.getDefaultCursor()
         timer.stop()
+    }
+
+    private fun removeGlass() {
+        glass.isVisible = false
+        originalGlass?.let { window.rootPane.glassPane = it }
+        originalGlass = null
+    }
+
+    private fun stop() {
+        endPan()
+        exiting = false
+        removeGlass()
     }
 
     private fun tick() {
@@ -189,15 +240,19 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
     }
 
     private companion object {
+        const val MOUSE_PRESSED_ID = MouseEvent.MOUSE_PRESSED
+        const val MOUSE_RELEASED_ID = MouseEvent.MOUSE_RELEASED
         const val TICK_MS = 10
         const val DEAD_ZONE_PX = 12.0
         const val DRAG_THRESHOLD_PX = 8.0
         /** Linear gain, the Windows/Chromium autoscroll model: each px of
-         *  reach past the dead zone adds this many px/s. */
-        const val SPEED_PX_PER_SEC_PER_PX = 10.0
+         *  reach past the dead zone adds this many px/s. 16 (was 10, user
+         *  direction 2026-08-19: steeper): ~800 px/s at 50px past the dead
+         *  zone, ~1600 at 100px, ~4000 at 250px. */
+        const val SPEED_PX_PER_SEC_PER_PX = 16.0
         /** High ceiling — native panning is effectively uncapped; this only
          *  guards against a cursor parked at the far edge of a big monitor. */
-        const val MAX_PX_PER_SECOND = 6000.0
+        const val MAX_PX_PER_SECOND = 10000.0
         /** Per-tick approach toward the target speed. Native panning reacts
          *  immediately; this is just enough smoothing to avoid 100Hz jitter. */
         const val EASING = 0.35

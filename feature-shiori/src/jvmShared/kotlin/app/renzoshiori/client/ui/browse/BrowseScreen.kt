@@ -1187,6 +1187,7 @@ private fun CloudLatestDetailsSheet(
                             )
                         }
                     }
+                    androidx.compose.foundation.text.selection.SelectionContainer {
                     Text(
                         item.title,
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
@@ -1194,6 +1195,7 @@ private fun CloudLatestDetailsSheet(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 10.dp),
                     )
+                    }
                     if (byline.isNotEmpty()) {
                         Text(
                             byline,
@@ -1258,12 +1260,14 @@ private fun CloudLatestDetailsSheet(
                 }
 
                 // Description section.
+                androidx.compose.foundation.text.selection.SelectionContainer {
                 Text(
                     item.description?.takeIf { it.isNotBlank() } ?: "No description available",
                     style = MaterialTheme.typography.bodySmall,
                     color = RenzoColors.MutedForeground,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                 )
+                }
                 HorizontalDivider(color = RenzoColors.Border)
 
                 // Source badge section.
@@ -1482,6 +1486,9 @@ private fun CloudLatestDetailsDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
+                        // Selectable (user direction 2026-08-19): the title is
+                        // what gets copied out to search elsewhere.
+                        androidx.compose.foundation.text.selection.SelectionContainer {
                         Text(
                             item.title,
                             fontSize = 17.sp,
@@ -1489,6 +1496,7 @@ private fun CloudLatestDetailsDialog(
                             lineHeight = 22.sp,
                             color = RenzoColors.Foreground,
                         )
+                        }
                         Text(
                             statusText,
                             style = MaterialTheme.typography.labelSmall,
@@ -1531,6 +1539,7 @@ private fun CloudLatestDetailsDialog(
                     // Web: a plain <p> (newlines collapse to spaces) with NO
                     // clamp at lg — the card's scrolling content area absorbs
                     // a long synopsis instead of truncating it.
+                    androidx.compose.foundation.text.selection.SelectionContainer {
                     Text(
                         item.description?.takeIf { it.isNotBlank() }
                             ?.replace(Regex("\\s+"), " ")
@@ -1540,6 +1549,7 @@ private fun CloudLatestDetailsDialog(
                         color = RenzoColors.MutedForeground,
                         modifier = Modifier.padding(top = 10.dp),
                     )
+                    }
                     val meta = listOfNotNull(
                         chapters?.let { "$it chapters" },
                         formatFetchDate(item.fetchDate),

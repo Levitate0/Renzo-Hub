@@ -228,26 +228,32 @@ fun SeriesHeroSection(
             }
 
             // ── Title (web: text-2xl → md:text-[34px]) ──
-            Text(
-                state.title,
-                fontSize = if (heroWide) 34.sp else 26.sp,
-                lineHeight = if (heroWide) 40.sp else 30.sp,
-                fontWeight = FontWeight.Bold,
-                color = RenzoColors.Foreground,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
+            // Selectable (user direction 2026-08-19): the title and byline are
+            // exactly what people copy out to search elsewhere.
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(
+                    state.title,
+                    fontSize = if (heroWide) 34.sp else 26.sp,
+                    lineHeight = if (heroWide) 40.sp else 30.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = RenzoColors.Foreground,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
 
             // ── Author / artist ──
             if (series.author.isNotEmpty() || series.artist.isNotEmpty()) {
                 val suffix =
                     if (series.artist.isNotEmpty() && series.artist != series.author)
                         " · illust. ${series.artist}" else ""
-                Text(
-                    "by ${series.author}$suffix",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Muted,
-                )
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(
+                        "by ${series.author}$suffix",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Muted,
+                    )
+                }
             }
 
             // ── Inline meta row ──
@@ -301,16 +307,18 @@ fun SeriesHeroSection(
             if (series.description.isNotBlank()) {
                 // Web: max-w-[70ch] so desktop lines stay readable.
                 Column(modifier = if (heroWide) Modifier.widthIn(max = 640.dp) else Modifier) {
-                    Text(
-                        series.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Muted,
-                        maxLines = if (descriptionExpanded) Int.MAX_VALUE else 3,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = if (descriptionExpanded) {
-                            Modifier.heightIn(max = 256.dp).verticalScroll(rememberScrollState())
-                        } else Modifier,
-                    )
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(
+                            series.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Muted,
+                            maxLines = if (descriptionExpanded) Int.MAX_VALUE else 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = if (descriptionExpanded) {
+                                Modifier.heightIn(max = 256.dp).verticalScroll(rememberScrollState())
+                            } else Modifier,
+                        )
+                    }
                     if (series.description.length > 240) {
                         Text(
                             if (descriptionExpanded) "Show less" else "Read more",
