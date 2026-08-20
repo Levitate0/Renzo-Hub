@@ -1182,7 +1182,7 @@ private fun SeriesHoverPreview(series: LibraryRowDto) {
                                 .background(RenzoColors.Secondary)
                                 .then(
                                     if (url != null) {
-                                        Modifier.clickable { uriHandler.openUri(url) }
+                                        Modifier.clickable { app.renzoshiori.client.ui.util.openSourceUrl(uriHandler, url) }
                                     } else {
                                         Modifier
                                     },

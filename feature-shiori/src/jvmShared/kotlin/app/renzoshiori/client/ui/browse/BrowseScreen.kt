@@ -690,7 +690,7 @@ fun BrowseScreen(
             baseUrl = baseUrl,
             canAddSeries = libraryState.canAddSeries,
             onDismiss = { detailsItem = null },
-            onViewSource = { url -> runCatching { uriHandler.openUri(url) } },
+            onViewSource = { url -> app.renzoshiori.client.ui.util.openSourceUrl(uriHandler, url) },
             onRead = if (details.mihonId.isNotBlank()) {
                 {
                     detailsItem = null

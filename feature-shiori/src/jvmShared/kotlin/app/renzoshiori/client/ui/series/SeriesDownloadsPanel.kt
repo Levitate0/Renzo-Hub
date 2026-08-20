@@ -188,7 +188,7 @@ private fun DownloadRow(download: DownloadInfoDto, baseUrl: String) {
             .fillMaxWidth()
             .then(
                 if (url != null) {
-                    Modifier.dpadClickable(radius = 0.dp) { runCatching { uriHandler.openUri(url) } }
+                    Modifier.dpadClickable(radius = 0.dp) { app.renzoshiori.client.ui.util.openSourceUrl(uriHandler, url) }
                 } else {
                     Modifier
                 },

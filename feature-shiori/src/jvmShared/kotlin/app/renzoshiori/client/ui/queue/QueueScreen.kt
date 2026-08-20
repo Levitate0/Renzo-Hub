@@ -387,7 +387,7 @@ fun QueueScreen(
                                         reload()
                                     }
                                 },
-                                onOpen = { url -> runCatching { uriHandler.openUri(url) } },
+                                onOpen = { url -> app.renzoshiori.client.ui.util.openSourceUrl(uriHandler, url) },
                             )
                         }
                     }
