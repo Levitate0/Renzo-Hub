@@ -438,11 +438,15 @@ fun HomeShell(
     }
 
     // TV used to keep a persistent left rail here; it now rides the same wide
-    // command bar as desktop (the drawer below is inert at wide — no hamburger
-    // ever opens it).
+    // command bar as desktop.
     run {
         ModalNavigationDrawer(
             drawerState = drawerState,
+            // At wide (desktop AND TV) the command bar IS the nav and no
+            // hamburger exists — but the drawer's edge-drag gesture still
+            // worked, so a mouse drag from the left edge pulled out a menu
+            // that shouldn't exist there. Gestures only below the breakpoint.
+            gesturesEnabled = !wide,
             drawerContent = {
                 ModalDrawerSheet(
                     drawerContainerColor = RenzoColors.Background,
