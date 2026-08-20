@@ -353,31 +353,38 @@ fun LockedChapterScreen(
     }
 }
 
-/**
- * The divider between two LOADED chapters in the continuous strip — a SLIVER,
- * deliberately (user direction 2026-08-19). The full-height "Finished /
- * Up next" treatment belongs to the END block while the next chapter is
- * still loading; once its pages are actually in the strip, a tall block
- * between them is just an interruption mid-read. One hairline row with the
- * incoming chapter's name keeps the boundary visible without costing a
- * screen of scrolling.
- */
+/** The "Finished / Up next" divider between two chapters in the continuous strip. */
 @Composable
 fun ChapterDivider(finishedLabel: String, nextLabel: String, modifier: Modifier = Modifier) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.weight(1f).height(1.dp).background(Color(0x26FFFFFF)))
+        Eyebrow("Finished")
         Text(
-            nextLabel.ifBlank { finishedLabel },
-            fontSize = 11.sp,
+            finishedLabel,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = ReaderPalette.Text70,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Box(
+            modifier = Modifier
+                .padding(vertical = 12.dp)
+                .width(64.dp)
+                .height(1.dp)
+                .background(Color(0x26FFFFFF)),
+        )
+        Eyebrow("Up next")
+        Text(
+            nextLabel,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = RenzoColors.Primary,
             textAlign = TextAlign.Center,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 10.dp),
+            modifier = Modifier.padding(top = 2.dp),
         )
-        Box(Modifier.weight(1f).height(1.dp).background(Color(0x26FFFFFF)))
     }
 }
