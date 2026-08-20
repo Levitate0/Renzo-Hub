@@ -28,6 +28,9 @@
         </intent>
     </queries>
 
+    <!-- largeHeap: an image-heavy reader — sliced webtoon pages run tens of
+         MB decoded, and the standard heap can't hold the pages around the
+         reading position. Mihon ships the same flag for the same reason. -->
     <application
         android:name=".HubApplication"
         android:label="@string/app_name"
@@ -36,6 +39,7 @@
         android:banner="@drawable/renzo_tv_banner"
         android:theme="@style/Theme.RenzoHub"
         android:usesCleartextTraffic="true"
+        android:largeHeap="true"
         android:supportsRtl="true"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
