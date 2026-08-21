@@ -421,14 +421,6 @@ private fun LibraryRibbon(
     // with nothing on screen to undo it. The isNotEmpty() guard is
     // load-bearing: state.series is empty while the library loads, and
     // without it every cold start would reset a valid saved filter to "All".
-    LaunchedEffect(genres, providers) {
-        if (genres.isNotEmpty() && selectedGenre != "__ALL__" && selectedGenre !in genres) {
-            onGenre("__ALL__")
-        }
-        if (providers.isNotEmpty() && selectedProvider != "__ALL__" && selectedProvider !in providers) {
-            onProvider("__ALL__")
-        }
-    }
     val categories = remember(state.settings) {
         (state.settings?.categories ?: emptyList()).filter { it.isNotBlank() }.sortedBy { it.lowercase() }
     }
@@ -446,6 +438,31 @@ private fun LibraryRibbon(
             children.forEach { out.add(SelectOption(it.id, it.name, count = it.seriesIds.size, indented = true)) }
         }
         out
+    }
+
+    LaunchedEffect(genres, providers, categories, favoriteOptions, state.settings) {
+        if (genres.isNotEmpty() && selectedGenre != "__ALL__" && selectedGenre !in genres) {
+            onGenre("__ALL__")
+        }
+        if (providers.isNotEmpty() && selectedProvider != "__ALL__" && selectedProvider !in providers) {
+            onProvider("__ALL__")
+        }
+        // The same stranding, category/favourites flavour (2026-08-21: a TV
+        // showed ZERO series): the Categories select hides whenever
+        // categorized folders are off — but a previously saved selection
+        // kept filtering, with no control on screen to undo it. Guarded on
+        // loaded settings so a still-loading library can't wipe a valid one.
+        if (selectedCategory != "__ALL__" && state.settings != null) {
+            val offered = state.settings?.categorizedFolders == true
+            if (!offered || (categories.isNotEmpty() && selectedCategory !in categories)) {
+                onCategory("__ALL__")
+            }
+        }
+        if (selectedFavList != "__ALL__" && favoriteOptions.isNotEmpty() &&
+            favoriteOptions.none { it.value == selectedFavList }
+        ) {
+            onFavList("__ALL__")
+        }
     }
 
     // Web wrapper widths per select (page.tsx: w-36 sm:w-44 etc.) — the sm

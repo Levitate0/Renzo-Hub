@@ -874,6 +874,8 @@ private fun AccountMenuBody(
     externalDomain: String,
     importFolderConfigured: Boolean,
     onAction: (AccountAction) -> Unit,
+    /** false: the caller pins its own Sign out (the TV sheet's sticky footer). */
+    showSignOut: Boolean = true,
 ) {
     val clipboard = LocalClipboardManager.current
     val hideAdult = rememberHideAdult()
@@ -1022,7 +1024,9 @@ private fun AccountMenuBody(
                 MenuRow(Icons.Filled.Dns, "Change server") { onAction(AccountAction.SwitchServer) }
                 HorizontalDivider(color = RenzoColors.Border)
             }
-            MenuRow(Icons.AutoMirrored.Filled.Logout, "Sign out") { onAction(AccountAction.SignOut) }
+            if (showSignOut) {
+                MenuRow(Icons.AutoMirrored.Filled.Logout, "Sign out") { onAction(AccountAction.SignOut) }
+            }
             HorizontalDivider(color = RenzoColors.Border)
             Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                 ExternalLinksRow()
@@ -1458,15 +1462,27 @@ private fun AccountDropdown(
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
                         .border(1.dp, RenzoColors.Border, RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
-                        .background(RenzoColors.Background)
-                        .verticalScroll(rememberScrollState()),
+                        .background(RenzoColors.Background),
                 ) {
-                    AccountMenuBody(
-                        user = user,
-                        externalDomain = externalDomain,
-                        importFolderConfigured = importFolderConfigured,
-                        onAction = onAction,
-                    )
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        AccountMenuBody(
+                            user = user,
+                            externalDomain = externalDomain,
+                            importFolderConfigured = importFolderConfigured,
+                            onAction = onAction,
+                            showSignOut = false,
+                        )
+                    }
+                    // Sign out PINNED at the sheet's foot (user feedback
+                    // 2026-08-21: "hidden") — a dozen rows put it below the
+                    // fold, and a button you must scroll to may as well not
+                    // exist on a TV.
+                    HorizontalDivider(color = RenzoColors.Border)
+                    MenuRow(Icons.AutoMirrored.Filled.Logout, "Sign out") { onAction(AccountAction.SignOut) }
                 }
             }
         }

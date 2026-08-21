@@ -4,6 +4,9 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -147,9 +150,43 @@ private fun TvResolutionNormalized(content: @Composable () -> Unit) {
     if (isTv) {
         top.levitatemedia.renzo.hub.core.TvScale(
             designHeightDp = TV_DESIGN_HEIGHT_DP,
-            content = content,
-        )
+        ) {
+            TvDpadContained(content)
+        }
     } else {
+        content()
+    }
+}
+
+/**
+ * Keep D-pad focus ON the screen (user report 2026-08-21: "focus goes off
+ * screen and it's hard to get back").
+ *
+ * When Compose finds no focus candidate in the pressed direction, the
+ * UNHANDLED key event falls through to Android's View-level focus search —
+ * which scans the whole hierarchy, including composed-but-offscreen
+ * content, and teleports focus somewhere invisible. This root handler runs
+ * AFTER children (onKeyEvent, not preview — text fields keep their arrow
+ * keys), performs the Compose focus move itself, and consumes the event
+ * either way: a direction with nothing on screen simply does nothing.
+ */
+@Composable
+private fun TvDpadContained(content: @Composable () -> Unit) {
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    androidx.compose.foundation.layout.Box(
+        androidx.compose.ui.Modifier.onKeyEvent { event ->
+            if (event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onKeyEvent false
+            val direction = when (event.key) {
+                androidx.compose.ui.input.key.Key.DirectionUp -> androidx.compose.ui.focus.FocusDirection.Up
+                androidx.compose.ui.input.key.Key.DirectionDown -> androidx.compose.ui.focus.FocusDirection.Down
+                androidx.compose.ui.input.key.Key.DirectionLeft -> androidx.compose.ui.focus.FocusDirection.Left
+                androidx.compose.ui.input.key.Key.DirectionRight -> androidx.compose.ui.focus.FocusDirection.Right
+                else -> return@onKeyEvent false
+            }
+            focusManager.moveFocus(direction)
+            true
+        },
+    ) {
         content()
     }
 }

@@ -154,7 +154,11 @@ fun AccountMenu(
                     .width(300.dp)
                     .fillMaxHeight()
                     .background(RenzoColors.Popover)
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .windowInsetsPadding(WindowInsets.safeDrawing),
+            ) {
+            Column(
+                Modifier
+                    .weight(1f)
                     .verticalScroll(rememberScrollState()),
             ) {
                 // --- header: avatar + "Account" + circled close --------------
@@ -191,8 +195,17 @@ fun AccountMenu(
                 MenuItems(
                     user, contentLevel, onOpenSection, onCycleContentLevel,
                     onLogout, onChangeServer, onClose, onSwitchApp,
+                    showLogout = false,
                 )
                 Spacer(Modifier.height(16.dp))
+            }
+            // Log out PINNED at the sheet's foot (user feedback 2026-08-21:
+            // "hidden") — thirteen rows put it below the fold of the scroll,
+            // and a button you have to know to scroll to may as well not
+            // exist. Always on screen, first reachable with D-pad UP.
+            SheetDivider()
+            SheetItem("Log out", Icons.AutoMirrored.Filled.Logout, destructive = true) { onLogout(); onClose() }
+            Spacer(Modifier.height(8.dp))
             }
         }
     }
@@ -228,6 +241,8 @@ private fun MenuItems(
     onChangeServer: () -> Unit,
     onClose: () -> Unit,
     onSwitchApp: (() -> Unit)?,
+    /** false: the caller pins its own Log out (the sheet's sticky footer). */
+    showLogout: Boolean = true,
 ) {
     // --- account actions ---------------------------------------------------
     SheetItem("Edit avatar…", Icons.Filled.ImageIcon) { onOpenSection("account"); onClose() }
@@ -264,7 +279,9 @@ private fun MenuItems(
     }
 
     // Log out stays destructive — a deliberate Renzo choice.
-    SheetItem("Log out", Icons.AutoMirrored.Filled.Logout, destructive = true) { onLogout(); onClose() }
+    if (showLogout) {
+        SheetItem("Log out", Icons.AutoMirrored.Filled.Logout, destructive = true) { onLogout(); onClose() }
+    }
 }
 
 /**
