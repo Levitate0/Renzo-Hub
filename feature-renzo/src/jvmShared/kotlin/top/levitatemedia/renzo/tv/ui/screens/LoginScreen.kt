@@ -76,6 +76,21 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
  */
 @Composable
 fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onChangeServer: (() -> Unit)? = null, onLoggedIn: (PublicUser) -> Unit) {
+    // On a television, pairing is the default way in: a code read off the
+    // screen and approved elsewhere beats spelling a password out with a
+    // D-pad (HANDOFFrenzohub_tvcode.md — the server side is always on now).
+    // The password form stays one press away, and pairing declares itself
+    // unsupported gracefully against an older server.
+    val isTv = app.isTv
+    var pairing by remember(isTv) { mutableStateOf(isTv) }
+    if (pairing) {
+        RenzoTvPairingScreen(
+            app = app,
+            onPaired = onLoggedIn,
+            onUsePassword = { pairing = false },
+        )
+        return
+    }
     val scope = rememberCoroutineScope()
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }

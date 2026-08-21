@@ -75,9 +75,11 @@ sealed interface TvPollState {
     /**
      * Approved. [body] is the raw response, parsed by the half that asked —
      * the two servers issue different credentials and :core deliberately does
-     * not know which.
+     * not know which. [setCookies] carries the response's Set-Cookie headers
+     * verbatim: the anime half's credential is an fsa_session cookie on the
+     * approval response, not a token in the body.
      */
-    data class Approved(val body: String) : TvPollState
+    data class Approved(val body: String, val setCookies: List<String> = emptyList()) : TvPollState
 
     /** The user rejected it, or the code expired. Start over. */
     data class Failed(val reason: String) : TvPollState
@@ -123,6 +125,17 @@ class TvPairingClient(private val baseUrl: String) {
                             ?: "Too many devices are pairing right now. Try again in a minute."
                         TvCodeResult.Busy(msg)
                     }
+                    // 429: THIS caller asked too often (per-address rate
+                    // limit) — transient like 503, NOT missing support.
+                    // Collapsing it into Unsupported made the feature vanish
+                    // for a user who tapped "pair a TV" a few times too many
+                    // (HANDOFFrenzohub_tvcode.md §2).
+                    res.code == 429 -> {
+                        val msg = runCatching { json.decodeFromString<ErrorBody>(text).error }
+                            .getOrNull()?.takeIf { it.isNotBlank() }
+                            ?: "Too many code requests from this device. Try again in a few minutes."
+                        TvCodeResult.Busy(msg)
+                    }
                     else -> TvCodeResult.Unsupported
                 }
             }
@@ -164,7 +177,7 @@ class TvPairingClient(private val baseUrl: String) {
                         res.isSuccessful -> {
                             val status = json.decodeFromString<PollStatus>(text).status
                             when (status) {
-                                "approved" -> TvPollState.Approved(text)
+                                "approved" -> TvPollState.Approved(text, res.headers("Set-Cookie"))
                                 "denied" -> TvPollState.Failed("The sign-in request was denied.")
                                 "expired" -> TvPollState.Failed("The code expired. Try again.")
                                 else -> TvPollState.Pending
