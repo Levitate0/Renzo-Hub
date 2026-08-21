@@ -250,7 +250,11 @@ private fun MenuItems(
     )
     SheetDivider()
 
-    if (onSwitchApp != null && top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) {
+    // TV included (2026-08-21): the nav drawer that used to carry the app
+    // switch is unreachable there now that the bar is the nav.
+    if (onSwitchApp != null &&
+        (top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop || top.levitatemedia.renzo.hub.core.HubPlatform.isTv)
+    ) {
         SheetItem("Switch to Renzo Shiori", Icons.Filled.SwapHoriz) { onSwitchApp(); onClose() }
         SheetDivider()
     }

@@ -89,13 +89,24 @@ fun TopBar(
         // pushing this under the breakpoint and hiding the tab pills.
         val wide = top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 800 &&
             maxWidth >= 700.dp
-        // Desktop matches the web: the bar IS the nav, so no hamburger while
-        // the pills are visible. It comes back if the window shrinks below
-        // the pill break (otherwise a narrow window would have no nav at all).
-        val showHamburger = !(top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop && wide)
+        // Desktop AND TV match the web: the bar IS the nav, so no hamburger
+        // while the pills are visible (TV joined 2026-08-21 — same model as
+        // the Shiori half; "Switch to Renzo Shiori" moves to the avatar menu
+        // there). It comes back if a desktop window shrinks below the pill
+        // break, so a narrow window is never left without nav.
+        val showHamburger =
+            !((top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop || app.isTv) && wide)
         val barModifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            // TV: the bar rides the panel-resolution chrome scale (full-size
+            // on 4K, slimmer on 1080p), floored so the 36dp search box fits.
+            .height(
+                if (app.isTv) {
+                    (56 * top.levitatemedia.renzo.hub.core.tvChromeScale()).dp.coerceAtLeast(44.dp)
+                } else {
+                    56.dp
+                },
+            )
             .background(RenzoColors.Background)
             // A hairline under the bar so page content never reads as
             // overlapping it on a short/small screen (web: topbar border-b).
@@ -136,7 +147,10 @@ fun TopBar(
                         Tab.BAR_TABS.forEach { tab ->
                             TabPill(
                                 label = tab.label,
-                                icon = tabIcon(tab),
+                                // TV: text-only pills — six icons of pill
+                                // chrome is what pushed the row under the
+                                // right cluster on a 1080p panel.
+                                icon = if (app.isTv) null else tabIcon(tab),
                                 active = tab == active,
                                 badge = when (tab) {
                                     Tab.Updates -> updatesBadge
@@ -466,7 +480,7 @@ private fun HamburgerButton(onClick: () -> Unit) {
 @Composable
 private fun TabPill(
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: androidx.compose.ui.graphics.vector.ImageVector?,
     active: Boolean,
     badge: Int = 0,
     onClick: () -> Unit,
@@ -491,14 +505,16 @@ private fun TabPill(
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+        }
         Text(
             label,
             color = fg,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
-            modifier = Modifier.padding(start = 6.dp),
+            modifier = if (icon != null) Modifier.padding(start = 6.dp) else Modifier,
         )
         PillBadge(badge, onActivePill = active)
     }

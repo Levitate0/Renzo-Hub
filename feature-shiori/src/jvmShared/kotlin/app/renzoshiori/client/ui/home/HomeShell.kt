@@ -1058,6 +1058,9 @@ private fun SectionPillsRow(
         // the pills they scroll rather than clip or underlap the edge clusters.
         modifier = Modifier.horizontalScroll(rememberScrollState()),
     ) {
+        // TV: text-only pills — eight icons of pill chrome pushed the row
+        // under the right cluster on a 1080p panel (2026-08-21).
+        val textOnly = LocalIsTv.current
         Section.entries.forEach { s ->
             val active = s == current
             Row(
@@ -1070,17 +1073,19 @@ private fun SectionPillsRow(
                     .dpadClickable(radius = 50.dp, fill = null) { onSelect(s) }
                     .padding(horizontal = 12.dp, vertical = 7.dp),
             ) {
-                Icon(
-                    s.icon, contentDescription = null,
-                    tint = if (active) RenzoColors.PrimaryForeground else RenzoColors.MutedForeground,
-                    modifier = Modifier.size(16.dp),
-                )
+                if (!textOnly) {
+                    Icon(
+                        s.icon, contentDescription = null,
+                        tint = if (active) RenzoColors.PrimaryForeground else RenzoColors.MutedForeground,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
                 Text(
                     s.label,
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (active) RenzoColors.PrimaryForeground else RenzoColors.MutedForeground,
                     maxLines = 1,
-                    modifier = Modifier.padding(start = 6.dp),
+                    modifier = if (textOnly) Modifier else Modifier.padding(start = 6.dp),
                 )
                 if (s == Section.Queue) {
                     if (metrics.downloads > 0) {
