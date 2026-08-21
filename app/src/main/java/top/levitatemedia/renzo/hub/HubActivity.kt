@@ -94,22 +94,24 @@ class HubActivity : ComponentActivity() {
 
             LaunchedEffect(target) { target?.let { HubSession.setActive(it) } }
 
-            when (target) {
-                null -> HubPicker(onPick = choose)
+            TvResolutionNormalized {
+                when (target) {
+                    null -> HubPicker(onPick = choose)
 
-                HubTarget.Renzo -> RenzoRoot(
-                    host = renzoHost(),
-                    onSwitchApp = { choose(HubTarget.Shiori) },
-                    // The URL and login gates keep an escape hatch: a wrong
-                    // address or a one-service household must never be stuck
-                    // in the other half's sign-in.
-                    onBackToPicker = { target = null },
-                )
+                    HubTarget.Renzo -> RenzoRoot(
+                        host = renzoHost(),
+                        onSwitchApp = { choose(HubTarget.Shiori) },
+                        // The URL and login gates keep an escape hatch: a wrong
+                        // address or a one-service household must never be stuck
+                        // in the other half's sign-in.
+                        onBackToPicker = { target = null },
+                    )
 
-                HubTarget.Shiori -> ShioriRoot(
-                    onSwitchApp = { choose(HubTarget.Renzo) },
-                    onBackToPicker = { target = null },
-                )
+                    HubTarget.Shiori -> ShioriRoot(
+                        onSwitchApp = { choose(HubTarget.Renzo) },
+                        onBackToPicker = { target = null },
+                    )
+                }
             }
         }
     }
@@ -125,4 +127,30 @@ class HubActivity : ComponentActivity() {
 @Composable
 private fun HubPicker(onPick: (HubTarget) -> Unit) {
     PickerScreen(onPick = onPick)
+}
+
+/**
+ * One TV layout for every panel resolution (user direction 2026-08-21).
+ *
+ * The whole TV app was designed against the ~540dp of height a 1080p set
+ * reports at xhdpi. Panels and boxes disagree on density: a 4K set that
+ * reports a LOWER density hands the same layout 1080dp and everything renders
+ * half-size and dense. GROW-ONLY scaling by `panelHeightDp / 540` makes a 2K
+ * or 4K panel draw the identical apparent UI a 1080p set gets — and a normal
+ * 540dp panel passes through at exactly 1:1 (minScale = 1 means phones and
+ * standard TVs are untouched).
+ */
+@Composable
+private fun TvResolutionNormalized(content: @Composable () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isTv = remember(context) { top.levitatemedia.renzo.hub.core.isTvDevice(context) }
+    if (isTv) {
+        top.levitatemedia.renzo.hub.core.TvScale(
+            designHeightDp = 540,
+            minScale = 1f,
+            content = content,
+        )
+    } else {
+        content()
+    }
 }

@@ -34,17 +34,39 @@ fun TvFit(
     designHeightDp: Int,
     minScale: Float = 0.6f,
     content: @Composable () -> Unit,
+) = TvScale(designHeightDp, minScale = minScale, maxScale = 1f, content = content)
+
+/**
+ * The general form of [TvFit]: scale the subtree so [designHeightDp] of
+ * content maps onto the panel's height — BOTH ways.
+ *
+ * This is what makes one TV layout serve every resolution. Panels don't agree
+ * on what a dp is worth: a 1080p set at xhdpi reports ~540dp of height, while
+ * a 4K panel (or box) that reports a lower density can hand the same layout
+ * 1080dp — and everything renders half-size and dense. Scaling density by
+ * `panelHeight / designHeight` renders the SAME apparent layout on 1080p, 2K
+ * and 4K alike: design once at 540dp, and a panel reporting 1080dp simply
+ * draws it at 2×.
+ *
+ * @param minScale floor for very short panels (degrade before unreadable).
+ * @param maxScale ceiling; 1f gives [TvFit]'s shrink-only behaviour.
+ */
+@Composable
+fun TvScale(
+    designHeightDp: Int,
+    minScale: Float = 0.6f,
+    maxScale: Float = 4f,
+    content: @Composable () -> Unit,
 ) {
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         val base = LocalDensity.current
-        // Lowering density means MORE dp fit in the same pixels, so the content
-        // shrinks to fit rather than overflowing.
+        // Lowering density means MORE dp fit in the same pixels (content
+        // shrinks); raising it means fewer (content grows).
         val scale = (maxHeight.value / designHeightDp.toFloat())
-            .coerceAtMost(1f)
-            .coerceAtLeast(minScale)
+            .coerceIn(minScale, maxScale)
         CompositionLocalProvider(
             LocalDensity provides Density(
                 density = base.density * scale,

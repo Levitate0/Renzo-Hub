@@ -30,8 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.platform.LocalContext
-import top.levitatemedia.renzo.hub.core.TvFit
 import top.levitatemedia.renzo.hub.core.isTvDevice
 import top.levitatemedia.renzo.hub.core.HubTarget
 
@@ -56,10 +56,15 @@ private val Focused = Color(0xFF1C1D23)
 @Composable
 fun PickerScreen(onPick: (HubTarget) -> Unit) {
     val isTv = rememberIsTv()
-    // A clipped picker is unrecoverable — there is nothing left to press. On a
-    // TV the whole page scales to the panel rather than scrolling.
+    // TV renders the DESKTOP picker's layout (user direction 2026-08-21):
+    // a centred 560dp-max column with the exe's exact metrics, laid out at a
+    // 560dp design height and scaled to the panel — so 1080p, 2K and 4K sets
+    // all draw the same apparent picker, never edge-to-edge stretched tiles.
+    // A clipped picker is unrecoverable, so a short panel shrinks it to fit.
     if (isTv) {
-        TvFit(designHeightDp = 620) { PickerContent(isTv = true, onPick = onPick) }
+        top.levitatemedia.renzo.hub.core.TvScale(designHeightDp = 560) {
+            PickerContent(isTv = true, onPick = onPick)
+        }
     } else {
         PickerContent(isTv = false, onPick = onPick)
     }
@@ -82,32 +87,39 @@ private fun PickerContent(isTv: Boolean, onPick: (HubTarget) -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Image(
-            painter = painterResource(R.drawable.renzo_hub_wordmark),
-            contentDescription = "Renzo Hub",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.height(if (isTv) 92.dp else 108.dp),
-        )
-        Text(
-            "You can switch at any time from the menu.",
-            color = Muted,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 10.dp, bottom = 28.dp),
-        )
+        // Same widths and art sizes as the exe's DesktopPicker — the cap is
+        // what keeps the tiles card-shaped instead of stretched to the panel.
+        Column(
+            Modifier.widthIn(max = 560.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.renzo_hub_wordmark),
+                contentDescription = "Renzo Hub",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.height(108.dp),
+            )
+            Text(
+                "You can switch at any time from the menu.",
+                color = Muted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 10.dp, bottom = 28.dp),
+            )
 
-        PickerTile(
-            wordmark = top.levitatemedia.renzo.tv.R.drawable.renzo_wordmark,
-            caption = "Anime",
-            tileArtHeight = if (isTv) 52.dp else 60.dp,
-            onClick = { onPick(HubTarget.Renzo) },
-        )
-        PickerTile(
-            wordmark = app.renzoshiori.client.R.drawable.renzo_login_banner,
-            caption = "Manga",
-            tileArtHeight = if (isTv) 52.dp else 60.dp,
-            onClick = { onPick(HubTarget.Shiori) },
-            modifier = Modifier.padding(top = 16.dp),
-        )
+            PickerTile(
+                wordmark = top.levitatemedia.renzo.tv.R.drawable.renzo_wordmark,
+                caption = "Anime",
+                tileArtHeight = 60.dp,
+                onClick = { onPick(HubTarget.Renzo) },
+            )
+            PickerTile(
+                wordmark = app.renzoshiori.client.R.drawable.renzo_login_banner,
+                caption = "Manga",
+                tileArtHeight = 60.dp,
+                onClick = { onPick(HubTarget.Shiori) },
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
     }
 }
 
