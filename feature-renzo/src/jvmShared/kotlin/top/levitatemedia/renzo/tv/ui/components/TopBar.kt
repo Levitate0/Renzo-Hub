@@ -3,6 +3,7 @@ package top.levitatemedia.renzo.tv.ui.components
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -140,6 +141,8 @@ fun TopBar(
                     Row(
                         Modifier
                             .horizontalScroll(rememberScrollState())
+                            // One D-pad region — matches the Shiori bar.
+                            .focusGroup()
                             .padding(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,

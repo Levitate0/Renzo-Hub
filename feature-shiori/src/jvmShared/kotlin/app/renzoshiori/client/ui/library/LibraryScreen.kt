@@ -3,6 +3,7 @@ package app.renzoshiori.client.ui.library
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -431,7 +432,10 @@ private fun LibraryRibbon(
             // is pushed to the right edge, exactly like the web ribbon.
             .then(if (ribbonWide) Modifier else Modifier.horizontalScroll(rememberScrollState()))
             // Web ribbon: `px-3 lg:px-5` — the filters share the page's edge zone.
-            .padding(horizontal = if (ribbonWide) 20.dp else 8.dp, vertical = 6.dp),
+            .padding(horizontal = if (ribbonWide) 20.dp else 8.dp, vertical = 6.dp)
+            // One D-pad region: left/right walks the filters in order instead
+            // of 2D search jumping between ribbon and grid.
+            .focusGroup(),
     ) {
         // Status filter — status-colored dots + live count badges.
         RibbonSelect(

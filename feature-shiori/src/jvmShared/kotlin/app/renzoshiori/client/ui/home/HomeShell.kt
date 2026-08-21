@@ -1056,7 +1056,10 @@ private fun SectionPillsRow(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         // Web: overflow-x-auto scrollbar-hide — when CenterClampedBar squeezes
         // the pills they scroll rather than clip or underlap the edge clusters.
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        // focusGroup: the D-pad walks the pills as ONE region — without it,
+        // 2D focus search jumps diagonally between the bar and whatever row
+        // sits below, which reads as broken navigation on TV.
+        modifier = Modifier.horizontalScroll(rememberScrollState()).focusGroup(),
     ) {
         // TV: text-only pills — eight icons of pill chrome pushed the row
         // under the right cluster on a 1080p panel (2026-08-21).
@@ -1185,7 +1188,11 @@ fun ShioriCommandBar(
                 SectionPillsRow(activeSection, metrics) { s -> onSelectSection(s) }
             },
             right = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    // One D-pad region — see SectionPillsRow.
+                    modifier = Modifier.focusGroup(),
+                ) {
                     if (showSearch) {
                         // TV keeps its ONE search — the in-screen TvSearchBar
                         // with the microphone. A second box up here would be a
@@ -1351,6 +1358,33 @@ private fun AccountDropdown(
     onDismiss: () -> Unit,
     onAction: (AccountAction) -> Unit,
 ) {
+    // TV: a Popup-hosted DropdownMenu does NOT contain D-pad focus — the
+    // cursor escapes into the (invisible) screen behind it and is then very
+    // hard to bring back, which is exactly the reported lost-focus failure.
+    // A Dialog window traps focus natively, so TV gets the same card content
+    // in one (2026-08-21; same rule RibbonSelect and the tag filter follow).
+    if (LocalIsTv.current) {
+        if (expanded) {
+            Dialog(onDismissRequest = onDismiss) {
+                Column(
+                    Modifier
+                        .width(320.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
+                        .background(RenzoColors.Popover)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    AccountMenuBody(
+                        user = user,
+                        externalDomain = externalDomain,
+                        importFolderConfigured = importFolderConfigured,
+                        onAction = onAction,
+                    )
+                }
+            }
+        }
+        return
+    }
     androidx.compose.material3.DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,

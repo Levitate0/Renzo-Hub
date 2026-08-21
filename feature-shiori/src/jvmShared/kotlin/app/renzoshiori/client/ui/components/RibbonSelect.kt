@@ -95,11 +95,20 @@ fun RibbonSelect(
     val isTv = LocalIsTv.current
     val focus = rememberFocusState()
 
+    // TV: the web's fixed trigger widths are sized for a desktop row; at the
+    // panel-resolution chrome scale they overflowed the non-scrolling wide
+    // ribbon and pushed the sort/size/Track-all cluster clean off a 1080p
+    // panel. Widths shrink with the same factor the heights already use.
+    val effectiveTriggerWidth = when {
+        triggerWidth == null -> null
+        isTv -> (triggerWidth.value * top.levitatemedia.renzo.hub.core.tvChromeScale()).dp
+        else -> triggerWidth
+    }
     Box(modifier = modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .then(if (triggerWidth != null) Modifier.width(triggerWidth) else Modifier)
+                .then(if (effectiveTriggerWidth != null) Modifier.width(effectiveTriggerWidth) else Modifier)
                 .height(if (isTv) (40 * top.levitatemedia.renzo.hub.core.tvChromeScale()).dp.coerceAtLeast(32.dp) else 32.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
@@ -325,6 +334,9 @@ private fun TvSelectDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.6f)
+                // 60% of a TV's ~1270dp effective width was a huge sheet;
+                // a select menu is a narrow list (2026-08-21).
+                .widthIn(max = 440.dp)
                 .heightIn(max = 520.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))

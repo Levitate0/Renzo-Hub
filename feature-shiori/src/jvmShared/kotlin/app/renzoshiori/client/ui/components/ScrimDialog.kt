@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.renzoshiori.client.ui.theme.RenzoColors
@@ -33,6 +34,12 @@ fun ScrimDialog(
                 Modifier
                     .fillMaxSize()
                     .background(RenzoColors.DialogScrim)
+                    // clickable is FOCUSABLE by default, which made the scrim
+                    // an invisible screen-sized D-pad target inside every
+                    // dialog: the cursor landed on it (no ring anywhere) and
+                    // centre DISMISSED the dialog. Touch dismissal stays;
+                    // focus search skips it.
+                    .focusProperties { canFocus = false }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

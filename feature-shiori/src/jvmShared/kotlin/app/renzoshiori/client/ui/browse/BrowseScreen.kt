@@ -904,6 +904,9 @@ private fun TagFilterDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
+                // Cap: 92% of a phone is a dialog; 92% of a TV's ~1270dp
+                // effective width was a wall-to-wall sheet (2026-08-21).
+                .widthIn(max = 480.dp)
                 .heightIn(max = 560.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
