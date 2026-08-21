@@ -56,6 +56,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import top.levitatemedia.renzo.tv.api.PublicUser
 import top.levitatemedia.renzo.tv.RenzoBackHandler
+import top.levitatemedia.renzo.tv.resources.Res
+import top.levitatemedia.renzo.tv.resources.ic_github
+import top.levitatemedia.renzo.tv.resources.ic_globe
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 
 /** The user's avatar: their uploaded image when present, else initials. */
@@ -146,6 +149,8 @@ fun AccountMenu(
                     user, contentLevel, onOpenSection, onCycleContentLevel,
                     onLogout, onChangeServer, onClose, onSwitchApp,
                 )
+                SheetDivider()
+                ProjectLinksRow()
             }
         } else {
             Column(
@@ -205,7 +210,57 @@ fun AccountMenu(
             // exist. Always on screen, first reachable with D-pad UP.
             SheetDivider()
             SheetItem("Log out", Icons.AutoMirrored.Filled.Logout, destructive = true) { onLogout(); onClose() }
+            SheetDivider()
+            ProjectLinksRow()
             Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+/**
+ * Project links, matching the web's new menu foot
+ * (HANDOFFrenzohub_accountmenulinks.md): RENZO's own repo — not Shiori's —
+ * and the renzo-apps site; deliberately no Discord. Inert on TV, where
+ * there is no browser to open them in.
+ */
+@Composable
+private fun ProjectLinksRow() {
+    val links = listOf(
+        Triple("GitHub", "https://github.com/Levitate0/Renzo", Res.drawable.ic_github),
+        Triple("Website", "https://renzo-apps.levitatemedia.top", Res.drawable.ic_globe),
+    )
+    val inert = top.levitatemedia.renzo.hub.core.HubPlatform.isTv
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        links.forEach { (name, href, res) ->
+            var focused by remember { mutableStateOf(false) }
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .then(
+                        if (inert) {
+                            Modifier
+                        } else {
+                            Modifier
+                                .focusRing(focused, 6.dp)
+                                .tvClickable(onFocused = { focused = it }) {
+                                    top.levitatemedia.renzo.hub.core.HubPlatform.openExternal(href)
+                                }
+                        },
+                    ),
+            ) {
+                Icon(
+                    org.jetbrains.compose.resources.painterResource(res),
+                    contentDescription = name,
+                    tint = if (focused) RenzoColors.Foreground else RenzoColors.MutedForeground,
+                    modifier = Modifier.size(16.dp),
+                )
             }
         }
     }
