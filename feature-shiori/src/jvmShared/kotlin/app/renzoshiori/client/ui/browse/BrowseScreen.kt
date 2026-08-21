@@ -998,8 +998,19 @@ private fun TagFilterBody(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
             )
-            else -> LazyColumn(modifier = Modifier.heightIn(max = listMaxHeight)) {
-                items(filtered, key = { it.name }) { g ->
+            // A PLAIN scrolling Column, deliberately not a LazyColumn: this
+            // body renders inside a DropdownMenu on desktop, whose
+            // IntrinsicSize-based sizing queries descend into the children —
+            // and a lazy list (SubcomposeLayout) hard-crashes on ANY intrinsic
+            // measurement. A width-fixed wrapper only stops the width query;
+            // height intrinsics still reach the list. The list is capped at
+            // MAX_VISIBLE_GENRES (200) cheap rows, so eager composition is fine.
+            else -> Column(
+                modifier = Modifier
+                    .heightIn(max = listMaxHeight)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                filtered.forEach { g ->
                     val isChecked = selected.contains(g.name)
                     val rowFocus = rememberFocusState()
                     Row(

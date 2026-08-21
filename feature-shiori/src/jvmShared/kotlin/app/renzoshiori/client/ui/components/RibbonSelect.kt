@@ -18,7 +18,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -39,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.renzoshiori.client.ui.theme.RenzoColors
+import kotlinx.coroutines.launch
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.tv.TvSelectedMark
 import app.renzoshiori.client.ui.tv.focusRing
@@ -131,10 +137,22 @@ fun RibbonSelect(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = maxTriggerWidth),
             )
+            // Web SelectValue: the selected option's live count rides in the
+            // trigger too ("All 270"), muted.
+            if (selected?.count != null && selected.count > 0) {
+                Text(
+                    selected.count.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+            // Web SelectTrigger: CaretSortIcon (up+down carets) at 50% — not
+            // a single down chevron.
             Icon(
-                Icons.Filled.ExpandMore,
+                Icons.Filled.UnfoldMore,
                 contentDescription = null,
-                tint = RenzoColors.MutedForeground,
+                tint = RenzoColors.Foreground.copy(alpha = 0.5f),
                 modifier = Modifier.padding(start = 4.dp).size(16.dp),
             )
         }
@@ -152,16 +170,45 @@ fun RibbonSelect(
                 onDismiss = { open = false },
             )
         }
+        // Web SelectContent, transliterated: rounded-md bordered popover,
+        // max-h-96 (384dp) with chevron scroll hints when the list overflows
+        // (the genres menu), p-1 viewport, and COMPACT text-sm items — a
+        // Material menu item's 48dp min-height is twice the web row. The
+        // selected item carries a check pinned to the RIGHT edge (SelectItem's
+        // pr-8 + absolute right-2 CheckIcon).
         DropdownMenu(
             expanded = open && !isTv,
             onDismissRequest = { open = false },
             containerColor = RenzoColors.Popover,
-            modifier = Modifier.heightIn(max = 420.dp),
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, RenzoColors.Border),
         ) {
-            options.forEach { opt ->
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+            val listScroll = androidx.compose.foundation.rememberScrollState()
+            val scope = androidx.compose.runtime.rememberCoroutineScope()
+            Column(Modifier.padding(horizontal = 4.dp)) {
+                if (listScroll.canScrollBackward) {
+                    ScrollHintRow(up = true) {
+                        scope.launch { listScroll.animateScrollBy(-SCROLL_STEP_PX) }
+                    }
+                }
+                Column(
+                    Modifier
+                        .heightIn(max = 384.dp)
+                        .verticalScroll(listScroll),
+                ) {
+                    options.forEach { opt ->
+                        val isSelected = opt.value == value
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable {
+                                    onChange(opt.value)
+                                    open = false
+                                }
+                                .padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                        ) {
                             if (opt.indented) {
                                 Text(
                                     "└",
@@ -203,15 +250,50 @@ fun RibbonSelect(
                                     modifier = Modifier.padding(start = 8.dp),
                                 )
                             }
+                            Spacer(Modifier.weight(1f).widthIn(min = 12.dp))
+                            Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Filled.Check,
+                                        contentDescription = "Selected",
+                                        tint = RenzoColors.Foreground,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                }
+                            }
                         }
-                    },
-                    onClick = {
-                        onChange(opt.value)
-                        open = false
-                    },
-                )
+                    }
+                }
+                if (listScroll.canScrollForward) {
+                    ScrollHintRow(up = false) {
+                        scope.launch { listScroll.animateScrollBy(SCROLL_STEP_PX) }
+                    }
+                }
             }
         }
+    }
+}
+
+/** How far a click on a scroll hint moves the list (~6 rows). */
+private const val SCROLL_STEP_PX = 200f
+
+/** SelectScrollUp/DownButton: a centred chevron row bounding an overflowing list. */
+@Composable
+private fun ScrollHintRow(up: Boolean, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+    ) {
+        Icon(
+            if (up) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = if (up) "Scroll up" else "Scroll down",
+            tint = RenzoColors.Foreground,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
