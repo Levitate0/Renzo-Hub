@@ -90,13 +90,12 @@ fun TopBar(
         // pushing this under the breakpoint and hiding the tab pills.
         val wide = top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 800 &&
             maxWidth >= 700.dp
-        // Desktop AND TV match the web: the bar IS the nav, so no hamburger
-        // while the pills are visible (TV joined 2026-08-21 — same model as
-        // the Shiori half; "Switch to Renzo Shiori" moves to the avatar menu
-        // there). It comes back if a desktop window shrinks below the pill
-        // break, so a narrow window is never left without nav.
-        val showHamburger =
-            !((top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop || app.isTv) && wide)
+        // Desktop matches the web: the bar IS the nav, no hamburger while the
+        // pills are visible. TV keeps the HAMBURGER instead (user direction
+        // 2026-08-21, second pass): a full pill row was too tight on a 1080p
+        // panel, so the sections live in the drawer there and the bar keeps
+        // just brand + search + status + avatar.
+        val showHamburger = !(top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop && wide)
         val barModifier = Modifier
             .fillMaxWidth()
             // TV: the bar rides the panel-resolution chrome scale (full-size
@@ -138,6 +137,7 @@ fun TopBar(
                     modifier = Modifier.height(28.dp),
                 )
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    if (!app.isTv) {
                     Row(
                         Modifier
                             .horizontalScroll(rememberScrollState())
@@ -162,6 +162,7 @@ fun TopBar(
                                 },
                             ) { onTab(tab) }
                         }
+                    }
                     }
                 }
                 SearchBox(onSearch = onSearch, modifier = Modifier.width(256.dp))

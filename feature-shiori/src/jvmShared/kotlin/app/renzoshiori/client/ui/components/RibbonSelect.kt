@@ -95,15 +95,9 @@ fun RibbonSelect(
     val isTv = LocalIsTv.current
     val focus = rememberFocusState()
 
-    // TV: the web's fixed trigger widths are sized for a desktop row; at the
-    // panel-resolution chrome scale they overflowed the non-scrolling wide
-    // ribbon and pushed the sort/size/Track-all cluster clean off a 1080p
-    // panel. Widths shrink with the same factor the heights already use.
-    val effectiveTriggerWidth = when {
-        triggerWidth == null -> null
-        isTv -> (triggerWidth.value * top.levitatemedia.renzo.hub.core.tvChromeScale()).dp
-        else -> triggerWidth
-    }
+    // Full web widths on every platform: the ribbon SCROLLS on TV now
+    // (EdgeHintScrollRow), so nothing needs to shrink to fit.
+    val effectiveTriggerWidth = triggerWidth
     Box(modifier = modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

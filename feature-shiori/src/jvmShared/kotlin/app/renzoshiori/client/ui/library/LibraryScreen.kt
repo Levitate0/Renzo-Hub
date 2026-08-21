@@ -316,6 +316,36 @@ private fun favoriteFilterIds(state: LibraryUiState, selected: String): Set<Stri
     return ids
 }
 
+/**
+ * The ribbon container: at lg the row fits and the action cluster is pushed
+ * to the right edge (weight spacer, no scroll), exactly like the web ribbon;
+ * everywhere else — phones AND TV — the row scrolls with edge hints.
+ */
+@Composable
+private fun RibbonRow(
+    wide: Boolean,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+) {
+    if (wide) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp)
+                .focusGroup(),
+            content = content,
+        )
+    } else {
+        app.renzoshiori.client.ui.components.EdgeHintScrollRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentModifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            content = content,
+        )
+    }
+}
+
 @Composable
 private fun LibraryRibbon(
     state: LibraryUiState,
@@ -421,21 +451,13 @@ private fun LibraryRibbon(
     // Web wrapper widths per select (page.tsx: w-36 sm:w-44 etc.) — the sm
     // breakpoint is 640px.
     val sm = screenWidthDp() >= 640.dp
-    val ribbonWide = screenWidthDp() >= 1024.dp
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            // A weight spacer needs bounded width, so the scroll only exists
-            // below the breakpoint — at lg the row fits and the action cluster
-            // is pushed to the right edge, exactly like the web ribbon.
-            .then(if (ribbonWide) Modifier else Modifier.horizontalScroll(rememberScrollState()))
-            // Web ribbon: `px-3 lg:px-5` — the filters share the page's edge zone.
-            .padding(horizontal = if (ribbonWide) 20.dp else 8.dp, vertical = 6.dp)
-            // One D-pad region: left/right walks the filters in order instead
-            // of 2D search jumping between ribbon and grid.
-            .focusGroup(),
+    // TV is NOT wide here (user direction 2026-08-21): the fitted row packed
+    // every control too tightly, so the set scrolls the ribbon instead —
+    // with edge hints saying so (EdgeHintScrollRow).
+    val isTvRibbon = LocalIsTv.current
+    val ribbonWide = !isTvRibbon && screenWidthDp() >= 1024.dp
+    RibbonRow(
+        wide = ribbonWide,
     ) {
         // Status filter — status-colored dots + live count badges.
         RibbonSelect(

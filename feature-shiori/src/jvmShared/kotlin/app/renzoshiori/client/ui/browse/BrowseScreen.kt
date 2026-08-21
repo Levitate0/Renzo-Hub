@@ -333,13 +333,10 @@ fun BrowseScreen(
         }
 
         // ── Ribbon ───────────────────────────────────────────────────────
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        app.renzoshiori.client.ui.components.EdgeHintScrollRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentModifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
             // Source picker — the web (page.tsx:575-592) leads each source with
             // its language's country flag and keeps the globe only for "all".

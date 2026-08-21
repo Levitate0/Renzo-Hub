@@ -117,6 +117,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.resources.Res
 import app.renzoshiori.client.resources.*
 import app.renzoshiori.client.ShioriRuntime
+import app.renzoshiori.client.ui.components.ScrimDialog
 import app.renzoshiori.client.data.model.DownloadsMetricsDto
 import app.renzoshiori.client.data.model.UserDto
 import app.renzoshiori.client.data.model.UserLevel
@@ -1136,6 +1137,7 @@ fun ShioriCommandBar(
 ) {
     val app = ShioriRuntime.app
     var menuOpen by remember { mutableStateOf(false) }
+    var tvSectionsOpen by remember { mutableStateOf(false) }
     val libraryState by libraryVm.state.collectAsState()
 
     var metrics by remember { mutableStateOf(DownloadsMetricsDto()) }
@@ -1171,6 +1173,17 @@ fun ShioriCommandBar(
                 .padding(horizontal = 6.dp),
             left = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // TV (user direction 2026-08-21): the section pills go
+                    // behind a hamburger — nine pills of bar was still too
+                    // tight on a 1080p panel. The avatar deliberately stays
+                    // out of it, in the bar's right cluster.
+                    if (LocalIsTv.current) {
+                        DpadIconButton(
+                            icon = Icons.Filled.Menu,
+                            contentDescription = "Open sections menu",
+                            onClick = { tvSectionsOpen = true },
+                        )
+                    }
                     Image(
                         painter = painterResource(Res.drawable.splash_icon),
                         contentDescription = "Renzo Shiori home",
@@ -1185,7 +1198,9 @@ fun ShioriCommandBar(
                 }
             },
             center = {
-                SectionPillsRow(activeSection, metrics) { s -> onSelectSection(s) }
+                if (!LocalIsTv.current) {
+                    SectionPillsRow(activeSection, metrics) { s -> onSelectSection(s) }
+                }
             },
             right = {
                 Row(
@@ -1235,6 +1250,72 @@ fun ShioriCommandBar(
             },
         )
         HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.6f))
+    }
+
+    // TV sections menu — a LEFT pull-out sheet (user direction 2026-08-21),
+    // hosted in ScrimDialog so D-pad focus is trapped inside the window
+    // (the TV popup rule); rows carry icon + label + the Queue badge.
+    if (tvSectionsOpen) {
+        ScrimDialog(
+            onDismiss = { tvSectionsOpen = false },
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Column(
+                Modifier
+                    .width(300.dp)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp))
+                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp))
+                    .background(RenzoColors.Background)
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 16.dp),
+            ) {
+                Section.entries.forEach { s ->
+                    val active = s == activeSection
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .dpadClickable(radius = 8.dp) {
+                                tvSectionsOpen = false
+                                onSelectSection(s)
+                            }
+                            .padding(horizontal = 10.dp, vertical = 10.dp),
+                    ) {
+                        Icon(
+                            s.icon,
+                            contentDescription = null,
+                            tint = tvContentColor(active, false),
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            s.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = tvContentColor(active, false),
+                            modifier = Modifier.padding(start = 12.dp).weight(1f),
+                        )
+                        if (s == Section.Queue) {
+                            val badge = metrics.downloads + metrics.failed
+                            if (badge > 0) {
+                                Text(
+                                    if (badge > 99) "99+" else badge.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = RenzoColors.PrimaryForeground,
+                                    modifier = Modifier
+                                        .padding(end = 6.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(RenzoColors.Primary)
+                                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                        TvSelectedMark(active)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1365,13 +1446,19 @@ private fun AccountDropdown(
     // in one (2026-08-21; same rule RibbonSelect and the tag filter follow).
     if (LocalIsTv.current) {
         if (expanded) {
-            Dialog(onDismissRequest = onDismiss) {
+            // RIGHT pull-out sheet (user direction 2026-08-21), focus-trapped
+            // via ScrimDialog — the same shape the phone's AccountPanel has.
+            ScrimDialog(
+                onDismiss = onDismiss,
+                contentAlignment = Alignment.CenterEnd,
+            ) {
                 Column(
                     Modifier
                         .width(320.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
-                        .background(RenzoColors.Popover)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                        .border(1.dp, RenzoColors.Border, RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                        .background(RenzoColors.Background)
                         .verticalScroll(rememberScrollState()),
                 ) {
                     AccountMenuBody(
