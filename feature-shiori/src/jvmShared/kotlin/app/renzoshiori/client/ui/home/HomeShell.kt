@@ -975,6 +975,11 @@ private fun AccountMenuBody(
             // a column of disabled rows that invite repeated pressing), TV shows
             // ONE row that leads to the instance's own web address.
             if (isTv) {
+                // Account IS ported to the remote (user direction 2026-08-21):
+                // it holds the devices list — where a paired TV shows up and
+                // can be signed out — which is exactly the page a TV user
+                // needs reachable from the couch.
+                MenuRow(Icons.Filled.VpnKey, "Account") { onAction(AccountAction.Account) }
                 MenuRow(Icons.Filled.Settings, "Settings, sources & import…") {
                     onAction(AccountAction.ServerSettings)
                 }
