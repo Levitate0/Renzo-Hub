@@ -73,13 +73,24 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
         }
     }
 
+    // Windows-native parity: clicking ANOTHER window (or alt-tabbing away)
+    // ends the pan — without this, a pan whose cursor wandered outside the
+    // app kept scrolling forever until the user came back and clicked.
+    private val focusListener = object : java.awt.event.WindowAdapter() {
+        override fun windowLostFocus(e: java.awt.event.WindowEvent?) {
+            stop()
+        }
+    }
+
     fun install() {
         Toolkit.getDefaultToolkit().systemEventQueue.push(queue)
+        window.addWindowFocusListener(focusListener)
     }
 
     fun uninstall() {
         // The pushed queue stays (pop is protected and the filter is inert
         // while the mode is off); just make sure the mode is off.
+        window.removeWindowFocusListener(focusListener)
         stop()
     }
 
@@ -102,8 +113,8 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
                     }
                     return false
                 }
-                // ANY button while panning cancels — left and middle alike —
-                // and the cancelling click is consumed.
+                // ANY button while panning cancels — left, right, and a
+                // second middle alike — and the cancelling click is consumed.
                 exiting = true
                 endPan()
                 return true
