@@ -707,15 +707,25 @@ private fun ExternalLinksRow() {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth(),
     ) {
+        // A TV has no browser to open these in — a focusable link that can't
+        // go anywhere is a dead D-pad stop (user direction 2026-08-21), so
+        // there the icons are passive decoration: no focus, no click.
+        val inert = LocalIsTv.current
         links.forEach { (name, href, res) ->
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(32.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .dpadClickable(radius = 6.dp) {
-                        top.levitatemedia.renzo.hub.core.HubPlatform.openExternal(href)
-                    },
+                    .then(
+                        if (inert) {
+                            Modifier
+                        } else {
+                            Modifier.dpadClickable(radius = 6.dp) {
+                                top.levitatemedia.renzo.hub.core.HubPlatform.openExternal(href)
+                            }
+                        },
+                    ),
             ) {
                 Icon(
                     painterResource(res), contentDescription = name,
