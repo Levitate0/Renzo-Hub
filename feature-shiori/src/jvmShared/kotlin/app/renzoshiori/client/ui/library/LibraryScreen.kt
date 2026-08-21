@@ -417,6 +417,9 @@ private fun LibraryRibbon(
         out
     }
 
+    // Web wrapper widths per select (page.tsx: w-36 sm:w-44 etc.) — the sm
+    // breakpoint is 640px.
+    val sm = screenWidthDp() >= 640.dp
     val ribbonWide = screenWidthDp() >= 1024.dp
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -441,6 +444,7 @@ private fun LibraryRibbon(
             ),
             value = statusFilter,
             onChange = onStatusFilter,
+            triggerWidth = if (sm) 176.dp else 144.dp,
         )
 
         // Categories — only when categorized folders are enabled in settings.
@@ -451,6 +455,7 @@ private fun LibraryRibbon(
                 value = selectedCategory,
                 onChange = onCategory,
                 placeholder = "All Categories",
+                triggerWidth = if (sm) 160.dp else 128.dp,
             )
         }
 
@@ -461,6 +466,7 @@ private fun LibraryRibbon(
                 value = selectedFavList,
                 onChange = onFavList,
                 placeholder = "Favourites",
+                triggerWidth = if (sm) 176.dp else 128.dp,
             )
         }
 
@@ -470,6 +476,7 @@ private fun LibraryRibbon(
             value = selectedGenre,
             onChange = onGenre,
             placeholder = "All Genres",
+            triggerWidth = if (sm) 160.dp else 128.dp,
         )
 
         // Sources.
@@ -478,6 +485,7 @@ private fun LibraryRibbon(
             value = selectedProvider,
             onChange = onProvider,
             placeholder = "All Sources",
+            triggerWidth = if (sm) 192.dp else 128.dp,
         )
 
         // Right cluster: My library / sort / card size / Track all / Add Series —
@@ -498,6 +506,7 @@ private fun LibraryRibbon(
             ),
             value = orderBy,
             onChange = onOrderBy,
+            triggerWidth = if (sm) 128.dp else 112.dp,
         )
 
         RibbonSelect(
@@ -506,6 +515,7 @@ private fun LibraryRibbon(
             onChange = onCardWidth,
             placeholder = "Card Size",
             maxTriggerWidth = 32.dp,
+            triggerWidth = if (sm) 64.dp else 56.dp,
         )
 
         // Track all — self-hides when no tracker is connected, like the web.

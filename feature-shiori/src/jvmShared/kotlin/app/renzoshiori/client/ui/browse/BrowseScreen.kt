@@ -357,6 +357,8 @@ fun BrowseScreen(
                 value = selectedSourceId,
                 onChange = { selectedSourceId = it },
                 placeholder = "All Sources",
+                // Web (cloud-latest page.tsx): w-40 sm:w-48 wrapper.
+                triggerWidth = if (screenWidthDp() >= 640.dp) 192.dp else 160.dp,
             )
 
             // 18+ visibility — mirrors the account menu's "Adult (18+)" item.

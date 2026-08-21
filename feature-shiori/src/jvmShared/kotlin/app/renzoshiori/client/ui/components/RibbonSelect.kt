@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -81,6 +82,13 @@ fun RibbonSelect(
     placeholder: String? = null,
     /** Caps the trigger label so a long genre/source name can't stretch the ribbon. */
     maxTriggerWidth: androidx.compose.ui.unit.Dp = 148.dp,
+    /**
+     * FIXED trigger width — the web wraps each ribbon Select in a w-N div with
+     * a w-full trigger, so triggers hold a set width with the caret pinned to
+     * the right edge instead of hugging their label. null keeps hug-content
+     * for callers with no web width to copy.
+     */
+    triggerWidth: androidx.compose.ui.unit.Dp? = null,
 ) {
     var open by remember { mutableStateOf(false) }
     val selected = options.firstOrNull { it.value == value }
@@ -91,6 +99,7 @@ fun RibbonSelect(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
+                .then(if (triggerWidth != null) Modifier.width(triggerWidth) else Modifier)
                 .height(if (isTv) 40.dp else 32.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
@@ -147,6 +156,9 @@ fun RibbonSelect(
                     modifier = Modifier.padding(start = 6.dp),
                 )
             }
+            // justify-between: at a fixed width the caret sits on the right
+            // edge, not against the label.
+            if (triggerWidth != null) Spacer(Modifier.weight(1f))
             // Web SelectTrigger: CaretSortIcon (up+down carets) at 50% — not
             // a single down chevron.
             Icon(
