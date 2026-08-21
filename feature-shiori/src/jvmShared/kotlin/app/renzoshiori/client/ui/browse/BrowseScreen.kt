@@ -474,14 +474,24 @@ fun BrowseScreen(
                         expanded = tagPopoverOpen,
                         onDismissRequest = { tagPopoverOpen = false },
                         containerColor = RenzoColors.Popover,
-                        modifier = Modifier.width(352.dp),
                     ) {
-                        TagFilterBody(
-                            genres = genresData,
-                            hideAdult = hideAdult,
-                            selected = selectedGenres,
-                            listMaxHeight = 288.dp,
-                        )
+                        // The fixed width must sit INSIDE the menu, on a
+                        // wrapper around the content: DropdownMenu sizes
+                        // itself with width(IntrinsicSize.Max), and that
+                        // intrinsic query descends into the children — where
+                        // TagFilterBody's LazyColumn (a SubcomposeLayout)
+                        // throws "intrinsic measurements ... not supported".
+                        // A width modifier on the DropdownMenu itself is
+                        // OUTSIDE the intrinsic modifier and doesn't stop the
+                        // descent; this wrapper fast-returns 352dp instead.
+                        Column(Modifier.width(352.dp)) {
+                            TagFilterBody(
+                                genres = genresData,
+                                hideAdult = hideAdult,
+                                selected = selectedGenres,
+                                listMaxHeight = 288.dp,
+                            )
+                        }
                     }
                 }
             }
