@@ -51,6 +51,21 @@ fun TvFit(
  * @param minScale floor for very short panels (degrade before unreadable).
  * @param maxScale ceiling; 1f gives [TvFit]'s shrink-only behaviour.
  */
+/**
+ * Chrome sizing factor by PANEL RESOLUTION (user direction 2026-08-21): the
+ * same bar that reads fine on a 4K panel eats a fifth of a 1080p one, so
+ * chrome — bars, search rows, ribbon controls — scales with the panel's
+ * PHYSICAL pixel height instead of riding the normalized density. 1.0 at 4K
+ * (2160px), ~0.72 at 1080p, floored so controls stay pressable. Reads raw
+ * container pixels, so it is immune to whatever [TvScale] did to density.
+ */
+@Composable
+fun tvChromeScale(): Float {
+    val px = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
+    if (px <= 0) return 1f
+    return (px / 2160f).coerceIn(0.72f, 1f)
+}
+
 @Composable
 fun TvScale(
     designHeightDp: Int,

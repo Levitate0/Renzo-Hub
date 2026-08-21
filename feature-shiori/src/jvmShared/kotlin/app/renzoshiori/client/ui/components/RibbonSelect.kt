@@ -100,7 +100,7 @@ fun RibbonSelect(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .then(if (triggerWidth != null) Modifier.width(triggerWidth) else Modifier)
-                .height(if (isTv) 40.dp else 32.dp)
+                .height(if (isTv) (40 * top.levitatemedia.renzo.hub.core.tvChromeScale()).dp.coerceAtLeast(32.dp) else 32.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
                 .background(RenzoColors.Background)
@@ -419,7 +419,7 @@ fun RibbonToggleChip(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .height(if (isTv) 40.dp else 32.dp)
+            .height(if (isTv) (40 * top.levitatemedia.renzo.hub.core.tvChromeScale()).dp.coerceAtLeast(32.dp) else 32.dp)
             .clip(RoundedCornerShape(50))
             .background(
                 if (active) RenzoColors.Primary.copy(alpha = 0.15f)

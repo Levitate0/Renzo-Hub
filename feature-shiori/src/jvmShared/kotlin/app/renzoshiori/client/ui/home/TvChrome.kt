@@ -136,7 +136,7 @@ fun DpadToggleChip(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .height(38.dp)
+            .height((38 * top.levitatemedia.renzo.hub.core.tvChromeScale()).dp.coerceAtLeast(32.dp))
             .background(
                 when {
                     active -> RenzoColors.Primary.copy(alpha = 0.15f)

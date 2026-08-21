@@ -1149,7 +1149,18 @@ fun ShioriCommandBar(
 
     Column {
         CenterClampedBar(
-            modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
+            // TV: the bar scales with PANEL RESOLUTION (user direction
+            // 2026-08-21) — 56dp is ~1/10th of a 1080p panel before the
+            // sections below even start, but reads fine on 4K.
+            modifier = Modifier.fillMaxWidth()
+                .height(
+                    if (LocalIsTv.current) {
+                        (56 * top.levitatemedia.renzo.hub.core.tvChromeScale()).dp
+                    } else {
+                        56.dp
+                    },
+                )
+                .padding(horizontal = 6.dp),
             left = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(

@@ -58,15 +58,19 @@ fun TvSearchBar(
         onSubmit(transcript)
     }
 
+    // Chrome scales with PANEL RESOLUTION (user direction 2026-08-21): the
+    // 48dp field is fine on a 4K panel and oversized on 1080p, where the
+    // chrome stack ate ~1/5 of the screen.
+    val chrome = top.levitatemedia.renzo.hub.core.tvChromeScale()
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = (6 * chrome).dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp)
+                .height((48 * chrome).dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(RenzoColors.Card)
                 .focusRing(focus.focused, 10.dp)
@@ -82,7 +86,7 @@ fun TvSearchBar(
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = RenzoColors.Foreground),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
                 cursorBrush = SolidColor(RenzoColors.Foreground),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(
