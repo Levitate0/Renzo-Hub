@@ -335,20 +335,23 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
     // Hamburger drawer — overlays whatever screen is up (only openable from
     // the Tabs topbar). Rendered last so it sits above everything.
     if (drawerOpen) {
-        NavDrawer(
-            active = nav.tab.value,
-            username = app.user.value?.username,
-            onTab = { nav.tab.value = it },
-            onAccount = { nav.push(Screen.Account()) },
-            onClose = { drawerOpen = false },
-            updatesBadge = app.updatesCount.value,
-            downloadsBadge = app.activeJobs.value,
-            onSwitchApp = onSwitchApp,
-        )
+        top.levitatemedia.renzo.tv.ui.components.TvFocusTrap(onDismiss = { drawerOpen = false }) {
+            NavDrawer(
+                active = nav.tab.value,
+                username = app.user.value?.username,
+                onTab = { nav.tab.value = it },
+                onAccount = { nav.push(Screen.Account()) },
+                onClose = { drawerOpen = false },
+                updatesBadge = app.updatesCount.value,
+                downloadsBadge = app.activeJobs.value,
+                onSwitchApp = onSwitchApp,
+            )
+        }
     }
 
     // Avatar popout (web AccountMenu parity) — above everything, incl. the drawer.
     if (accountMenuOpen) {
+        top.levitatemedia.renzo.tv.ui.components.TvFocusTrap(onDismiss = { accountMenuOpen = false }) {
         AccountMenu(
             user = app.user.value,
             contentLevel = app.contentLevel.value,
@@ -369,5 +372,6 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
             onClose = { accountMenuOpen = false },
             onSwitchApp = onSwitchApp,
         )
+        }
     }
 }
