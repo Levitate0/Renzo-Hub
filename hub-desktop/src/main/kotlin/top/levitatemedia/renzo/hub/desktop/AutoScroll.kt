@@ -19,7 +19,6 @@ import java.awt.AWTEvent
 import java.awt.Cursor
 import java.awt.Point
 import java.awt.Toolkit
-import java.awt.event.AWTEventListener
 import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
 import javax.swing.SwingUtilities
@@ -42,14 +41,16 @@ import kotlin.math.sign
  * whole wheel lines. `isShiftDown` routes a rotation to the horizontal axis,
  * which is how sideways panning rides along.
  *
- * Exit-click swallowing (Windows 11 behaviour, user direction 2026-08-19):
- * the click that LEAVES the mode must not also act on the UI — on Windows,
- * left-clicking out of a pan never opens what was under the cursor; the NEXT
- * click is the first normal one. An [AWTEventListener] cannot consume events,
- * so while the mode is active a glass pane sits over the root: every button
- * press ends the pan and both the press and its release die on the glass.
- * The synthetic wheel events are dispatched straight to the component under
- * the cursor, bypassing picking, so scrolling is unaffected by the glass.
+ * Exit-click swallowing (Windows 11 behaviour, user direction 2026-08-19/20):
+ * ONE click of ANY button — left or another middle — cancels the pan, and
+ * that click is CONSUMED: it never opens what sat under the cursor. The next
+ * click is the first normal one. Neither an [AWTEventListener] (can't
+ * consume) nor a Swing glass pane (lightweight — can't block the heavyweight
+ * surface Compose renders into on Windows) can do this reliably, so the
+ * swallowing lives in a pushed [java.awt.EventQueue]: it sees every event
+ * BEFORE dispatch and simply drops the ones that belong to the mode. The
+ * synthetic wheel events are dispatched directly to the component under the
+ * cursor and never pass through the queue.
  */
 internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
 
@@ -59,79 +60,82 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
     private var sticky = false
     private var moved = false
     private var current = Point()
-    /** A button press ended the pan; its release still dies on the glass. */
+    /** A button press cancelled the pan; everything mouse-button-shaped is
+     *  swallowed until every button is back up. */
     private var exiting = false
-    private var originalGlass: java.awt.Component? = null
 
     private val timer = Timer(TICK_MS) { tick() }
-    private val listener = AWTEventListener { event -> onEvent(event) }
 
-    /** Covers the window while the mode is active so the exiting click (and
-     *  everything else the mouse does) never reaches the app underneath. */
-    private val glass = object : javax.swing.JComponent() {}.apply {
-        isOpaque = false
-        cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
-        addMouseListener(object : java.awt.event.MouseAdapter() {
-            override fun mousePressed(e: MouseEvent) {
-                // ANY button ends the pan — Windows 11: the press is consumed,
-                // only the release remains to swallow.
-                exiting = true
-                endPan()
-            }
-
-            override fun mouseReleased(e: MouseEvent) {
-                // The exiting click's release — the press above happened on
-                // this glass, so the grab routes its release here too. Swallow
-                // it and take the glass down: the NEXT click is a normal one.
-                if (exiting) {
-                    exiting = false
-                    removeGlass()
-                }
-            }
-        })
-        // Registered so the glass intercepts these event types too; the pan
-        // itself polls the global pointer, so nothing to do here.
-        addMouseMotionListener(object : java.awt.event.MouseAdapter() {})
-        addMouseWheelListener { /* physical wheel is inert during the mode */ }
+    private val queue = object : java.awt.EventQueue() {
+        override fun dispatchEvent(event: AWTEvent) {
+            if (event is MouseEvent && handleAndSwallow(event)) return
+            super.dispatchEvent(event)
+        }
     }
 
     fun install() {
-        Toolkit.getDefaultToolkit().addAWTEventListener(
-            listener,
-            AWTEvent.MOUSE_EVENT_MASK,
-        )
+        Toolkit.getDefaultToolkit().systemEventQueue.push(queue)
     }
 
     fun uninstall() {
-        Toolkit.getDefaultToolkit().removeAWTEventListener(listener)
+        // The pushed queue stays (pop is protected and the filter is inert
+        // while the mode is off); just make sure the mode is off.
         stop()
     }
 
-    private fun onEvent(event: AWTEvent) {
-        val e = event as? MouseEvent ?: return
-        if (e.button != MouseEvent.BUTTON2) return
+    /**
+     * The whole mode lifecycle, run against every mouse event before AWT
+     * dispatches it. Returns true to DROP the event.
+     */
+    private fun handleAndSwallow(e: MouseEvent): Boolean {
+        val component = e.component ?: return false
+        if (component !== window && SwingUtilities.getWindowAncestor(component) !== window) return false
         when (e.id) {
-            // The ENTRY press. Everything after it lives on the glass — except
-            // the release below.
-            MOUSE_PRESSED_ID -> {
-                if (anchor.value != null || exiting) return
-                val component = e.component ?: return
-                if (component !== window && SwingUtilities.getWindowAncestor(component) !== window) return
-                start(SwingUtilities.convertPoint(component, e.point, window.contentPane))
-            }
-            // AWT's implicit mouse grab delivers this release to the component
-            // that took the entry press — NOT the glass — so it is handled
-            // here: press-drag-release pans once; press-and-release in place
-            // arms sticky mode (both are how Windows behaves). A middle
-            // release means nothing to any Compose control, so letting it
-            // fall through is harmless.
-            MOUSE_RELEASED_ID -> {
-                if (anchor.value != null && !exiting && e.component !== glass) {
-                    if (moved) stop() else sticky = true
+            MouseEvent.MOUSE_PRESSED -> {
+                if (exiting) return true
+                if (anchor.value == null) {
+                    // ENTRY: a middle press starts the pan; consumed, like
+                    // Windows — it must not also register as a press below.
+                    if (e.button == MouseEvent.BUTTON2) {
+                        start(SwingUtilities.convertPoint(component, e.point, window.contentPane))
+                        return true
+                    }
+                    return false
                 }
+                // ANY button while panning cancels — left and middle alike —
+                // and the cancelling click is consumed.
+                exiting = true
+                endPan()
+                return true
             }
+            MouseEvent.MOUSE_RELEASED -> {
+                if (exiting) {
+                    // Swallow until every button is up again; the NEXT press
+                    // is the first normal one.
+                    if (noButtonsDown(e)) exiting = false
+                    return true
+                }
+                if (anchor.value != null && e.button == MouseEvent.BUTTON2) {
+                    // The entry press's release: press-drag-release pans once
+                    // and ends here; press-and-release in place arms sticky
+                    // mode (both are how Windows behaves).
+                    if (moved) stop() else sticky = true
+                    return true
+                }
+                return false
+            }
+            // CLICKED events pair with a press/release that was swallowed.
+            MouseEvent.MOUSE_CLICKED -> return exiting || anchor.value != null
+            else -> return false
         }
     }
+
+    private fun noButtonsDown(e: MouseEvent): Boolean =
+        e.modifiersEx and (
+            MouseEvent.BUTTON1_DOWN_MASK or
+                MouseEvent.BUTTON2_DOWN_MASK or
+                MouseEvent.BUTTON3_DOWN_MASK
+            ) == 0
 
     /** Eased per-axis velocity (px/s) — the actual speed glides toward the
      *  offset-derived target instead of snapping with every mouse move, which
@@ -146,29 +150,21 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
         moved = false
         velX = 0.0
         velY = 0.0
-        originalGlass = window.rootPane.glassPane
-        window.rootPane.glassPane = glass
-        glass.isVisible = true
+        window.contentPane.cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
         timer.start()
     }
 
-    /** Ends the panning; the glass stays up until the exiting release. */
+    /** Ends the panning; [exiting] keeps swallowing until the buttons are up. */
     private fun endPan() {
         anchor.value = null
         sticky = false
+        window.contentPane.cursor = Cursor.getDefaultCursor()
         timer.stop()
-    }
-
-    private fun removeGlass() {
-        glass.isVisible = false
-        originalGlass?.let { window.rootPane.glassPane = it }
-        originalGlass = null
     }
 
     private fun stop() {
         endPan()
         exiting = false
-        removeGlass()
     }
 
     private fun tick() {
@@ -240,8 +236,6 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
     }
 
     private companion object {
-        const val MOUSE_PRESSED_ID = MouseEvent.MOUSE_PRESSED
-        const val MOUSE_RELEASED_ID = MouseEvent.MOUSE_RELEASED
         const val TICK_MS = 10
         const val DEAD_ZONE_PX = 12.0
         const val DRAG_THRESHOLD_PX = 8.0
