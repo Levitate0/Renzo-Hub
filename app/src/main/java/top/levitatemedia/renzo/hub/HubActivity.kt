@@ -146,7 +146,7 @@ private fun TvResolutionNormalized(content: @Composable () -> Unit) {
     val isTv = remember(context) { top.levitatemedia.renzo.hub.core.isTvDevice(context) }
     if (isTv) {
         top.levitatemedia.renzo.hub.core.TvScale(
-            designHeightDp = 540,
+            designHeightDp = TV_DESIGN_HEIGHT_DP,
             minScale = 1f,
             content = content,
         )
@@ -154,3 +154,12 @@ private fun TvResolutionNormalized(content: @Composable () -> Unit) {
         content()
     }
 }
+
+/**
+ * The dp height the TV UI is designed against. A standard 1080p set reports
+ * ~540dp, so values below 540 ZOOM the whole TV UI (zoom = 540/design):
+ * 470 ≈ 1.15× — couch-distance sizing, per user feedback (2026-08-21) that
+ * the 1:1 layout read cramped. Higher-dp 2K/4K panels still normalize to the
+ * same apparent size on top of this.
+ */
+private const val TV_DESIGN_HEIGHT_DP = 470
