@@ -694,13 +694,13 @@ private fun StatChip(icon: ImageVector, value: String, color: Color) {
     }
 }
 
-/** external-links.tsx — GitHub / Discord / Website, verbatim hrefs. */
+/** GitHub / Website (user direction 2026-08-21: Shiori's own repo, the
+ *  renzo-apps site, and no Discord link). */
 @Composable
 private fun ExternalLinksRow() {
     val links = listOf(
-        Triple("GitHub", "https://github.com/Levitate0/Renzo", Res.drawable.ic_github),
-        Triple("Discord", "https://discord.gg/AvhtPPV8", Res.drawable.ic_discord),
-        Triple("Website", "https://www.renzo.net", Res.drawable.ic_globe),
+        Triple("GitHub", "https://github.com/Levitate0/Renzo-Shiori", Res.drawable.ic_github),
+        Triple("Website", "https://renzo-apps.levitatemedia.top", Res.drawable.ic_globe),
     )
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),

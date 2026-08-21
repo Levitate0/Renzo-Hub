@@ -26,6 +26,15 @@ class ApiClient(private val prefs: Prefs) {
     val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     val http: OkHttpClient = OkHttpClient.Builder()
+        // Identify the Hub (see core HUB_USER_AGENT) — servers label the
+        // session's device off the login request's User-Agent.
+        .addInterceptor { chain ->
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("User-Agent", top.levitatemedia.renzo.hub.core.HUB_USER_AGENT)
+                    .build(),
+            )
+        }
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(75, TimeUnit.SECONDS)
         .followRedirects(true)

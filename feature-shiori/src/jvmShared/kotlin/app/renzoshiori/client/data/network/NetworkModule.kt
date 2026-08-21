@@ -237,6 +237,16 @@ class NetworkModule(private val tokenStore: TokenStore) {
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .cookieJar(cookieJar)
+            // Identify the Hub (see core HUB_USER_AGENT): the server labels
+            // sessions off the login UA — the OkHttp default read as
+            // "Browser" in the devices list.
+            .addInterceptor { chain ->
+                chain.proceed(
+                    chain.request().newBuilder()
+                        .header("User-Agent", top.levitatemedia.renzo.hub.core.HUB_USER_AGENT)
+                        .build(),
+                )
+            }
             .addInterceptor(AuthInterceptor(tokenStore))
             .addInterceptor(PerRequestTimeoutInterceptor())
             .addInterceptor(
