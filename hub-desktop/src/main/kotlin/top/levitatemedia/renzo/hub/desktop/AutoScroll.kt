@@ -24,6 +24,7 @@ import java.awt.event.MouseWheelEvent
 import javax.swing.SwingUtilities
 import javax.swing.Timer
 import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sign
 
@@ -41,23 +42,29 @@ import kotlin.math.sign
  * whole wheel lines. `isShiftDown` routes a rotation to the horizontal axis,
  * which is how sideways panning rides along.
  *
- * Exit-click swallowing (Windows 11 behaviour, user direction 2026-08-19/20):
- * ONE click of ANY button — left or another middle — cancels the pan, and
- * that click is CONSUMED: it never opens what sat under the cursor. The next
- * click is the first normal one. Neither an [AWTEventListener] (can't
- * consume) nor a Swing glass pane (lightweight — can't block the heavyweight
- * surface Compose renders into on Windows) can do this reliably, so the
- * swallowing lives in a pushed [java.awt.EventQueue]: it sees every event
- * BEFORE dispatch and simply drops the ones that belong to the mode. The
- * synthetic wheel events are dispatched directly to the component under the
- * cursor and never pass through the queue.
+ * Speed follows Windows' curve rather than a linear ramp — see
+ * [targetVelocity], which is Blink's per-axis `pow(distance, 2.2)` model.
+ *
+ * Leaving the mode (Windows 11 behaviour, user direction 2026-08-19/20 and
+ * 2026-08-22): ONE click of ANY button — left, right, or a second middle —
+ * cancels the pan, and that click is CONSUMED. It never reaches what sat under
+ * the cursor, so nothing opens, nothing is selected and no context menu
+ * appears; the NEXT click is the first normal one. Escape and a real wheel
+ * notch cancel the same way and are swallowed for the same reason.
+ *
+ * Neither an [java.awt.event.AWTEventListener] (can't consume) nor a Swing
+ * glass pane (lightweight — can't block the heavyweight surface Compose
+ * renders into on Windows) can do this reliably, so the swallowing lives in a
+ * pushed [java.awt.EventQueue]: it sees every event BEFORE dispatch and simply
+ * drops the ones that belong to the mode. The synthetic wheel events are
+ * dispatched directly to the component under the cursor and never pass through
+ * the queue, so they cannot cancel the pan that produced them.
  */
 internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
 
     /** Anchor in content-pane coordinates, non-null while panning (drives the overlay). */
     val anchor = mutableStateOf<Point?>(null)
 
-    private var sticky = false
     private var moved = false
     private var current = Point()
     /** A button press cancelled the pan; everything mouse-button-shaped is
@@ -68,9 +75,25 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
 
     private val queue = object : java.awt.EventQueue() {
         override fun dispatchEvent(event: AWTEvent) {
+            // MouseWheelEvent is a MouseEvent subclass, so wheel events arrive
+            // here too and are handled in handleAndSwallow.
             if (event is MouseEvent && handleAndSwallow(event)) return
+            if (event is java.awt.event.KeyEvent && handleAndSwallowKey(event)) return
             super.dispatchEvent(event)
         }
+    }
+
+    /**
+     * Escape cancels the pan and is CONSUMED, for the same reason a cancelling
+     * click is: the keystroke that leaves the mode must not also reach what is
+     * underneath and close a dialog or clear a search box. Every Escape of the
+     * press/release/typed triple is dropped so no half of it leaks.
+     */
+    private fun handleAndSwallowKey(e: java.awt.event.KeyEvent): Boolean {
+        if (e.keyCode != java.awt.event.KeyEvent.VK_ESCAPE) return false
+        if (anchor.value == null) return false
+        if (e.id == java.awt.event.KeyEvent.KEY_PRESSED) stop()
+        return true
     }
 
     // Windows-native parity: clicking ANOTHER window (or alt-tabbing away)
@@ -127,16 +150,33 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
                     return true
                 }
                 if (anchor.value != null && e.button == MouseEvent.BUTTON2) {
-                    // The entry press's release: press-drag-release pans once
-                    // and ends here; press-and-release in place arms sticky
-                    // mode (both are how Windows behaves).
-                    if (moved) stop() else sticky = true
+                    // The entry press's release decides which of Windows' two
+                    // modes this gesture was. Press-drag-release is a one-shot
+                    // pan and ends here. Press-and-release without moving arms
+                    // the sticky mode: the pan simply continues, because the
+                    // anchor is left in place, until a click or Escape ends it.
+                    if (moved) stop()
                     return true
                 }
                 return false
             }
             // CLICKED events pair with a press/release that was swallowed.
             MouseEvent.MOUSE_CLICKED -> return exiting || anchor.value != null
+            // A pan entered by press-and-hold keeps a button down, so every
+            // move is delivered as a DRAG. Letting those through would run the
+            // app's drag handling — text selection, reorder, swipe — under a
+            // cursor the user is only steering. Plain MOUSE_MOVED is left
+            // alone so hover still tracks, which is what Windows does.
+            MouseEvent.MOUSE_DRAGGED -> return anchor.value != null || exiting
+            // A real wheel notch cancels, matching Chromium and Edge. The
+            // synthetic wheel events this class generates are dispatched
+            // straight to the target component and never enter this queue, so
+            // they cannot cancel the very pan that produced them.
+            MouseEvent.MOUSE_WHEEL -> {
+                if (anchor.value == null) return false
+                stop()
+                return true
+            }
             else -> return false
         }
     }
@@ -157,7 +197,6 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
     private fun start(p: Point) {
         anchor.value = p
         current = p
-        sticky = false
         moved = false
         velX = 0.0
         velY = 0.0
@@ -168,7 +207,6 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
     /** Ends the panning; [exiting] keeps swallowing until the buttons are up. */
     private fun endPan() {
         anchor.value = null
-        sticky = false
         window.contentPane.cursor = Cursor.getDefaultCursor()
         timer.stop()
     }
@@ -196,17 +234,38 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
     }
 
     /**
-     * Offset from the anchor → target speed in px/s, SIGNED so above/left of
-     * the anchor pans up/left and below/right pans down/right. Windows'
-     * native panning model (Explorer/Chromium autoscroll): zero inside the
-     * anchor badge's dead zone, then LINEAR in distance — fine control close
-     * to the anchor, whole pages flying by at arm's reach. ~380 px/s at 50px
-     * past the dead zone, ~880 at 100px, ~2380 at 250px.
+     * Per-axis offset from the anchor → target speed in px/s, SIGNED so above
+     * or left of the anchor pans up/left and below/right pans down/right.
+     *
+     * This is Windows' curve, not a linear ramp. Blink's
+     * `autoscroll_controller.cc` computes middle-click autoscroll as
+     * `pow(|distance|, 2.2) * multiplier` PER AXIS, zeroing an axis whose
+     * offset is within a 15px dead zone — Chromium and Edge inherit the feel
+     * from the platform, so matching them matches Windows 11.
+     *
+     * Two details are deliberately copied rather than "improved":
+     *
+     *  - The dead zone ZEROES the axis; it is not subtracted from the
+     *    distance. Just outside it the speed is ~4 px/s, so the discontinuity
+     *    is invisible, and subtracting it instead would flatten the toe of the
+     *    curve where fine control lives.
+     *  - The axes are independent. Radial distance would make a purely
+     *    vertical pan speed up as the cursor drifted sideways.
+     *
+     * The exponent is what gives the mode its character: a slow, precise crawl
+     * near the anchor and whole pages at arm's reach, off one gesture.
+     * ~4 px/s just outside the dead zone, 44 at 50px, 201 at 100px, 923 at
+     * 200px, 4243 at 400px.
+     *
+     * The previous implementation was linear (16 px/s per px past a 12px dead
+     * zone), which had no acceleration to speak of and started at 288 px/s
+     * only 30px out — a lurch exactly where the curve should still be
+     * crawling.
      */
     private fun targetVelocity(offsetPx: Double): Double {
         if (abs(offsetPx) <= DEAD_ZONE_PX) return 0.0
-        val distance = abs(offsetPx) - DEAD_ZONE_PX
-        val magnitude = (distance * SPEED_PX_PER_SEC_PER_PX).coerceAtMost(MAX_PX_PER_SECOND)
+        val magnitude = (SPEED_MULTIPLIER * abs(offsetPx).pow(SPEED_EXPONENT))
+            .coerceAtMost(MAX_PX_PER_SECOND)
         return magnitude * sign(offsetPx)
     }
 
@@ -248,19 +307,26 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
 
     private companion object {
         const val TICK_MS = 10
-        const val DEAD_ZONE_PX = 12.0
+        /** Blink's kNoMiddleClickAutoscrollRadius, applied per axis. */
+        const val DEAD_ZONE_PX = 15.0
         const val DRAG_THRESHOLD_PX = 8.0
-        /** Linear gain, the Windows/Chromium autoscroll model: each px of
-         *  reach past the dead zone adds this many px/s. 16 (was 10, user
-         *  direction 2026-08-19: steeper): ~800 px/s at 50px past the dead
-         *  zone, ~1600 at 100px, ~4000 at 250px. */
-        const val SPEED_PX_PER_SEC_PER_PX = 16.0
-        /** High ceiling — native panning is effectively uncapped; this only
-         *  guards against a cursor parked at the far edge of a big monitor. */
+        /** Blink's kExponent. The whole feel of the mode lives here. */
+        const val SPEED_EXPONENT = 2.2
+        /**
+         * Calibrated so the curve lands on Windows' speeds in px/s: 44 at
+         * 50px from the anchor, 201 at 100px, 923 at 200px. Blink's own
+         * multiplier is expressed against its internal frame-time unit and
+         * does not transfer directly.
+         */
+        const val SPEED_MULTIPLIER = 0.008
+        /** Reached ~590px from the anchor; only guards a cursor parked at the
+         *  far edge of a large monitor. */
         const val MAX_PX_PER_SECOND = 10000.0
-        /** Per-tick approach toward the target speed. Native panning reacts
-         *  immediately; this is just enough smoothing to avoid 100Hz jitter. */
-        const val EASING = 0.35
+        /** Per-tick approach toward the target speed. The curve already gives
+         *  gentle control near the anchor, so this only has to take the
+         *  quantisation jitter off the 100Hz pointer poll — it is NOT the
+         *  source of the acceleration, and heavy easing would just add lag. */
+        const val EASING = 0.5
         /** One preciseWheelRotation unit scrolls roughly this many px in Compose lists. */
         const val PX_PER_WHEEL_UNIT = 64.0
     }
