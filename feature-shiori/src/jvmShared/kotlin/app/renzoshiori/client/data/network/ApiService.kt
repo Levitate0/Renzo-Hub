@@ -112,6 +112,15 @@ interface ApiService {
         @Query("seriesId") seriesId: String,
         @Query("chapter") chapter: Double,
         @Query("refresh") refresh: Boolean = false,
+        /**
+         * Also re-read the source's CHAPTER LISTING, not just the page list
+         * (ReaderController.cs:223). A coin-gated chapter is absent from the
+         * listing until it is owned, so the listing is exactly what has to be
+         * re-fetched for an unlock to be noticed. Expensive — one 20s-bounded
+         * source call per candidate source — so it is reserved for the unlock
+         * poll, matching readerService.ts:49-62.
+         */
+        @Query("refreshChapters") refreshChapters: Boolean = false,
     ): PreviewPagesDto
 
     // ── Preview (Browse items — pages come live from the source, nothing

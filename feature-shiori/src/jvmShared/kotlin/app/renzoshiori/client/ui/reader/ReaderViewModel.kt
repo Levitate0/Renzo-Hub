@@ -185,6 +185,14 @@ class ReaderViewModel(
     private var appending = false
     /** True once anything was streamed live — only then is the server cache worth clearing on exit. */
     private var usedStream = false
+
+    /**
+     * Chapter number for which a fresh source pull has ALREADY been paid, by a
+     * successful unlock poll. buildSegment consumes it once so the open that
+     * follows an unlock does not re-fetch the same page list. Web's
+     * `freshStreamRef` (page.tsx:325-330, 549-552).
+     */
+    private var freshStreamFor: Double? = null
     private val loadedDims = ArrayList<Pair<Int, Int>>()
 
     init {
@@ -425,7 +433,14 @@ class ReaderViewModel(
         // Not downloaded anywhere → stream it live from the source. This is
         // the slow path: the server fetches the page list from the source site
         // (sometimes through a Cloudflare solver), so it can take a while.
-        val attempt = runCatching { api.streamPages(seriesId, number) }
+        // Force a fresh source pull rather than trusting the server's cached
+        // page list (web readerService.ts does this on every open), EXCEPT
+        // immediately after a successful unlock poll, which has just paid for
+        // one for this very chapter. Transliterates freshStreamRef in
+        // page.tsx:325-330 / 549-552.
+        val alreadyFresh = freshStreamFor == number
+        if (alreadyFresh) freshStreamFor = null
+        val attempt = runCatching { api.streamPages(seriesId, number, refresh = !alreadyFresh) }
         val stream = attempt.getOrNull()
         if (stream == null) return SegResult.Failed(describeFailure(attempt.exceptionOrNull()))
         if (stream.locked || stream.pageCount <= 0) return SegResult.Locked(chapter.url)
@@ -855,13 +870,22 @@ class ReaderViewModel(
         _state.update { it.copy(unlockChecking = true) }
         viewModelScope.launch {
             val api = app.network.currentApi()
-            // refresh=true bypasses the backend's cached (empty) page list.
-            val stream = if (api == null) null else runCatching { api.streamPages(seriesId, number, true) }.getOrNull()
+            // refresh=true bypasses the backend's cached (empty) page list, and
+            // refreshChapters=true re-reads the source's chapter LISTING — a
+            // coin-gated chapter is missing from that listing until it is
+            // owned, so without it an unlock is never noticed no matter how
+            // often we poll. Web does the same at page.tsx:620-624.
+            val stream = if (api == null) null else runCatching {
+                api.streamPages(seriesId, number, refresh = true, refreshChapters = true)
+            }.getOrNull()
             _state.update { it.copy(unlockChecking = false) }
             if (stream != null && !stream.locked && stream.pageCount > 0) {
                 _state.update { st ->
                     st.copy(chapters = st.chapters.map { if (it.number == number) it.copy(locked = false) else it })
                 }
+                // The call above was already a fresh pull for this chapter; let
+                // the open that follows skip paying for a second one.
+                freshStreamFor = number
                 openChapter(number)
             }
         }
