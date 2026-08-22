@@ -188,6 +188,19 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
                 MouseEvent.BUTTON3_DOWN_MASK
             ) == 0
 
+    /**
+     * Whole-curve speed multiplier, so the pan can be matched to the machine's
+     * own feel without a rebuild:
+     *
+     *     RENZO_AUTOSCROLL_GAIN=1.5 RenzoHub.exe
+     *
+     * 1.0 is the unmodified curve. This exists because the reference is what
+     * the browser does on the user's own desktop, which cannot be measured
+     * from a headless build host.
+     */
+    private val gain: Double =
+        System.getenv("RENZO_AUTOSCROLL_GAIN")?.toDoubleOrNull()?.takeIf { it > 0.0 } ?: 1.0
+
     /** Eased per-axis velocity (px/s) — the actual speed glides toward the
      *  offset-derived target instead of snapping with every mouse move, which
      *  is what keeps the pan smooth rather than jumpy. */
@@ -229,8 +242,8 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
         }
         velY += (targetVelocity((current.y - a.y).toDouble()) - velY) * EASING
         velX += (targetVelocity((current.x - a.x).toDouble()) - velX) * EASING
-        dispatch(rotationFor(velY), horizontal = false)
-        dispatch(rotationFor(velX), horizontal = true)
+        dispatch(pixelsThisTick(velY), horizontal = false)
+        dispatch(pixelsThisTick(velX), horizontal = true)
     }
 
     /**
@@ -255,7 +268,9 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
      * The exponent is what gives the mode its character: a slow, precise crawl
      * near the anchor and whole pages at arm's reach, off one gesture.
      * ~4 px/s just outside the dead zone, 44 at 50px, 201 at 100px, 923 at
-     * 200px, 4243 at 400px.
+     * 200px, 4243 at 400px — and since [dispatch] was corrected these are the
+     * speeds actually DELIVERED, not merely requested. Scale the lot with
+     * RENZO_AUTOSCROLL_GAIN if this machine wants a different feel.
      *
      * The previous implementation was linear (16 px/s per px past a 12px dead
      * zone), which had no acceleration to speak of and started at 288 px/s
@@ -264,18 +279,30 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
      */
     private fun targetVelocity(offsetPx: Double): Double {
         if (abs(offsetPx) <= DEAD_ZONE_PX) return 0.0
-        val magnitude = (SPEED_MULTIPLIER * abs(offsetPx).pow(SPEED_EXPONENT))
+        val magnitude = (SPEED_MULTIPLIER * gain * abs(offsetPx).pow(SPEED_EXPONENT))
             .coerceAtMost(MAX_PX_PER_SECOND)
         return magnitude * sign(offsetPx)
     }
 
-    private fun rotationFor(pxPerSecond: Double): Double {
+    /** Pixels this tick should move, at the current eased speed. */
+    private fun pixelsThisTick(pxPerSecond: Double): Double {
         if (abs(pxPerSecond) < 1.0) return 0.0
-        return pxPerSecond * (TICK_MS / 1000.0) / PX_PER_WHEEL_UNIT
+        return pxPerSecond * (TICK_MS / 1000.0)
     }
 
-    private fun dispatch(rotation: Double, horizontal: Boolean) {
-        if (rotation == 0.0) return
+    /**
+     * The user's own Windows "lines to scroll per notch"
+     * (SPI_GETWHEELSCROLLLINES, default 3), which AWT exposes as a desktop
+     * property. A real wheel event carries it in `scrollAmount` and Compose
+     * multiplies by it (see [dispatch]) — so the pan now honours the same
+     * mouse setting the wheel does, instead of ignoring it.
+     */
+    private fun wheelScrollLines(): Int =
+        (Toolkit.getDefaultToolkit().getDesktopProperty("win.scrollbar.wheelScrollLines") as? Int)
+            ?.takeIf { it > 0 } ?: DEFAULT_WHEEL_SCROLL_LINES
+
+    private fun dispatch(pixels: Double, horizontal: Boolean) {
+        if (pixels == 0.0) return
         val contentPane = window.contentPane
         // A cursor outside the window must still scroll SOMETHING: clamp the
         // hit point into the content pane so the wheel event always lands on
@@ -286,6 +313,32 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
         )
         val target = SwingUtilities.getDeepestComponentAt(contentPane, hit.x, hit.y) ?: contentPane
         val pt = SwingUtilities.convertPoint(contentPane, hit, target)
+
+        // How many pixels ONE unit of preciseWheelRotation actually scrolls.
+        //
+        // Not a constant. Compose's Windows scroll config
+        // (foundation's WindowsWinUIConfig.calculateMouseWheelScroll, read
+        // from the 1.11.1 bytecode) computes
+        //
+        //     px = preciseWheelRotation * (viewportSize / 20) * scrollAmount
+        //
+        // so the conversion depends on the size of what is being scrolled and
+        // on the event's own scrollAmount. This previously assumed a fixed 64
+        // px/unit and sent scrollAmount = 1, which under-scrolled by the ratio
+        // between the two: in a ~740px-tall window that is 37 px/unit against
+        // an assumed 64, i.e. the pan delivered ~58% of the speed it asked for
+        // — before any curve was involved. That is the "Hub is slower than the
+        // browser" gap.
+        //
+        // The viewport here is the AWT component under the cursor, which for
+        // Compose is the whole rendering surface. A full-window list matches
+        // exactly; a small nested scroller is approximated by the window,
+        // which is also how the native pan behaves.
+        val lines = wheelScrollLines()
+        val viewport = if (horizontal) target.width else target.height
+        val pxPerUnit = ((viewport / 20.0) * lines).coerceAtLeast(1.0)
+        val rotation = pixels / pxPerUnit
+
         target.dispatchEvent(
             MouseWheelEvent(
                 target,
@@ -297,8 +350,10 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
                 0,
                 false,
                 MouseWheelEvent.WHEEL_UNIT_SCROLL,
-                1,
-                // The int click count is ignored by Compose; precise carries it.
+                // Must match the value the conversion above assumed: Compose
+                // reads this back off the AWT event and multiplies by it.
+                lines,
+                // The int rotation is ignored by Compose; precise carries it.
                 rotation.roundToInt(),
                 rotation,
             ),
@@ -327,8 +382,9 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
          *  quantisation jitter off the 100Hz pointer poll — it is NOT the
          *  source of the acceleration, and heavy easing would just add lag. */
         const val EASING = 0.5
-        /** One preciseWheelRotation unit scrolls roughly this many px in Compose lists. */
-        const val PX_PER_WHEEL_UNIT = 64.0
+        /** SPI_GETWHEELSCROLLLINES' own default, used when AWT has no value
+         *  for the property (non-Windows, or an unset desktop property). */
+        const val DEFAULT_WHEEL_SCROLL_LINES = 3
     }
 }
 
