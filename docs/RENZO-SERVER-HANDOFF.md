@@ -1,12 +1,12 @@
 # Renzo (anime) — changes needed for the Hub, and debrid streaming
 
-**For:** whoever works on `/opt/zurg-stack/fullstack-arr` (Node 20 / Express 4 /
+**For:** whoever works on `/opt/zurg-stack/renzo-ecosystem/renzo` (Node 20 / Express 4 /
 TypeScript, port 8787) and the Renzo half of the Android client.
 **Written:** 2026-08-03, from a read of the server source at that date.
 
 The Android side is now **Renzo Hub** — one APK carrying both Renzo (anime) and
 Renzo Shiori (manga), applicationId `top.levitatemedia.renzo`, in
-`/opt/zurg-stack/renzo-clients/hub`. This document covers what changed on the
+`/opt/zurg-stack/renzo-ecosystem/hub`. This document covers what changed on the
 client, what the server needs, and the debrid-specific risks — which are the
 sharp end of all of it.
 

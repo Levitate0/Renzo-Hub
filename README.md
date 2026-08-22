@@ -22,10 +22,19 @@ All 131 Kotlin files (32 Renzo + 99 Shiori) compile unmodified except for the
 Coil migration and one resource rename. `assembleDebug`, `assembleRelease` and
 `assembleDemo` all succeed.
 
-Neither original tree was modified. `tv-native` and `Rensaio/clients/android`
-still build and ship exactly as before, so the handoff's sequencing advice —
-ship Renzo's Play listing off the standalone build *before* cutting over — is
-still available.
+**Both original trees are now ARCHIVED (2026-08-21) and must not be edited.**
+`renzo-clients/tv-native` and `shiori/clients/android` carry an `ARCHIVED.md`
+and a mechanical build guard; neither has ever shipped an APK asset in any
+GitHub release, so the standalone-build sequencing advice in the old handoff is
+no longer available and should be ignored.
+
+This paragraph previously read "Neither original tree was modified … still build
+and ship exactly as before". That was false and actively harmful: it was the
+written permission a reader needed to treat the fork as live, and on 2026-08-21
+commit `7387d46` did exactly that — landing an 18+ filter fix in the archived
+manga fork while the shipping client here went 5h30m with a 24-tag-short
+filter. It also named `Rensaio/clients/android`, a path that has not existed
+since the repositories were merged.
 
 ## Module layout
 

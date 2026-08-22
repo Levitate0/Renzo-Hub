@@ -1,6 +1,6 @@
 # TV pairing for Renzo Shiori — server spec
 
-**For:** the Shiori server chat (`/opt/zurg-stack/Rensaio`, .NET 8 / ASP.NET, SQLite).
+**For:** the Shiori server chat (`/opt/zurg-stack/renzo-ecosystem/shiori`, .NET 8 / ASP.NET, SQLite).
 **Companion:** `TV-PAIRING-RENZO.md` — same protocol, different credential.
 **Date:** 2026-08-04.
 

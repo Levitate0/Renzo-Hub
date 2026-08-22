@@ -12,7 +12,7 @@ rather than a separate one.
 |---|---|
 | `RENZO-HUB-HANDOFF.md` | module layout, applicationId, branding, toolchain |
 | `RENZO-DESKTOP-NATIVE-HANDOFF.md` | the framework decision, video, packaging — **written 2026-08-02, before the Hub existed**, so treat its module plan as superseded by §2 below |
-| `renzo-clients/hub/docs/OFFLINE-DESIGN.md` | the offline model this must reuse verbatim |
+| `hub/docs/OFFLINE-DESIGN.md` | the offline model this must reuse verbatim |
 | `HANDOFF_renzo-hub_session-and-auth.md` | auth, including §7 added 2026-08-14 |
 
 ---
@@ -30,7 +30,7 @@ misread the job.
 
 ## 1. What actually exists — measured, not assumed
 
-Counted on 2026-08-14 in `/opt/zurg-stack/renzo-clients/hub/`.
+Counted on 2026-08-14 in `/opt/zurg-stack/renzo-ecosystem/hub/`.
 
 **The UI is already written.** `feature-shiori/.../ui/` has 17 screen packages:
 `auth, browse, components, downloads, home, importwizard, library, onboarding,
@@ -69,7 +69,7 @@ rewrite was already disciplined about keeping platform calls out of screens.
 | OkHttp / Retrofit / kotlinx.serialization | 4.12.0 / 3.0.0 / 1.9.0 | all JVM, unchanged |
 | **media3** | **1.7.1** | **no** — Android-only. Video is the exception; see §6. |
 
-**What this replaces:** `Rensaio/clients/windows` — WPF + WebView2, ~1,200 lines
+**What this replaces:** `shiori/clients/windows` — WPF + WebView2, ~1,200 lines
 of C#, no UI of its own. Details in `RENZO-DESKTOP-NATIVE-HANDOFF.md` §1.
 
 ---
@@ -94,7 +94,7 @@ table above get an `expect` declaration in `commonMain` and two `actual`s.
 
 **Do not fork the screens.** A desktop copy of `UpdatesScreen.kt` that drifts
 from the Android one is the failure mode this whole structure exists to prevent,
-and it is the same rule `clients/android/UI_PARITY.md` sets for the web → Compose
+and it is the same rule `shiori/clients/android/UI_PARITY.md` sets for the web → Compose
 direction.
 
 ---
@@ -103,7 +103,7 @@ direction.
 
 The screen exists; the desktop job is to **verify parity and let it run**, not
 rebuild. Check it against the web page, which is the source of truth:
-`Rensaio/RenzoFrontend/src/app/updates/page.tsx` (464 lines).
+`shiori/RenzoFrontend/src/app/updates/page.tsx` (464 lines).
 
 **Endpoint:** `GET /api/serie/updates?start=&count=[&viewAll=true]`
 
@@ -135,7 +135,7 @@ web layout first, then decide.
 
 ## 4. "Matches the web GUI"
 
-The standing rule (`clients/android/UI_PARITY.md`): screens are **transliterated
+The standing rule (`shiori/clients/android/UI_PARITY.md`): screens are **transliterated
 from the web component source, not approximated** — copy and paste, but in
 Kotlin. The desktop build inherits that, with the web app as the reference and
 the Android screen as the already-done translation.
@@ -253,7 +253,7 @@ Every number here was measured on 2026-08-14 and will drift:
   only the Shiori half was. Do this before committing to a Renzo-half estimate.
 - Compose Multiplatform's support for the specific Compose BOM in use — the Hub
   is on a recent BOM and CMP tracks it with a lag.
-- `renzo-clients/hub/` **is not a git repository** as of this writing. Anything
+- `hub/` **is not a git repository** as of this writing. Anything
   built there is unprotected; `git init` before starting.
 
 ---
@@ -265,6 +265,6 @@ Every number here was measured on 2026-08-14 and will drift:
 | `RENZO-HUB-HANDOFF.md` | the chat building the Android APK (Renzo Hub) |
 | `RENZO-DESKTOP-NATIVE-HANDOFF.md` | the earlier desktop plan — framework, video, packaging |
 | `HANDOFF_renzo-hub_session-and-auth.md` | auth and session handling for both halves |
-| `renzo-clients/hub/docs/OFFLINE-DESIGN.md` | the offline/download model |
-| `Rensaio/clients/android/UI_PARITY.md` | the web → Compose transliteration rule and map |
+| `hub/docs/OFFLINE-DESIGN.md` | the offline/download model |
+| `shiori/clients/android/UI_PARITY.md` | the web → Compose transliteration rule and map |
 | `HANDOFF_renzo-hub_desktop-exe.md` | this document |

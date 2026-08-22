@@ -1,6 +1,6 @@
 # Renzo Shiori on TV — compatibility spec
 
-**For:** the Shiori chat (`/opt/zurg-stack/Rensaio/clients/android`).
+**For:** the Shiori chat (`/opt/zurg-stack/renzo-ecosystem/shiori/clients/android`).
 **Date:** 2026-08-04.
 **Companion:** `TV-PAIRING-SHIORI.md` (sign-in without typing — build that first).
 

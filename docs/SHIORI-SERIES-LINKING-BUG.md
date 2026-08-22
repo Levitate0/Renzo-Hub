@@ -1,6 +1,6 @@
 # Unrelated series are being merged, and adding one silently edits the other
 
-**For:** the Shiori server chat (`/opt/zurg-stack/Rensaio`).
+**For:** the Shiori server chat (`/opt/zurg-stack/renzo-ecosystem/shiori`).
 **Date:** 2026-08-10.
 **Severity:** destructive — it writes foreign sources into an existing series,
 and the user has to notice and undo it by hand.
@@ -173,7 +173,7 @@ not clear `augmented`, `confirmRows` or `stage` when a new search ran, so Add
 could submit the *previous* series' payload. That made adds appear to do nothing
 and masked this bug entirely. Fixed in
 `hub/feature-shiori/.../ui/browse/AddSeriesSheet.kt`; worth porting to
-`Rensaio/clients/android`, where the same code exists.
+`shiori/clients/android`, where the same code exists.
 
 The client now also refuses to treat a 2xx-with-no-id as success, and verifies
 the new id actually appears in the library before closing the sheet.

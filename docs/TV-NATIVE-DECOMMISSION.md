@@ -1,9 +1,9 @@
 # Retiring `tv-native` in favour of Renzo Hub
 
-**For:** the Renzo chat (`/opt/zurg-stack/fullstack-arr`, `renzo-clients/tv-native`).
+**For:** the Renzo chat (`/opt/zurg-stack/renzo-ecosystem/renzo`, `renzo-clients/tv-native`).
 **Date:** 2026-08-04. Written from a diff of both trees at that date.
 
-Renzo Hub (`renzo-clients/hub`) is one APK carrying Renzo and Renzo Shiori. It
+Renzo Hub (`hub`) is one APK carrying Renzo and Renzo Shiori. It
 takes Renzo's applicationId and Renzo's signing key, so it **upgrades existing
 Renzo installs in place**. This is what has to happen before `tv-native` stops
 being the shipping client, and what must survive the purge.

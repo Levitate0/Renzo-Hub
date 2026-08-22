@@ -1,6 +1,6 @@
 # TV pairing for Renzo — server spec
 
-**For:** the Renzo server chat (`/opt/zurg-stack/fullstack-arr`, Node 20 / Express 4 / TS).
+**For:** the Renzo server chat (`/opt/zurg-stack/renzo-ecosystem/renzo`, Node 20 / Express 4 / TS).
 **Companion:** `TV-PAIRING-SHIORI.md` — same protocol, different credential.
 **Date:** 2026-08-04.
 

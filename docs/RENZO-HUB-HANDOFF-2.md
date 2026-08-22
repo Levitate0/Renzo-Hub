@@ -1,6 +1,6 @@
 # Renzo Hub → server/web, round 2
 
-**For:** `/opt/zurg-stack/fullstack-arr` (server + Next.js web UI) and `renzo-clients/tv-native`.
+**For:** `/opt/zurg-stack/renzo-ecosystem/renzo` (server + Next.js web UI) and `renzo-clients/tv-native`.
 **Date:** 2026-08-03. Follows `RENZO-SERVER-HANDOFF.md` and your `RENZO-SERVER-REPLY.md`.
 
 Everything you sent back is **done on the Hub side**. This covers what changed,
