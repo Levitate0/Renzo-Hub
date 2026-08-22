@@ -96,6 +96,10 @@ fun TitleScreen(
     // Device-download state. Bumped locally on save/remove for an instant
     // response, and by the shared downloader when a transfer actually lands.
     var offlineRevision by remember { mutableStateOf(0) }
+    // Bumped after a watched-progress write so TrackingRow re-reads: the server
+    // scrobbles to AniList/MAL on progress (api.ts:841) and can escalate the
+    // status to "completed" on the final episode (api.ts:252-263).
+    var trackingRevision by remember { mutableStateOf(0) }
     val downloadRevision by DownloadBus.revision.collectAsState()
 
     LaunchedEffect(titleId, reload) {
@@ -176,6 +180,7 @@ fun TitleScreen(
                         lists = lists,
                         downloadsDenied = app.user.value?.downloadsDenied == true,
                         watchedThrough = watchedThrough,
+                        trackingRevision = trackingRevision,
                         onPlay = { ep -> onPlay(d, ep) },
                         onToggleList = { listName ->
                             scope.launch {
@@ -281,6 +286,7 @@ fun TitleScreen(
                                             scope.launch {
                                                 try {
                                                     app.repo.setProgress(titleId, target)
+                                                    trackingRevision++
                                                     watchedThrough = target
                                                 } catch (e: ApiError) {
                                                     if (e.status == 401) onSessionLost()
@@ -340,6 +346,7 @@ fun TitleScreen(
                                             scope.launch {
                                                 try {
                                                     watchedThrough = app.repo.setProgress(d.id, n).watchedThrough
+                                                    trackingRevision++
                                                 } catch (_: Exception) {
                                                 } finally { progressBusy = false }
                                             }
@@ -384,6 +391,8 @@ private fun TitleHero(
     lists: List<String>,
     downloadsDenied: Boolean,
     watchedThrough: Int,
+    /** Bumped by the parent after a watched-progress write; re-reads TrackingRow. */
+    trackingRevision: Int,
     onPlay: (Int) -> Unit,
     onToggleLibrary: () -> Unit,
     onToggleList: (String) -> Unit,
@@ -529,7 +538,7 @@ private fun TitleHero(
                 // Web `.detail-controls`: Auto pill + folder + provider selects.
                 DetailControls(app, d, downloadsDenied, Modifier.padding(top = 12.dp))
                 // Web `<TrackingRow>`: AniList/MAL status + score for this title.
-                TrackingRow(app, d.id, Modifier.padding(top = 10.dp))
+                TrackingRow(app, d.id, Modifier.padding(top = 10.dp), revision = trackingRevision)
             }
             return@Box
         }
@@ -628,7 +637,7 @@ private fun TitleHero(
                     )
                 }
                 DetailControls(app, d, downloadsDenied, Modifier.padding(top = 12.dp))
-                TrackingRow(app, d.id, Modifier.padding(top = 10.dp))
+                TrackingRow(app, d.id, Modifier.padding(top = 10.dp), revision = trackingRevision)
             }
         }
     }
@@ -1074,15 +1083,66 @@ private fun DetailControls(
     }
 }
 
-/** Web `<TrackingRow>`: "Track [status] [score]/10" for AniList/MAL. */
+/** Web `toast(...)` from sonner (DownloadsScreen.kt:78 uses the same one-liner). */
+private fun toast(msg: String) = top.levitatemedia.renzo.tv.renzoToast(msg)
+
+/**
+ * Status vocabulary, transliterated from `tracking-row.tsx:15-23`.
+ *
+ * These are the server's lowercase TRACK_STATUSES (`tracker.ts:254`). Hub used
+ * to send AniList's uppercase enum ("CURRENT"/"REPEATING"), which only exists
+ * server-side inside the TO_ANILIST map and never crosses the wire — the guard
+ * at `api.ts:1131` dropped it and still answered 200, so every write no-opped.
+ *
+ * Deliberately NOT shared with AccountScreen's TRACK_OPTIONS: the web keeps two
+ * lists in two different orders (`defaults-pane.tsx:25` puts Plan-to-watch
+ * before Completed, this one after), and the transliteration rule is 1:1 with
+ * each source file rather than tidier than it.
+ */
+private val TRACK_STATUS_OPTIONS = listOf(
+    "" to "— Not tracked —",
+    "watching" to "Watching",
+    "completed" to "Completed",
+    "planning" to "Plan to watch",
+    "paused" to "Paused",
+    "dropped" to "Dropped",
+    "rewatching" to "Rewatching",
+)
+
+/** Web `<TrackingRow>`: "Track [status] [progress]/[total] [score]/10 [Sync]". */
 @Composable
-private fun TrackingRow(app: AppServices, titleId: Int, modifier: Modifier = Modifier) {
+private fun TrackingRow(
+    app: AppServices,
+    titleId: Int,
+    modifier: Modifier = Modifier,
+    revision: Int = 0,
+) {
     val scope = rememberCoroutineScope()
     var t by remember(titleId) { mutableStateOf<Tracking?>(null) }
-    LaunchedEffect(titleId) {
+    var status by remember(titleId) { mutableStateOf("") }
+    var progress by remember(titleId) { mutableStateOf("") }
+    var score by remember(titleId) { mutableStateOf("") }
+    var saving by remember(titleId) { mutableStateOf(false) }
+
+    // `revision` re-reads after a watched-progress change: the server scrobbles
+    // and can escalate the status to "completed" on the final episode
+    // (api.ts:841, api.ts:252-263), so the row would otherwise show a status the
+    // server has already moved on from. Web does this with a react-query
+    // invalidate (detail-view.tsx:178).
+    LaunchedEffect(titleId, revision) {
         t = try { app.repo.tracking(titleId) } catch (_: Exception) { null }
     }
     val tr = t ?: return
+
+    // Seed the editable fields from the response, preferring AniList
+    // (tracking-row.tsx:44-50).
+    LaunchedEffect(tr) {
+        val e = tr.entry
+        status = e?.status ?: ""
+        progress = (e?.progress ?: 0).toString()
+        score = e?.score?.takeIf { it > 0 }?.let { formatScore(it) } ?: ""
+    }
+
     Row(
         modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -1099,29 +1159,67 @@ private fun TrackingRow(app: AppServices, titleId: Int, modifier: Modifier = Mod
             )
             return@Row
         }
-        val statuses = listOf(
-            null to "— Not tracked —",
-            "CURRENT" to "Watching",
-            "PLANNING" to "Plan to watch",
-            "COMPLETED" to "Completed",
-            "PAUSED" to "Paused",
-            "DROPPED" to "Dropped",
-            "REPEATING" to "Rewatching",
+        SelectBox(
+            value = status,
+            options = TRACK_STATUS_OPTIONS,
+            onSelect = { status = it },
+            modifier = Modifier.width(150.dp),
         )
-        val curIdx = statuses.indexOfFirst { it.first == tr.status }.coerceAtLeast(0)
-        GhostChip(label = statuses[curIdx].second, on = tr.status != null) {
-            val next = statuses[(curIdx + 1) % statuses.size].first
-            scope.launch {
-                try { t = app.repo.setTracking(titleId, status = next ?: "") } catch (_: Exception) {}
+        WebInput(
+            value = progress,
+            onChange = { progress = it.filter { c -> c.isDigit() } },
+            placeholder = "0",
+            modifier = Modifier.width(64.dp),
+            numeric = true,
+        )
+        // The tracker's own episode count, not the local library's
+        // (tracker.ts:288/:308) — the row describes the list entry.
+        tr.entry?.total?.let {
+            Text("/ $it", color = RenzoColors.MutedForeground, fontSize = 13.sp)
+        }
+        WebInput(
+            value = score,
+            onChange = { score = it.filter { c -> c.isDigit() || c == '.' } },
+            placeholder = "/10",
+            modifier = Modifier.width(64.dp),
+            numeric = true,
+        )
+        // An explicit commit, like the web's Sync button. The old chip wrote on
+        // every tap, so cycling from "Not tracked" to "Rewatching" pushed six
+        // separate statuses to the user's real AniList/MAL account.
+        GhostChip(label = if (saving) "Syncing…" else "Sync", on = false) {
+            if (!saving) {
+                saving = true
+                scope.launch {
+                    try {
+                        t = app.repo.setTracking(
+                            titleId,
+                            status = status.takeIf { it.isNotEmpty() },
+                            progress = progress.toIntOrNull() ?: 0,
+                            score = score.takeIf { it.isNotEmpty() }?.toDoubleOrNull(),
+                        )
+                        toast("Tracking synced")
+                    } catch (e: Exception) {
+                        toast(e.message ?: "Tracking sync failed")
+                    } finally {
+                        saving = false
+                    }
+                }
             }
         }
         Text(
-            (tr.score?.takeIf { it > 0 }?.let { "%.0f".format(it) } ?: "–") + "/10",
+            "Syncs to " + tr.providers.joinToString(" + "),
             color = RenzoColors.MutedForeground,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
+
+/** Trims a whole-number score to "8" rather than "8.0" (web sends String(e.score)). */
+private fun formatScore(v: Double): String =
+    if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString()
 
 /** Web `.tp-ghost`: rounded-full 1dp bordered chip; `on` = primary text/border. */
 @Composable

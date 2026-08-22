@@ -1325,7 +1325,7 @@ private fun GhostIconButton(icon: ImageVector, onClick: () -> Unit) {
 
 /** shadcn Input (ui/input.tsx): h-9 rounded-md border bg-transparent px-3 text-sm. */
 @Composable
-private fun WebInput(
+internal fun WebInput(
     value: String,
     onChange: (String) -> Unit,
     placeholder: String,
@@ -1334,6 +1334,7 @@ private fun WebInput(
     readOnly: Boolean = false,
     mono: Boolean = false,
     email: Boolean = false,
+    numeric: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     Box(
@@ -1351,7 +1352,12 @@ private fun WebInput(
             singleLine = true,
             readOnly = readOnly,
             // Web email fields set inputMode="email".
-            keyboardOptions = if (email) KeyboardOptions(keyboardType = KeyboardType.Email) else KeyboardOptions.Default,
+            keyboardOptions = when {
+                email -> KeyboardOptions(keyboardType = KeyboardType.Email)
+                // Web `tracking-row.tsx:99,109` are <input type="number">.
+                numeric -> KeyboardOptions(keyboardType = KeyboardType.Number)
+                else -> KeyboardOptions.Default
+            },
             textStyle = TextStyle(
                 color = RenzoColors.Foreground,
                 fontSize = if (mono) 12.sp else 14.sp,
@@ -1374,7 +1380,7 @@ private fun WebInput(
 
 /** TvSelect translation: closed trigger + expanding option list. */
 @Composable
-private fun SelectBox(
+internal fun SelectBox(
     value: String,
     options: List<Pair<String, String>>,
     onSelect: (String) -> Unit,

@@ -1,8 +1,11 @@
 package top.levitatemedia.renzo.tv.api
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 /**
@@ -112,14 +115,49 @@ class Repo(val client: ApiClient) {
         return client.post("/api/titles/$id/provider", body.toString())
     }
 
-    suspend fun tracking(id: Int): Tracking = client.get("/api/titles/$id/tracking")
+    /**
+     * Parsed by hand rather than via [ApiClient.get] because the connected test
+     * is key PRESENCE, and kotlinx.serialization cannot distinguish an absent
+     * key from a present-null one — a distinction the server makes load-bearing
+     * (`tracker.ts:272`: "key present+null = connected but failed; absent = not
+     * connected").
+     */
+    private fun parseTracking(raw: String): Tracking {
+        val obj = client.json.parseToJsonElement(raw).jsonObject
+        fun entry(key: String): TrackEntry? =
+            obj[key]?.takeIf { it !is JsonNull }?.let { client.json.decodeFromJsonElement(it) }
+        return Tracking(
+            anilist = entry("anilist"),
+            mal = entry("mal"),
+            anilistConnected = obj.containsKey("anilist"),
+            malConnected = obj.containsKey("mal"),
+        )
+    }
 
-    suspend fun setTracking(id: Int, status: String? = null, score: Double? = null): Tracking {
+    suspend fun tracking(id: Int): Tracking = parseTracking(client.raw("/api/titles/$id/tracking"))
+
+    /**
+     * Status must be the server's lowercase vocabulary (`tracker.ts:254`
+     * TRACK_STATUSES) — the uppercase AniList enum is server-internal and is
+     * silently rejected by the `isTrackStatus` guard at `api.ts:1131`, which
+     * still answers 200.
+     *
+     * Note the server has no untrack path: `api.ts:1131` rejects the empty
+     * string, so selecting "— Not tracked —" cannot clear a remote list entry.
+     * That limitation is shared with the web, not Hub drift.
+     */
+    suspend fun setTracking(
+        id: Int,
+        status: String? = null,
+        progress: Int? = null,
+        score: Double? = null,
+    ): Tracking {
         val body = buildJsonObject {
             if (status != null) put("status", status)
+            if (progress != null) put("progress", progress)
             if (score != null) put("score", score)
         }
-        return client.post("/api/titles/$id/tracking", body.toString())
+        return parseTracking(client.raw("/api/titles/$id/tracking", "POST", body.toString()))
     }
 
     /** BLOCKS up to ~45s server-side while the debrid pipeline resolves. */

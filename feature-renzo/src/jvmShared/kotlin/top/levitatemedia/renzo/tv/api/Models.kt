@@ -355,14 +355,52 @@ data class FolderResult(val id: Int? = null, val folder: String = "")
 @Serializable
 data class ProviderResult(val id: Int? = null, val provider: String? = null)
 
-/** GET/POST /api/titles/:id/tracking — AniList/MAL status for this title. */
+/**
+ * One tracker's list entry (`tracker.ts:271 TrackEntry`, mirrored in the web's
+ * `lib/types.ts:325`).
+ */
 @Serializable
-data class Tracking(
+data class TrackEntry(
     val status: String? = null,
-    val progress: Int? = null,
-    val score: Double? = null,
-    val connected: Boolean = false,
+    val progress: Int = 0,
+    val score: Double = 0.0,
+    val total: Int? = null,
 )
+
+/**
+ * GET/POST /api/titles/:id/tracking — AniList/MAL status for this title.
+ *
+ * The server's shape is NESTED and per-tracker (`tracker.ts:272`):
+ * `{ anilist?: TrackEntry|null, mal?: TrackEntry|null }`. Key PRESENCE is the
+ * connected test, and a present-but-null value means "connected but the lookup
+ * failed" — which is why the two `*Connected` flags are carried separately
+ * instead of being derived from a null check. kotlinx.serialization cannot tell
+ * key-absent from key-present-null, so [Repo.tracking] parses this by hand and
+ * this class is deliberately NOT `@Serializable`.
+ *
+ * This previously declared a FLAT `(status, progress, score, connected)`. The
+ * server has never emitted any of those keys at that level, so with
+ * `ignoreUnknownKeys = true` every response decoded to all-defaults and
+ * `connected` was permanently false — the tracking row told every user to
+ * "Connect AniList or MAL in Settings" even with both linked.
+ */
+data class Tracking(
+    val anilist: TrackEntry? = null,
+    val mal: TrackEntry? = null,
+    val anilistConnected: Boolean = false,
+    val malConnected: Boolean = false,
+) {
+    val connected: Boolean get() = anilistConnected || malConnected
+
+    /** Display prefers AniList (web `tracking-row.tsx:46`). */
+    val entry: TrackEntry? get() = anilist ?: mal
+
+    /** Web `tracking-row.tsx:38-41`. */
+    val providers: List<String> get() = buildList {
+        if (anilistConnected) add("AniList")
+        if (malConnected) add("MyAnimeList")
+    }
+}
 
 /** Cumulative adult-content ladder, mirroring the web client. */
 object ContentLevel {
