@@ -361,11 +361,23 @@ private fun SignedInNavHost(
             "reader/{seriesId}/{chapter}",
             arguments = listOf(
                 navArgument("seriesId") { type = NavType.StringType },
-                navArgument("chapter") { type = NavType.FloatType },
+                navArgument("chapter") { type = NavType.StringType },
             ),
         ) { entry ->
             val seriesId = entry.arguments!!.read { getString("seriesId") }
-            val chapter = entry.arguments!!.read { getFloat("chapter") }.toDouble()
+            // Chapter numbers are decimals server-side (Chapter.Number is a C#
+            // decimal), so 22.2 must stay 22.2. NavType.FloatType round-tripped
+            // them through a 32-bit float, turning 22.2 into 22.200000762939453
+            // and making every `number ==` lookup miss for .1/.2/.3/.4/.6/.7/
+            // .8/.9 chapters ("Chapter not found."), as well as killing offline
+            // reads and corrupting reported progress. Navigation has no
+            // DoubleType, so the number rides as its exact decimal text
+            // (Double.toString/toDouble round-trips bit-for-bit). The -1.0
+            // fallback is deliberate: a malformed route lands on an honest
+            // "Chapter not found." rather than silently opening chapter 0,
+            // which can be a real prologue.
+            val chapter = entry.arguments!!.read { getStringOrNull("chapter") }
+                ?.toDoubleOrNull() ?: -1.0
             ReaderScreen(
                 seriesId = seriesId,
                 chapterNumber = chapter,
