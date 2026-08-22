@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -122,9 +123,13 @@ fun TitleScreen(
         error != null -> ErrorBox(error ?: "Failed to load title", onRetry = { reload++ })
         d == null -> LoadingBox(label = "Loading title…")
         else -> {
-            // Web grid: minmax(240px,1fr) — at phone width that's ONE tile
-            // per row; ~3 across on wide screens (ground truth).
-            val epCols = if (top.levitatemedia.renzo.tv.renzoScreenWidthDp() < 560) 1 else 3
+            // Web ep-grid: repeat(auto-fill, minmax(240px, 1fr)) with 18px
+            // column gaps, inside a centred body column. The web caps the body
+            // at 1180px; the Hub stretches to 1600 (user direction 2026-08-21:
+            // use more of the screen) — ~6 across on a full desktop window,
+            // down to 1 on a phone.
+            val bodyWidthDp = minOf(top.levitatemedia.renzo.tv.renzoScreenWidthDp() - 56, 1600)
+            val epCols = ((bodyWidthDp + 18) / 258).coerceAtLeast(1)
             val chunks = remember(d, epCols) { d.episodeList.chunked(epCols) }
             val todayIso = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
             var libBusy by remember { mutableStateOf(false) }
@@ -216,8 +221,7 @@ fun TitleScreen(
                 // 2. SEASON CHAIN ------------------------------------------
                 if (d.seasons.size > 1) {
                     item(key = "seasons") {
-                        Column(Modifier.fillMaxWidth()) {
-                            SectionHeading("Seasons")
+                        TitleBodyBox {
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                                 contentPadding = PaddingValues(end = 24.dp),
@@ -237,18 +241,81 @@ fun TitleScreen(
                 // 3. NEXT-UP banner ----------------------------------------
                 d.nextUp?.let { nu ->
                     item(key = "nextup") {
-                        NextUpBanner(nu, onClick = { onOpenTitle(nu.id) })
+                        TitleBodyBox { NextUpBanner(nu, onClick = { onOpenTitle(nu.id) }) }
                     }
                 }
 
                 // 4. EPISODES ----------------------------------------------
                 if (d.episodeList.isNotEmpty()) {
                     item(key = "eps-heading") {
-                        SectionHeading(
-                            "Episodes · ${watchedThrough.coerceIn(0, d.episodeList.size)}/${d.episodeList.size} watched",
-                        )
+                        TitleBodyBox {
+                            // Web season-header (episode-grid.tsx): "Season N
+                            // X of Y available" left, the season actions right.
+                            val airedCount = d.episodeList.count { !isUnaired(it, d, todayIso) }
+                            val fullyWatched = airedCount > 0 && watchedThrough >= airedCount
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "Season ${d.seasonNum ?: 1}",
+                                    color = RenzoColors.Foreground,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight(650),
+                                )
+                                Text(
+                                    "$airedCount of ${d.episodeList.size} available",
+                                    color = RenzoColors.MutedForeground,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(start = 8.dp).weight(1f),
+                                )
+                                PillButton(
+                                    label = if (fullyWatched) "✓ Season watched" else "Mark season watched",
+                                    filled = false,
+                                    onClick = {
+                                        if (!progressBusy) {
+                                            progressBusy = true
+                                            val target = if (fullyWatched) 0 else airedCount
+                                            scope.launch {
+                                                try {
+                                                    app.repo.setProgress(titleId, target)
+                                                    watchedThrough = target
+                                                } catch (e: ApiError) {
+                                                    if (e.status == 401) onSessionLost()
+                                                } catch (_: Exception) {
+                                                } finally {
+                                                    progressBusy = false
+                                                }
+                                            }
+                                        }
+                                    },
+                                )
+                                // Save season offline — local copies of every
+                                // episode the server holds. Never on TV, like
+                                // the web's offlineSupported gate.
+                                if (!app.isTv) {
+                                    Spacer(Modifier.width(8.dp))
+                                    PillButton(
+                                        label = "⤓ Save season offline",
+                                        filled = false,
+                                        onClick = {
+                                            app.prefs.serverUrl?.let { base ->
+                                                val nums = d.episodeList.filter { it.hasFile }.map { it.number }
+                                                if (nums.isNotEmpty()) {
+                                                    enqueueEpisodes(d, nums, base)
+                                                    offlineRevision++
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                     items(chunks.size, key = { "eps-row-$it" }) { i ->
+                        TitleBodyBox {
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -256,6 +323,7 @@ fun TitleScreen(
                             chunks[i].forEach { ep ->
                                 EpisodeTile(
                                     ep = ep,
+                                    seriesTitle = d.displayTitle,
                                     fallbackImage = ep.thumbnail ?: d.banner ?: d.poster,
                                     watched = ep.number <= watchedThrough,
                                     unaired = isUnaired(ep, d, todayIso),
@@ -297,35 +365,9 @@ fun TitleScreen(
                             }
                             repeat(epCols - chunks[i].size) { Spacer(Modifier.weight(1f)) }
                         }
-                    }
-
-                    // 5. Mark/unmark season --------------------------------
-                    item(key = "progress-action") {
-                        val fullyWatched = watchedThrough >= d.episodeList.size
-                        Row(Modifier.padding(top = 4.dp)) {
-                            PillButton(
-                                label = if (fullyWatched) "Unwatch season" else "Mark season watched",
-                                filled = false,
-                                onClick = {
-                                    if (!progressBusy) {
-                                        progressBusy = true
-                                        val target = if (fullyWatched) 0 else d.episodeList.size
-                                        scope.launch {
-                                            try {
-                                                app.repo.setProgress(titleId, target)
-                                                watchedThrough = target
-                                            } catch (e: ApiError) {
-                                                if (e.status == 401) onSessionLost()
-                                            } catch (_: Exception) {
-                                            } finally {
-                                                progressBusy = false
-                                            }
-                                        }
-                                    }
-                                },
-                            )
                         }
                     }
+
                 }
             }
         }
@@ -624,7 +666,7 @@ private fun SeasonCard(ref: SeasonRef, current: Boolean, onOpen: () -> Unit) {
             )
         }
         Text(
-            seasonLabel(ref),
+            seasonLabel(ref, current),
             color = if (current) RenzoColors.Foreground else RenzoColors.MutedForeground,
             fontSize = 11.5.sp,
             fontWeight = FontWeight.SemiBold,
@@ -635,9 +677,22 @@ private fun SeasonCard(ref: SeasonRef, current: Boolean, onOpen: () -> Unit) {
     }
 }
 
-private fun seasonLabel(ref: SeasonRef): String =
-    if (ref.kind == "movie") "Movie"
-    else "Season ${ref.num ?: 1}" + (ref.part?.takeIf { it > 1 }?.let { " Pt $it" } ?: "")
+/** Web seasonChip + the row's suffixes: "S1 · 2013 (this)", "OVA · 2023". */
+private fun seasonLabel(ref: SeasonRef, current: Boolean = false): String {
+    val chip = when {
+        ref.kind == "movie" -> "Movie"
+        ref.kind == "extra" -> when (ref.format?.uppercase()) {
+            "MOVIE" -> "Movie"
+            "OVA" -> "OVA"
+            "SPECIAL" -> "Special"
+            else -> "Special"
+        }
+        else -> "S${ref.num ?: 1}" + (ref.part?.takeIf { it > 1 }?.let { " Pt$it" } ?: "")
+    }
+    return chip +
+        (ref.year?.let { " · $it" } ?: "") +
+        (if (current) " (this)" else "")
+}
 
 // --- next-up banner ---------------------------------------------------------
 
@@ -678,9 +733,24 @@ private fun NextUpBanner(nextUp: SeasonRef, onClick: () -> Unit) {
 // --- episode tiles ----------------------------------------------------------
 
 /** Web ep-card: 16:9 thumb, badge bottom-right, watched strip, title + date. */
+/**
+ * Web .title-body, widened: everything below the hero sits in a CENTRED
+ * column — the web caps it at 1180px, the Hub at 1600dp (user direction
+ * 2026-08-21: fill more of the screen). Without a cap, episode tiles
+ * stretched into three giants across the whole desktop window.
+ */
+@Composable
+private fun TitleBodyBox(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = 1600.dp).fillMaxWidth(), content = content)
+    }
+}
+
 @Composable
 private fun EpisodeTile(
     ep: EpisodeInfo,
+    /** The web's .ep-series overline — the series name above every card. */
+    seriesTitle: String,
     fallbackImage: String?,
     watched: Boolean,
     unaired: Boolean,
@@ -775,22 +845,34 @@ private fun EpisodeTile(
                 )
             }
         }
+        // Web .ep-series: uppercase muted overline with the series name.
         Text(
-            "E${ep.number}" + (ep.epTitle?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
+            seriesTitle.uppercase(),
+            color = RenzoColors.MutedForeground,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.3.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 9.dp),
+        )
+        // Web .ep-title: "E{n} – {title}", falling back to "Episode n".
+        Text(
+            "E${ep.number} – " + (ep.epTitle?.takeIf { it.isNotBlank() } ?: "Episode ${ep.number}"),
             color = RenzoColors.Foreground,
             fontSize = 14.sp,
             fontWeight = FontWeight(650),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 7.dp),
+            modifier = Modifier.padding(top = 3.dp),
         )
-        // Web `.ep-foot`: air date left, ⋮ kebab right.
+        // Web `.ep-foot`: "Subtitled" left, ⋮ kebab right.
         Row(
             Modifier.fillMaxWidth().padding(top = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                ep.aired?.takeIf { it.isNotBlank() }?.take(10) ?: "",
+                "Subtitled",
                 color = RenzoColors.MutedForeground,
                 fontSize = 12.5.sp,
                 modifier = Modifier.weight(1f),
