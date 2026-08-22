@@ -65,7 +65,7 @@ fun UpdatesScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
             modifier = Modifier.padding(top = 2.dp),
         )
         when {
-            error != null -> ErrorBox(message = error!!, onRetry = { retryKey++ })
+            error != null -> ErrorBox(message = error!!, onRetry = { retryKey++ }, autoFocus = app.isTv)
             else -> {
                 val level = app.contentLevel.value
                 MediaGrid(

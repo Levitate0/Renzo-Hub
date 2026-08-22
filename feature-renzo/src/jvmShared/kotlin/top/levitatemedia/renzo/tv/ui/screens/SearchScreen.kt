@@ -172,7 +172,7 @@ fun SearchScreen(
             // the browse rows it replaced.
             ContentChips(app)
             when {
-                error != null -> ErrorBox(message = error!!, onRetry = { submit() })
+                error != null -> ErrorBox(message = error!!, onRetry = { submit() }, autoFocus = app.isTv)
                 searchedFor == null && !searching -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         if (app.isTv) "Type a title and press Search." else "Type in the search box above.",

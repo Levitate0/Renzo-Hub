@@ -124,7 +124,7 @@ fun TitleScreen(
 
     val d = detail
     when {
-        error != null -> ErrorBox(error ?: "Failed to load title", onRetry = { reload++ })
+        error != null -> ErrorBox(error ?: "Failed to load title", onRetry = { reload++ }, autoFocus = app.isTv)
         d == null -> LoadingBox(label = "Loading title…")
         else -> {
             // Web ep-grid: repeat(auto-fill, minmax(240px, 1fr)) with 18px

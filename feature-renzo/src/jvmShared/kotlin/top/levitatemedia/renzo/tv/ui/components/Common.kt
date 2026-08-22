@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
@@ -82,17 +85,43 @@ fun LoadingBox(modifier: Modifier = Modifier, label: String = "Loading…") {
     }
 }
 
+/**
+ * @param autoFocus move focus onto "Try again" as soon as the error appears.
+ *   Pass `app.isTv`.
+ */
 @Composable
 fun ErrorBox(
     message: String,
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,
+    autoFocus: Boolean = false,
 ) {
+    val retryFocus = remember { FocusRequester() }
+    // A TV has no pointer, so SOMETHING must hold focus or the D-pad has
+    // nowhere to go. This box replaces the whole screen's content, which
+    // destroys whatever was focused — leaving "Try again" unreachable and the
+    // screen a dead end until the app is restarted. That is what an AniList
+    // rate-limit looks like on a television: an error you cannot dismiss.
+    //
+    // Keyed on message rather than the lambda: onRetry is usually a lambda
+    // literal, so its identity changes on every recomposition and the effect
+    // would re-run (and re-steal focus) constantly.
+    LaunchedEffect(message, autoFocus, onRetry != null) {
+        if (autoFocus && onRetry != null) {
+            // Throws if the requester is not attached yet — same guard the
+            // player uses for its own fatal-error routing.
+            runCatching { retryFocus.requestFocus() }
+        }
+    }
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(message, color = RenzoColors.MutedForeground, fontSize = 14.sp)
             if (onRetry != null) {
-                PillButton(label = "Try again", onClick = onRetry)
+                PillButton(
+                    label = "Try again",
+                    onClick = onRetry,
+                    modifier = if (autoFocus) Modifier.focusRequester(retryFocus) else Modifier,
+                )
             }
         }
     }

@@ -107,7 +107,7 @@ fun HomeScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
     }
 
     if (error != null) {
-        ErrorBox(message = error!!, onRetry = { retryKey++ })
+        ErrorBox(message = error!!, onRetry = { retryKey++ }, autoFocus = app.isTv)
         return
     }
 

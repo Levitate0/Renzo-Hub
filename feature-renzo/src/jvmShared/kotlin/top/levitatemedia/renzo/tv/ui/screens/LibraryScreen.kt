@@ -159,7 +159,7 @@ fun LibraryScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
         ContentChips(app)
 
         when {
-            error != null -> ErrorBox(message = error!!, onRetry = { retryKey++ })
+            error != null -> ErrorBox(message = error!!, onRetry = { retryKey++ }, autoFocus = app.isTv)
             else -> {
                 val level = app.contentLevel.value
                 MediaGrid(
