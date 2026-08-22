@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Info
@@ -65,6 +66,8 @@ import androidx.compose.ui.zIndex
 import app.renzoshiori.client.data.network.ProviderExtendedDto
 import app.renzoshiori.client.data.network.absoluteUrl
 import app.renzoshiori.client.ui.theme.RenzoColors
+import androidx.compose.ui.platform.LocalUriHandler
+import app.renzoshiori.client.ui.home.dpadClickable
 import app.renzoshiori.client.ui.tv.LocalIsTv
 import coil3.compose.AsyncImage
 import kotlin.math.roundToInt
@@ -380,6 +383,11 @@ private fun ProviderCard(
     vm: SeriesDetailViewModel,
     onRequestDelete: () -> Unit,
 ) {
+    val uriHandler = LocalUriHandler.current
+    // The series' OWN page on this source, not the source's homepage — the
+    // backend fills it per SeriesProvider row (ModelExtensions.cs:339) and
+    // omits the key entirely when it is null, so it must stay optional.
+    val sourceUrl = provider.url?.takeIf { it.isNotBlank() }
     val isUnknown = provider.isUnknown
     val hasUnknownThumbnail = provider.thumbnailUrl?.lowercase()?.contains("unknown") == true
     val (statusText, statusColor) = providerStatusDisplay(provider.status)
@@ -471,12 +479,44 @@ private fun ProviderCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(
-                        provider.provider,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        color = RenzoColors.Foreground,
-                    )
+                    // Web parity (provider-card.tsx:227-238): the source name
+                    // is a link to where this series lives ON that source, so
+                    // the reorder card doubles as the way to go read it there.
+                    // The web signals it with a hover underline, which neither
+                    // a TV nor a touchscreen has — so the affordance is a
+                    // trailing OpenInNew glyph, exactly as the Library card
+                    // already does for the same field (LibraryScreen.kt:1246).
+                    if (sourceUrl != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .dpadClickable(radius = 4.dp, fill = null) {
+                                    app.renzoshiori.client.ui.util.openSourceUrl(uriHandler, sourceUrl)
+                                },
+                        ) {
+                            Text(
+                                provider.provider,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = RenzoColors.Primary,
+                            )
+                            Icon(
+                                Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = "Open ${provider.provider} in a browser",
+                                tint = RenzoColors.Primary,
+                                modifier = Modifier.size(11.dp),
+                            )
+                        }
+                    } else {
+                        Text(
+                            provider.provider,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = RenzoColors.Foreground,
+                        )
+                    }
                     if (provider.scanlator.isNotEmpty() && provider.scanlator != provider.provider) {
                         Text(
                             provider.scanlator.uppercase(),
