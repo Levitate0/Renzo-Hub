@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -30,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -68,6 +70,10 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
 
 /**
  * Title detail page — mirrors the web title page: hero banner + poster +
@@ -403,32 +409,62 @@ private fun TitleHero(
     val desc = remember(d.id) { cleanDescription(d.description) }
 
     val compact = top.levitatemedia.renzo.tv.renzoScreenWidthDp() < 768
+    // Web `.title-hero-name`: clamp(26px, 4vw, 46px). It was a flat 34sp, a
+    // quarter smaller than the web at desktop widths.
+    val heroTitleSp = (top.levitatemedia.renzo.tv.renzoScreenWidthDp() * 0.04f).coerceIn(26f, 46f)
     var descExpanded by remember { mutableStateOf(false) }
+    // Web: `min-height: min(58dvh, 560px)` (globals.css:4356). A FIXED height
+    // both cropped the banner harder than the web does and clipped the content
+    // stack as soon as the title wrapped to two lines — heightIn lets it grow
+    // the way min-height does.
+    val heroMinHeight = if (compact) 540.dp else (top.levitatemedia.renzo.tv.renzoScreenHeightDp() * 0.58f).coerceAtMost(560f).dp
     Box(
         Modifier
             .fillMaxWidth()
-            .height(if (compact) 540.dp else 340.dp)
+            .heightIn(min = heroMinHeight)
             .clip(RoundedCornerShape(16.dp))
-            .background(RenzoColors.Card),
+            .border(1.dp, RenzoColors.Border, RoundedCornerShape(16.dp))
+            // Web `.title-hero` sets no background — bare art over the page.
+            .background(RenzoColors.Background),
     ) {
         AsyncImage(
-            model = d.banner ?: d.poster,
+            // `?:` only catches null; the web's `d.banner || d.poster` also
+            // falls through on an empty string, which the server can emit.
+            model = d.banner?.takeIf { it.isNotBlank() } ?: d.poster?.takeIf { it.isNotBlank() },
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            // Web `background-position: center 20%` — banner art puts faces
+            // near the top, so a centred crop cuts them off.
+            alignment = BiasAlignment(0f, -0.6f),
             modifier = Modifier.matchParentSize(),
         )
-        // Vertical scrim: fade into the page background at the bottom.
-        Box(
-            Modifier
-                .matchParentSize()
-                .background(Brush.verticalGradient(0f to Color.Transparent, 1f to RenzoColors.Background)),
-        )
-        // Left scrim for text legibility (web hero parity).
+        // ONE web element, `.title-hero-scrim`, holds both gradients, and in
+        // CSS the FIRST layer paints on top — so the horizontal goes down
+        // first here and the vertical composites over it. The middle stops
+        // matter: without them the art was washed out through the middle of
+        // the frame and dimmed on the right, where the web leaves it clear
+        // from 76% onward.
         Box(
             Modifier
                 .matchParentSize()
                 .background(
-                    Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.78f), 1f to Color.Transparent),
+                    Brush.horizontalGradient(
+                        0.00f to Color.Black.copy(alpha = 0.78f),
+                        0.46f to Color.Black.copy(alpha = 0.36f),
+                        0.76f to Color.Transparent,
+                        1.00f to Color.Transparent,
+                    ),
+                ),
+        )
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.00f to Color.Black.copy(alpha = 0.28f),
+                        0.32f to Color.Black.copy(alpha = 0.06f),
+                        1.00f to RenzoColors.Background,
+                    ),
                 ),
         )
         if (compact) {
@@ -542,11 +578,15 @@ private fun TitleHero(
             }
             return@Box
         }
+        // Web `.title-hero-inner`: width min(1180px, 100%), centred, with
+        // 96/32/30 padding — not a full-bleed row with uniform 24.
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
         Row(
             Modifier
-                .align(Alignment.BottomStart)
+                .align(Alignment.BottomCenter)
+                .widthIn(max = 1180.dp)
                 .fillMaxWidth()
-                .padding(24.dp),
+                .padding(start = 32.dp, end = 32.dp, top = 96.dp, bottom = 30.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             AsyncImage(
@@ -554,22 +594,34 @@ private fun TitleHero(
                 contentDescription = d.displayTitle,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .width(120.dp)
+                    // Web `.title-hero-poster`: 158px wide with a deep drop
+                    // shadow (0 12px 40px rgba(0,0,0,.55)) over a --secondary
+                    // well. It was 120 and sitting on the near-black episode
+                    // thumbnail well, which made it read as a small detached
+                    // tile instead of the card overlapping the banner.
+                    .shadow(20.dp, RoundedCornerShape(12.dp))
+                    .width(158.dp)
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(RenzoColors.EpThumbWell),
+                    .background(RenzoColors.Secondary),
             )
-            Spacer(Modifier.width(20.dp))
-            Column(Modifier.weight(1f)) {
+            Spacer(Modifier.width(26.dp))
+            // Web caps the text column at 740px; without it the description
+            // ran the full width of a wide window.
+            Column(Modifier.weight(1f).widthIn(max = 740.dp)) {
                 androidx.compose.foundation.text.selection.SelectionContainer {
                 Text(
                     d.displayTitle,
                     color = RenzoColors.Foreground,
-                    fontSize = 34.sp,
+                    // Web `clamp(26px, 4vw, 46px)` with line-height 1.05.
+                    fontSize = heroTitleSp.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 38.sp,
+                    lineHeight = (heroTitleSp * 1.05f).sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    style = LocalTextStyle.current.copy(
+                        shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 2f), 20f),
+                    ),
                 )
                 }
                 // Metaline: TYPE · year · N ep · first 3 genres
@@ -579,11 +631,14 @@ private fun TitleHero(
                     modifier = Modifier.padding(top = 6.dp),
                 ) {
                     Text(
-                        (d.format ?: d.type).uppercase(),
+                        // Web shows SERIES / MOVIE (hero.tsx:101-105). This was
+                        // printing the raw AniList format, so it read "TV",
+                        // "TV_SHORT" or "ONA".
+                        if (d.type == "movie") "MOVIE" else "SERIES",
                         color = RenzoColors.Primary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
+                        letterSpacing = 0.4.sp,
                     )
                     val metaRest = (
                         listOfNotNull(
@@ -607,11 +662,33 @@ private fun TitleHero(
                         desc,
                         color = RenzoColors.Foreground.copy(alpha = 0.9f),
                         fontSize = 14.sp,
-                        lineHeight = 19.sp,
-                        maxLines = 3,
+                        // Web `.desc` is 14px/1.55.
+                        lineHeight = 21.7.sp,
+                        maxLines = if (descExpanded) Int.MAX_VALUE else 3,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 8.dp),
                     )
+                    }
+                    // The compact layout already had this; the wide one clamped
+                    // to 3 lines with no way to read the rest, leaving
+                    // descExpanded dead code on desktop. Web gates it on the
+                    // same >200 characters (hero.tsx:141).
+                    if (desc.length > 200) {
+                        var moreFocusedWide by remember { mutableStateOf(false) }
+                        Text(
+                            if (descExpanded) "Less" else "More details",
+                            color = RenzoColors.Primary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .padding(top = 6.dp)
+                                .focusRing(moreFocusedWide, 6.dp)
+                                .tvClickable(
+                                    onFocused = { moreFocusedWide = it },
+                                    onClick = { descExpanded = !descExpanded },
+                                )
+                                .padding(horizontal = 4.dp),
+                        )
                     }
                 }
                 Row(
@@ -639,6 +716,7 @@ private fun TitleHero(
                 DetailControls(app, d, downloadsDenied, Modifier.padding(top = 12.dp))
                 TrackingRow(app, d.id, Modifier.padding(top = 10.dp), revision = trackingRevision)
             }
+        }
         }
     }
 }
