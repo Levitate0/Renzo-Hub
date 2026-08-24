@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -49,38 +50,52 @@ fun EdgeHintScrollRow(
                 .focusGroup(),
             content = content,
         )
-        if (scroll.canScrollBackward) {
-            EdgeHint(left = true, modifier = Modifier.align(Alignment.CenterStart))
-        }
-        if (scroll.canScrollForward) {
-            EdgeHint(left = false, modifier = Modifier.align(Alignment.CenterEnd))
-        }
+        // matchParentSize (inside EdgeHint), NOT align + fillMaxHeight: a Box
+        // sizes itself to its largest child, and fillMaxHeight resolves to the
+        // INCOMING max height — the whole remaining column. The hint therefore
+        // stretched this Box to full screen height, which left the library grid
+        // below it with nothing, and parked the chevron at the vertical centre
+        // of the screen instead of beside the ribbon.
+        if (scroll.canScrollBackward) EdgeHint(left = true)
+        if (scroll.canScrollForward) EdgeHint(left = false)
     }
 }
 
+/**
+ * Purely decorative, so it must not influence the row's size.
+ *
+ * The outer Box takes [matchParentSize], which is measured AFTER the real
+ * content and so contributes nothing to the parent's height; the gradient strip
+ * inside then fills that resolved height. Sizing the strip directly with
+ * `fillMaxHeight()` made it as tall as the incoming constraints allowed and
+ * dragged the whole row with it.
+ */
 @Composable
-private fun EdgeHint(left: Boolean, modifier: Modifier) {
+private fun BoxScope.EdgeHint(left: Boolean) {
     val bg = RenzoColors.Background
-    Box(
-        contentAlignment = if (left) Alignment.CenterStart else Alignment.CenterEnd,
-        modifier = modifier
-            .fillMaxHeight()
-            .width(36.dp)
-            .background(
-                Brush.horizontalGradient(
-                    colors = if (left) {
-                        listOf(bg, bg.copy(alpha = 0f))
-                    } else {
-                        listOf(bg.copy(alpha = 0f), bg)
-                    },
+    Box(Modifier.matchParentSize()) {
+        Box(
+            contentAlignment = if (left) Alignment.CenterStart else Alignment.CenterEnd,
+            modifier = Modifier
+                .align(if (left) Alignment.CenterStart else Alignment.CenterEnd)
+                .fillMaxHeight()
+                .width(36.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = if (left) {
+                            listOf(bg, bg.copy(alpha = 0f))
+                        } else {
+                            listOf(bg.copy(alpha = 0f), bg)
+                        },
+                    ),
                 ),
-            ),
-    ) {
-        Icon(
-            if (left) Icons.Filled.ChevronLeft else Icons.Filled.ChevronRight,
-            contentDescription = null,
-            tint = RenzoColors.MutedForeground,
-            modifier = Modifier.width(18.dp),
-        )
+        ) {
+            Icon(
+                if (left) Icons.Filled.ChevronLeft else Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = RenzoColors.MutedForeground,
+                modifier = Modifier.width(18.dp),
+            )
+        }
     }
 }
