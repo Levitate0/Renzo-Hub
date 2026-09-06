@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -384,10 +385,14 @@ fun ChapterRow(
         else -> null
     }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
+    // A phone cannot fit the text AND six controls on one line: the chapter
+    // name and the "from <source>" line were both being truncated to make room.
+    // Below the sm breakpoint the actions move to their own line underneath, so
+    // the text gets the full width. TV is excluded — it has the room and the
+    // D-pad expects one horizontal run — matching how smRow is decided above.
+    val stacked = !LocalIsTv.current && screenWidthDp() < 640.dp
+
+    val rowModifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .clip(MaterialTheme.shapes.small)
@@ -404,8 +409,9 @@ fun ChapterRow(
             .tvClickable(onFocused = rowFocus::set) {
                 if (selecting) vm.toggleSelected(chapter.number) else onOpenChapter(chapter.number)
             }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-    ) {
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+
+    val leading: @Composable RowScope.() -> Unit = {
         if (selecting) {
             Icon(
                 if (selected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
@@ -492,7 +498,9 @@ fun ChapterRow(
                 }
             }
         }
+    }
 
+    val actions: @Composable RowScope.() -> Unit = {
         if (!selecting) {
             // Save offline (native-only) — phone icon once saved.
             if (isOffline) {
@@ -645,6 +653,30 @@ fun ChapterRow(
                     }
                 }
             }
+        }
+    }
+
+    if (stacked) {
+        Column(rowModifier) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) { leading() }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) { actions() }
+        }
+    } else {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = rowModifier,
+        ) {
+            leading()
+            actions()
         }
     }
 }
