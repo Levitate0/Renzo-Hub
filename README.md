@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/renzo-hub-banner.png" alt="Renzo Hub — mobile &amp; desktop, one hub" width="820">
+</p>
+
 # Renzo Hub
 
 One client for both halves of the Renzo ecosystem — **Renzo** (anime) and
@@ -120,3 +124,13 @@ Edits to any of them reach nobody. This is not hypothetical: on 2026-08-21 an
 18+ filter fix landed in the archived manga fork instead of the shipping client,
 leaving users with a 24-tag-short adult filter for five and a half hours. If a
 document tells you one of those trees is live, that document is stale.
+
+## Brand assets
+
+`docs/brand/` holds the source artwork:
+
+| File | Size | Use |
+|---|---|---|
+| `renzo-hub-banner.png` | 1280×640 | README header and the GitHub social preview |
+| `renzo-hub-wordmark.png` | 1236×702 | transparent lockup — login and splash banners |
+| `renzo-hub-icon.png` | 1024×1024 | transparent mark — app and launcher icon source |
