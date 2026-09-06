@@ -21,6 +21,22 @@ interface KeyValuePrefs {
     fun putFloat(key: String, value: Float)
     fun remove(key: String)
     fun keys(): Set<String>
+
+    /**
+     * Like [putString], but does not return until the value is durable.
+     *
+     * Android's SharedPreferences.apply() only writes to memory and queues the
+     * disk write; a process death before it lands loses it. That is fine for a
+     * card size or a resume position, and NOT fine for the server address or
+     * the session — losing those is what makes the app look like it forgot the
+     * server. The Shiori half already draws this distinction by hand
+     * (AndroidTokenStore uses commit() for exactly these two values); this is
+     * the same rule available through the shared seam.
+     *
+     * Defaults to [putString], which is already correct wherever writes are
+     * synchronous (the desktop .properties store).
+     */
+    fun putStringDurable(key: String, value: String?) = putString(key, value)
 }
 
 /** Open (or create) the named settings store. */

@@ -18,12 +18,16 @@ class Prefs {
     /** Normalized base URL ("https://host[:port]", no trailing slash) or null on first run. */
     var serverUrl: String?
         get() = p.getString("serverUrl", null)?.takeIf { it.isNotBlank() }
-        set(v) = p.putString("serverUrl", v?.trim()?.trimEnd('/'))
+        // Durable: an async write lost to a process kill is precisely what
+        // makes the app come back asking for the server address again.
+        set(v) = p.putStringDurable("serverUrl", v?.trim()?.trimEnd('/'))
 
     /** fsa_session cookie VALUE (opaque token). Replayed on every API/media request. */
     var sessionCookie: String?
         get() = p.getString("session", null)?.takeIf { it.isNotBlank() }
-        set(v) = p.putString("session", v)
+        // Durable for the same reason as serverUrl — and so a 401-driven
+        // clearSession() is not silently undone by a restart either.
+        set(v) = p.putStringDurable("session", v)
 
     /**
      * Adult-content ladder, device-local like the web client's localStorage

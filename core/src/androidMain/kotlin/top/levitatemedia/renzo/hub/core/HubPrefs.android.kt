@@ -22,5 +22,17 @@ private class SharedPrefsKeyValue(private val p: SharedPreferences) : KeyValuePr
     override fun getFloat(key: String, def: Float): Float = p.getFloat(key, def)
     override fun putFloat(key: String, value: Float) = p.edit().putFloat(key, value).apply()
     override fun remove(key: String) = p.edit().remove(key).apply()
+
+    /**
+     * commit(), not apply(): this blocks until the write reaches disk, so a
+     * task-swipe or a low-memory kill straight after login cannot lose it.
+     * Reserved for the few values worth the synchronous write — everything
+     * else keeps apply(), because these stores are also written on a ticker
+     * during playback and disk I/O there would show up as jank.
+     */
+    @Suppress("ApplySharedPref")
+    override fun putStringDurable(key: String, value: String?) {
+        p.edit().apply { if (value == null) remove(key) else putString(key, value) }.commit()
+    }
     override fun keys(): Set<String> = p.all.keys
 }

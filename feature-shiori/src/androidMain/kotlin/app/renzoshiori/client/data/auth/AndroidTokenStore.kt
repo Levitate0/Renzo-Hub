@@ -48,7 +48,11 @@ class AndroidTokenStore(context: Context) : TokenStore {
 
     override var accessToken: String?
         get() = secrets.getString(KEY_TOKEN, null)
-        set(value) = secrets.edit().putString(KEY_TOKEN, value).apply()
+        // commit(), for the same reason serverUrl uses it: these are written
+        // once at sign-in, and an apply() still queued when the process is
+        // killed is a sign-in the user has to repeat.
+        @Suppress("ApplySharedPref")
+        set(value) { secrets.edit().putString(KEY_TOKEN, value).commit() }
 
     override var serverUrl: String?
         get() = conn.getString(KEY_SERVER, null)
@@ -70,19 +74,50 @@ class AndroidTokenStore(context: Context) : TokenStore {
      */
     override var refreshCookie: String?
         get() = secrets.getString(KEY_REFRESH, null)
-        set(value) = secrets.edit().putString(KEY_REFRESH, value).apply()
+        @Suppress("ApplySharedPref")
+        set(value) { secrets.edit().putString(KEY_REFRESH, value).commit() }
 
     /**
      * Sign-out / expiry: drop the access token AND the remember-me cookie.
      * The server URL survives, so this lands on Login rather than Connect.
      */
+    @Suppress("ApplySharedPref")
     override fun clearSession() {
-        secrets.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).apply()
+        secrets.edit().remove(KEY_TOKEN).remove(KEY_REFRESH).commit()
     }
 
-    private fun openOrReset(context: Context): SharedPreferences = try {
-        open(context)
-    } catch (e: Throwable) {
+    private fun openOrReset(context: Context): SharedPreferences {
+        try {
+            return open(context)
+        } catch (first: Throwable) {
+            // NOT every failure means the store is corrupt, and the old code
+            // treated them all that way — deleting the prefs file and the
+            // master key on any Throwable at all.
+            //
+            // The Keystore is simply UNAVAILABLE while the device has not been
+            // unlocked since boot, and this class is constructed from the
+            // Application: a background start after a reboot (the download
+            // queue resuming, by design) lands here with credentials that are
+            // perfectly intact, and wiped them. That is the "sometimes signed
+            // out" report — it tracks reboots, not anything the user did.
+            if (!userUnlocked(context)) {
+                Log.w("TokenStore", "Keystore locked (pre-unlock boot) — NOT resetting; will reopen once unlocked", first)
+                return context.applicationContext.getSharedPreferences(FALLBACK_PREFS, Context.MODE_PRIVATE)
+            }
+            // One retry: EncryptedSharedPreferences.create can also lose a race
+            // with itself when two components open the same file at once.
+            runCatching { open(context) }.onSuccess { return it }
+            return reset(context, first)
+        }
+    }
+
+    /** True unless the device is still locked after a reboot (Direct Boot). */
+    private fun userUnlocked(context: Context): Boolean =
+        runCatching {
+            context.applicationContext.getSystemService(android.os.UserManager::class.java)?.isUserUnlocked
+        }.getOrNull() ?: true
+
+    private fun reset(context: Context, e: Throwable): SharedPreferences {
         Log.w("TokenStore", "Encrypted prefs unreadable — resetting; sign-in required", e)
         wasReset = true
         runCatching { context.deleteSharedPreferences(PREFS_NAME) }
@@ -94,7 +129,7 @@ class AndroidTokenStore(context: Context) : TokenStore {
         // If even a clean create fails, fall back to an in-memory-ish plain
         // store rather than crashing on launch. The session simply will not
         // persist, which is far better than an app that cannot start.
-        runCatching { open(context) }.getOrElse {
+        return runCatching { open(context) }.getOrElse {
             Log.e("TokenStore", "Encrypted prefs unavailable entirely — session will not persist", it)
             context.applicationContext.getSharedPreferences(FALLBACK_PREFS, Context.MODE_PRIVATE)
         }
