@@ -268,11 +268,19 @@ class Repo(val client: ApiClient) {
     suspend fun oauthStart(provider: String): OAuthStart =
         client.post("/api/account/oauth/$provider/start")
 
-    /** null while the auth-site flow is still pending (404 from the server). */
+    /**
+     * null while the auth-site flow is still pending.
+     *
+     * Pending is a 200 carrying `{pending:true}`, NOT a 404 — the previous
+     * comment here claimed otherwise and the code decoded into a type with a
+     * required `user`, so the ordinary "not yet" answer threw a deserialization
+     * error on the very first poll and the link could never complete. The 404
+     * arm is kept as belt-and-braces for an older server.
+     */
     suspend fun oauthPoll(provider: String, state: String): PublicUser? {
         val body = buildJsonObject { put("state", state) }
         return try {
-            client.post<LoginResponse>("/api/account/oauth/$provider/poll", body.toString()).user
+            client.post<OAuthPollResponse>("/api/account/oauth/$provider/poll", body.toString()).user
         } catch (e: ApiError) {
             if (e.status == 404) null else throw e
         }

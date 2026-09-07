@@ -45,6 +45,23 @@ data class MeResponse(
 @Serializable
 data class LoginResponse(val user: PublicUser)
 
+/**
+ * `/api/account/oauth/:provider/poll`, which answers 200 with TWO shapes:
+ * `{pending:true}` while the browser half of the flow is unfinished, and
+ * `{connected:true, user:{...}}` once it lands.
+ *
+ * Every field is optional for that reason. This was decoded as [LoginResponse]
+ * — whose `user` is required — so the FIRST poll, the one that is supposed to
+ * say "not yet", threw "Field 'user' is required ... missing at path: $" and
+ * surfaced as an error dialog over the Account screen instead of a wait.
+ */
+@Serializable
+data class OAuthPollResponse(
+    val pending: Boolean = false,
+    val connected: Boolean = false,
+    val user: PublicUser? = null,
+)
+
 /** One poster card — discover rows, library, updates, history all reuse it. */
 @Serializable
 data class CardItem(
