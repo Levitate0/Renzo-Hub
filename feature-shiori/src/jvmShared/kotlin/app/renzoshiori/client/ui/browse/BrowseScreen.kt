@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Visibility
@@ -71,6 +72,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -172,6 +174,10 @@ fun BrowseScreen(
     // persisted card size and has no size dropdown of its own.
     val cardWidth = remember { persistedCardWidth(isTv) }
     val selectedGenres = remember { mutableStateListOf<String>() }
+    // Negative tags — a row carrying any of these is dropped. Kept in its own
+    // list rather than signed onto selectedGenres: tag names are free text from
+    // a source, so no prefix is safely not part of a real tag.
+    val excludedGenres = remember { mutableStateListOf<String>() }
     // TV search draft — committed on the IME Search action (or a voice result)
     // rather than per keystroke, because every keystroke here is a live query
     // against every enabled source.
@@ -206,7 +212,12 @@ fun BrowseScreen(
         runCatching { api?.latestGenres() }.getOrNull()?.let { genresData = it }
     }
 
-    val genreSignature = selectedGenres.sorted().joinToString("|")
+    val activeTagCount = selectedGenres.size + excludedGenres.size
+
+    // "+" and "-" sides kept apart: moving a tag from included to excluded must
+    // read as a different filter and reset paging, not as the same one.
+    val genreSignature = selectedGenres.sorted().joinToString("|") +
+        "!" + excludedGenres.sorted().joinToString("|")
 
     // Reset pagination when filters change.
     LaunchedEffect(searchTerm, selectedSourceId, genreSignature) {
@@ -232,6 +243,7 @@ fun BrowseScreen(
                 sourceId = selectedSourceId.takeIf { it != "__ALL__" },
                 keyword = searchTerm.ifBlank { null },
                 genre = selectedGenres.toList().takeIf { it.isNotEmpty() },
+                excludeGenre = excludedGenres.toList().takeIf { it.isNotEmpty() },
             )
         }
             .onSuccess { page ->
@@ -434,10 +446,18 @@ fun BrowseScreen(
                         modifier = Modifier.size(16.dp),
                     )
                     Text(
-                        when (selectedGenres.size) {
-                            0 -> "Tags"
-                            1 -> "Tag: ${selectedGenres[0]}"
-                            else -> "Tags · ${selectedGenres.size}"
+                        // Mirrors cloud-latest/page.tsx's tagButtonLabel: a lone
+                        // tag reads better named than counted either way round,
+                        // and with both sides in play "Tags · 4" would hide that
+                        // three of them are exclusions.
+                        when {
+                            activeTagCount == 0 -> "Tags"
+                            activeTagCount == 1 && selectedGenres.size == 1 -> "Tag: ${selectedGenres[0]}"
+                            activeTagCount == 1 -> "Not: ${excludedGenres[0]}"
+                            selectedGenres.isNotEmpty() && excludedGenres.isNotEmpty() ->
+                                "Tags · ${selectedGenres.size} \u2212${excludedGenres.size}"
+                            selectedGenres.isNotEmpty() -> "Tags · ${selectedGenres.size}"
+                            else -> "Not · ${excludedGenres.size}"
                         },
                         style = MaterialTheme.typography.labelMedium,
                         color = RenzoColors.Foreground,
@@ -445,7 +465,7 @@ fun BrowseScreen(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = 8.dp),
                     )
-                    if (selectedGenres.isNotEmpty()) {
+                    if (activeTagCount > 0) {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
@@ -455,7 +475,7 @@ fun BrowseScreen(
                                 .padding(horizontal = 6.dp, vertical = 1.dp),
                         ) {
                             Text(
-                                selectedGenres.size.toString(),
+                                activeTagCount.toString(),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
@@ -488,6 +508,7 @@ fun BrowseScreen(
                                 genres = genresData,
                                 hideAdult = hideAdult,
                                 selected = selectedGenres,
+                                excluded = excludedGenres,
                                 listMaxHeight = 288.dp,
                             )
                         }
@@ -496,8 +517,8 @@ fun BrowseScreen(
             }
         }
 
-        // Selected-tag chips + Clear.
-        if (selectedGenres.isNotEmpty()) {
+        // Selected-tag chips + Clear. Included first, then excluded.
+        if (activeTagCount > 0) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -549,6 +570,60 @@ fun BrowseScreen(
                         )
                     }
                 }
+                excludedGenres.toList().forEach { name ->
+                    // Same chip, red-tinted and struck through — a chip row that
+                    // only listed names would make "Romance" and "not Romance"
+                    // identical.
+                    val chipFocus = rememberFocusState()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .border(1.dp, RenzoColors.Red.copy(alpha = 0.4f), RoundedCornerShape(50))
+                            .background(RenzoColors.Red.copy(alpha = 0.12f))
+                            .then(
+                                if (isTv) {
+                                    Modifier
+                                        .focusRing(chipFocus.focused, 50.dp)
+                                        .tvClickable(
+                                            onFocused = chipFocus::set,
+                                            onClick = { excludedGenres.remove(name) },
+                                        )
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .padding(start = 8.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Remove,
+                            contentDescription = null,
+                            tint = RenzoColors.Red,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            name,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                textDecoration = TextDecoration.LineThrough,
+                            ),
+                            color = if (isTv && chipFocus.focused) RenzoColors.Primary else RenzoColors.Red,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Stop excluding $name",
+                            tint = RenzoColors.Red.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .size(14.dp)
+                                .then(
+                                    if (isTv) Modifier else Modifier.clickable { excludedGenres.remove(name) },
+                                ),
+                        )
+                    }
+                }
                 val clearFocus = rememberFocusState()
                 Text(
                     "Clear",
@@ -562,10 +637,16 @@ fun BrowseScreen(
                                     .focusRing(clearFocus.focused, 4.dp)
                                     .tvClickable(
                                         onFocused = clearFocus::set,
-                                        onClick = { selectedGenres.clear() },
+                                        onClick = {
+                                            selectedGenres.clear()
+                                            excludedGenres.clear()
+                                        },
                                     )
                             } else {
-                                Modifier.clickable { selectedGenres.clear() }
+                                Modifier.clickable {
+                                    selectedGenres.clear()
+                                    excludedGenres.clear()
+                                }
                             },
                         )
                         .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -687,6 +768,7 @@ fun BrowseScreen(
             genres = genresData,
             hideAdult = hideAdult,
             selected = selectedGenres,
+            excluded = excludedGenres,
             onDismiss = { tagPopoverOpen = false },
         )
     }
@@ -895,6 +977,7 @@ private fun TagFilterDialog(
     genres: List<LatestGenreDto>?,
     hideAdult: Boolean,
     selected: MutableList<String>,
+    excluded: MutableList<String>,
     onDismiss: () -> Unit,
 ) {
     ScrimDialog(onDismiss = onDismiss) {
@@ -913,6 +996,7 @@ private fun TagFilterDialog(
                 genres = genres,
                 hideAdult = hideAdult,
                 selected = selected,
+                excluded = excluded,
                 listMaxHeight = 380.dp,
             )
         }
@@ -929,6 +1013,7 @@ private fun TagFilterBody(
     genres: List<LatestGenreDto>?,
     hideAdult: Boolean,
     selected: MutableList<String>,
+    excluded: MutableList<String>,
     /** max-h-72 (288dp) in the desktop popover; taller in the dialog. */
     listMaxHeight: Dp,
 ) {
@@ -1013,8 +1098,25 @@ private fun TagFilterBody(
                     .verticalScroll(rememberScrollState()),
             ) {
                 filtered.forEach { g ->
-                    val isChecked = selected.contains(g.name)
+                    val isIncluded = selected.contains(g.name)
+                    val isExcluded = excluded.contains(g.name)
                     val rowFocus = rememberFocusState()
+                    // neutral -> include -> exclude -> neutral, matching the
+                    // web's cycleGenre. The lists are kept mutually exclusive
+                    // here: "must have X and must not have X" can only ever
+                    // return nothing, and the server would honour it faithfully
+                    // while the user saw an empty page with no clue why.
+                    val cycle = {
+                        when {
+                            !isIncluded && !isExcluded -> selected.add(g.name)
+                            isIncluded -> {
+                                selected.remove(g.name)
+                                excluded.add(g.name)
+                            }
+                            else -> excluded.remove(g.name)
+                        }
+                        Unit
+                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -1029,18 +1131,10 @@ private fun TagFilterBody(
                                         onFocused = rowFocus::set,
                                         radius = 8.dp,
                                         fill = RenzoColors.Card,
-                                        onClick = {
-                                            if (isChecked) {
-                                                selected.remove(g.name)
-                                            } else {
-                                                selected.add(g.name)
-                                            }
-                                        },
+                                        onClick = cycle,
                                     )
                                 } else {
-                                    Modifier.clickable {
-                                        if (isChecked) selected.remove(g.name) else selected.add(g.name)
-                                    }
+                                    Modifier.clickable(onClick = cycle)
                                 },
                             )
                             .padding(horizontal = 10.dp, vertical = if (isTv) 12.dp else 8.dp),
@@ -1052,14 +1146,24 @@ private fun TagFilterBody(
                                 .clip(RoundedCornerShape(3.dp))
                                 .border(
                                     1.dp,
-                                    if (isChecked) RenzoColors.Primary else RenzoColors.Border,
+                                    when {
+                                        isIncluded -> RenzoColors.Primary
+                                        isExcluded -> RenzoColors.Red
+                                        else -> RenzoColors.Border
+                                    },
                                     RoundedCornerShape(3.dp),
                                 )
-                                .background(if (isChecked) RenzoColors.Primary else Color.Transparent),
+                                .background(
+                                    when {
+                                        isIncluded -> RenzoColors.Primary
+                                        isExcluded -> RenzoColors.Red
+                                        else -> Color.Transparent
+                                    },
+                                ),
                         ) {
-                            if (isChecked) {
+                            if (isIncluded || isExcluded) {
                                 Icon(
-                                    Icons.Filled.Check,
+                                    if (isIncluded) Icons.Filled.Check else Icons.Filled.Remove,
                                     contentDescription = null,
                                     tint = RenzoColors.PrimaryForeground,
                                     modifier = Modifier.size(11.dp),
@@ -1068,11 +1172,15 @@ private fun TagFilterBody(
                         }
                         Text(
                             g.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isTv) {
-                                tvContentColor(isChecked, rowFocus.focused)
-                            } else {
-                                RenzoColors.Foreground
+                            style = MaterialTheme.typography.bodyMedium.let {
+                                // Struck through when excluded, so "Romance" and
+                                // "not Romance" are not the same row of text.
+                                if (isExcluded) it.copy(textDecoration = TextDecoration.LineThrough) else it
+                            },
+                            color = when {
+                                isExcluded -> RenzoColors.MutedForeground
+                                isTv -> tvContentColor(isIncluded, rowFocus.focused)
+                                else -> RenzoColors.Foreground
                             },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

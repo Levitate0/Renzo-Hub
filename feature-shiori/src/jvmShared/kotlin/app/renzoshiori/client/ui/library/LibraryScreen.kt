@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -530,6 +532,53 @@ private fun LibraryRibbon(
             placeholder = "All Sources",
             triggerWidth = if (sm) 192.dp else 128.dp,
         )
+
+        // 18+ visibility, immediately after Sources — same chip and same
+        // position as Browse (BrowseScreen ribbon, and library/page.tsx on the
+        // web). AdultFilter is a process-wide flag, so toggling it here is felt
+        // on Browse and in the account menu too. The amber fill/border is the
+        // STATE (18+ shown) and stays put while the cursor moves; the ring is
+        // only ever focus.
+        val adultFocus = rememberFocusState()
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .height(if (isTvRibbon) 40.dp else 32.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .border(
+                    1.dp,
+                    if (hideAdult) RenzoColors.Border else RenzoColors.Amber.copy(alpha = 0.5f),
+                    RoundedCornerShape(8.dp),
+                )
+                .background(if (hideAdult) RenzoColors.Card else RenzoColors.Amber.copy(alpha = 0.12f))
+                .then(
+                    if (isTvRibbon) {
+                        Modifier
+                            .focusRing(adultFocus.focused, 8.dp)
+                            .tvClickable(
+                                onFocused = adultFocus::set,
+                                onClick = { AdultFilter.setHidden(!hideAdult) },
+                            )
+                    } else {
+                        Modifier.clickable { AdultFilter.setHidden(!hideAdult) }
+                    },
+                )
+                .padding(horizontal = 10.dp),
+        ) {
+            Icon(
+                if (hideAdult) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                contentDescription = null,
+                tint = if (hideAdult) RenzoColors.MutedForeground else RenzoColors.Amber,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                if (hideAdult) "18+ Hidden" else "18+ Shown",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (hideAdult) RenzoColors.Foreground else RenzoColors.Amber,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+        }
 
         // Right cluster: My library / sort / card size / Track all / Add Series —
         // right-aligned on a wide window (the web pushes it with ml-auto).

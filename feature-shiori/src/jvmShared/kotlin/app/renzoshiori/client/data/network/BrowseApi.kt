@@ -24,7 +24,12 @@ interface BrowseApi {
     @GET("api/search/sources")
     suspend fun searchSources(): List<SearchSourceDto>
 
-    /** The cached cross-source "latest" catalogue. `genre` repeats per tag. */
+    /**
+     * The cached cross-source "latest" catalogue. `genre` repeats per tag, and
+     * so does `excludeGenre` — a row must carry every `genre` and none of the
+     * `excludeGenre`s. The two are separate params rather than one signed list
+     * because tag names are free text from a source and may start with "-".
+     */
     @GET("api/serie/latest")
     suspend fun latest(
         @Query("start") start: Int,
@@ -32,6 +37,7 @@ interface BrowseApi {
         @Query("sourceId") sourceId: String? = null,
         @Query("keyword") keyword: String? = null,
         @Query("genre") genre: List<String>? = null,
+        @Query("excludeGenre") excludeGenre: List<String>? = null,
     ): List<LatestSeriesRowDto>
 
     /** Distinct tags in the cached catalogue, with counts (tag filter popover). */
