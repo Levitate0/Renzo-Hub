@@ -239,7 +239,6 @@ data class SetCategoryResultDto(
 /** Only the settings slice the series page reads. */
 @Serializable
 data class SeriesDetailSettingsDto(
-    val readerEnabled: Boolean = true,
     val categorizedFolders: Boolean = true,
     val categories: List<String> = emptyList(),
 )

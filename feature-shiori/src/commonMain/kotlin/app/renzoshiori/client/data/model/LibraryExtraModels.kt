@@ -60,7 +60,6 @@ data class FavoriteListDto(
 data class SettingsLiteDto(
     val categorizedFolders: Boolean = false,
     val categories: List<String> = emptyList(),
-    val readerEnabled: Boolean = true,
 )
 
 /** Mirrors ScrobblerConfig — only what the Track-all button needs. */

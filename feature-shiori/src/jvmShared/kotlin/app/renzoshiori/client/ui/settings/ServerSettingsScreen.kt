@@ -592,15 +592,6 @@ private fun ColumnScope.ContentPreferencesSection(
         update(s.copy(nsfwVisibility = NsfwVisibility.SHOW))
     }
 
-    CardDivider()
-    SwitchRow(
-        checked = s.readerEnabled != false,
-        onCheckedChange = { update(s.copy(readerEnabled = it)) },
-        label = "Built-in Reader",
-        hint = "Read downloaded chapters in the browser (smart webtoon/long-strip/paged modes, " +
-            "progress tracking, bookmarks) and preview Browse series without downloading. " +
-            "Turning this off hides all Read buttons.",
-    )
 
     CardDivider()
     SwitchRow(

@@ -66,7 +66,6 @@ data class ServerSettingsDto(
     val smtpPassword: String? = null,
     val smtpUseSsl: Boolean? = null,
     val smtpFromAddress: String? = null,
-    val readerEnabled: Boolean? = null,
     val downloadAllChapters: Boolean? = null,
     val libraryScanIntervalHours: Int? = null,
     val storageFolder: String? = null,

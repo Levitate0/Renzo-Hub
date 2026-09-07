@@ -141,7 +141,6 @@ data class SeriesDetailUiState(
     val canEdit: Boolean = false,
     val canDelete: Boolean = false,
     val canManageDownloads: Boolean = false,
-    val readerEnabled: Boolean = true,
     val categories: List<String> = emptyList(),
     val defaultSourcePriorityOrder: List<String> = emptyList(),
 
@@ -290,7 +289,6 @@ class SeriesDetailViewModel(
                 canEdit = canManage,
                 canDelete = canManage,
                 canManageDownloads = canManage,
-                readerEnabled = settings.readerEnabled,
                 categories = if (settings.categorizedFolders) settings.categories else emptyList(),
                 defaultSourcePriorityOrder = defaults,
             )

@@ -288,7 +288,7 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                             scope.launch {
                                 val api = app.network.currentServiceOf<ScrobblerApi>()
                                 runCatching {
-                                    api?.updateConfig(config.provider, ScrobblerConfigUpdateDto(isEnabled = next))
+                                    api?.updateConfig(config.provider, ScrobblerConfigUpdateDto(isEnabled = next))?.orThrow()
                                 }.onFailure { snackbar.showSnackbar(it.apiMessage("Couldn't update the tracker")) }
                                 refresh()
                             }
@@ -310,7 +310,7 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                             scope.launch {
                                 val api = app.network.currentServiceOf<ScrobblerApi>()
                                 runCatching {
-                                    api?.updateConfig(config.provider, ScrobblerConfigUpdateDto(autoSync = next))
+                                    api?.updateConfig(config.provider, ScrobblerConfigUpdateDto(autoSync = next))?.orThrow()
                                 }.onFailure { snackbar.showSnackbar(it.apiMessage("Couldn't update the tracker")) }
                                 refresh()
                             }
@@ -336,7 +336,7 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                         onClick = {
                             scope.launch {
                                 val api = app.network.currentServiceOf<ScrobblerApi>()
-                                runCatching { api?.disconnect(scrobblerRouteName(config.provider)) }
+                                runCatching { api?.disconnect(scrobblerRouteName(config.provider))?.orThrow() }
                                     .onFailure { snackbar.showSnackbar(it.apiMessage("Disconnect failed")) }
                                 refresh()
                             }
@@ -451,7 +451,7 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                                 onClick = {
                                     scope.launch {
                                         val api = app.network.currentServiceOf<ScrobblerApi>()
-                                        runCatching { api?.comicVineApiKey(ComicVineApiKeyDto(comicVineApiKey.trim())) }
+                                        runCatching { api?.comicVineApiKey(ComicVineApiKeyDto(comicVineApiKey.trim()))?.orThrow() }
                                             .onSuccess { comicVineApiKey = "" }
                                             .onFailure { snackbar.showSnackbar(it.apiMessage("Couldn't save the API key")) }
                                         refresh()
@@ -923,7 +923,7 @@ private fun SeriesMatchDialog(
                                                 externalSeriesId = result.externalId,
                                                 externalSeriesTitle = result.title,
                                             ),
-                                        )
+                                        )?.orThrow()
                                     }
                                         .onSuccess { onConfirmed() }
                                         .onFailure { snackbar.showSnackbar(it.apiMessage("Couldn't save the match")) }

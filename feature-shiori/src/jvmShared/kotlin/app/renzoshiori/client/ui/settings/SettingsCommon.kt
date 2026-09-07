@@ -77,6 +77,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import retrofit2.HttpException
+import retrofit2.Response
 
 /**
  * Transliterations of the web app's shadcn primitives (card.tsx, input.tsx,
@@ -868,6 +869,20 @@ private val errorJson = Json { ignoreUnknownKeys = true }
  * generic "request failed" is the whole reason a user can tell a wrong password
  * from an expired session.
  */
+/**
+ * Turn a non-2xx [Response] into the [HttpException] the rest of this file
+ * already knows how to report.
+ *
+ * Retrofit throws for a non-2xx ONLY when the method's return type is the body.
+ * The scrobbler endpoints return `Response<ResponseBody>`, so a 400/401/500
+ * arrives as a perfectly ordinary value: `runCatching` reports success,
+ * `.onFailure` never runs, and the screen refreshes as though the write had
+ * landed. Pressing Disconnect and watching nothing happen — with no error —
+ * is that bug wearing a UI.
+ */
+fun <T> Response<T>.orThrow(): Response<T> =
+    if (isSuccessful) this else throw HttpException(this)
+
 fun Throwable.apiMessage(fallback: String): String {
     if (this is HttpException) {
         val body = runCatching { response()?.errorBody()?.string() }.getOrNull()

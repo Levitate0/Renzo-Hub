@@ -194,7 +194,7 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
                         onClick = { vm.saveOffline(state.chapters.filter { it.downloaded }) },
                     )
                 }
-                if (state.readerEnabled && state.total > 0) {
+                if (state.total > 0) {
                     RenzoChip(
                         label = "Mark all read",
                         icon = Icons.Filled.DoneAll,
@@ -202,7 +202,7 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
                         onClick = { vm.markAllRead() },
                     )
                 }
-                if (state.readerEnabled && state.total > 0) {
+                if (state.total > 0) {
                     RenzoChip(
                         label = "Select",
                         icon = Icons.Filled.PlaylistAddCheck,
@@ -272,20 +272,19 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
                         icon = Icons.Filled.SwapHoriz,
                         onClick = { vm.invertSelection() },
                     )
-                    if (state.readerEnabled) {
-                        RenzoChip(
-                            label = "Mark read",
-                            icon = Icons.Filled.DoneAll,
-                            enabled = state.selected.isNotEmpty() && !state.bulkPending,
-                            onClick = { vm.bulkMark(true) },
-                        )
-                        RenzoChip(
-                            label = "Mark unread",
-                            icon = Icons.Outlined.Circle,
-                            enabled = state.selected.isNotEmpty() && !state.bulkPending,
-                            onClick = { vm.bulkMark(false) },
-                        )
-                    }
+                                        RenzoChip(
+                        label = "Mark read",
+                        icon = Icons.Filled.DoneAll,
+                        enabled = state.selected.isNotEmpty() && !state.bulkPending,
+                        onClick = { vm.bulkMark(true) },
+                    )
+                    RenzoChip(
+                        label = "Mark unread",
+                        icon = Icons.Outlined.Circle,
+                        enabled = state.selected.isNotEmpty() && !state.bulkPending,
+                        onClick = { vm.bulkMark(false) },
+                    )
+                
                     if (state.canManageDownloads) {
                         RenzoChip(
                             label = "Download",
@@ -520,31 +519,30 @@ fun ChapterRow(
             }
 
             // Read / unread toggle.
-            if (state.readerEnabled) {
-                SquareIconButton(
-                    icon = if (chapter.isCompleted) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-                    contentDescription = if (chapter.isCompleted) "Mark as unread" else "Mark as read",
-                    tint = if (chapter.isCompleted) Emerald500 else Muted.copy(alpha = 0.5f),
-                    borderColor = Color.Transparent,
-                    background = Color.Transparent,
-                    enabled = !readPending,
-                    onClick = { vm.toggleRead(chapter.number, !chapter.isCompleted) },
-                )
+                        SquareIconButton(
+                icon = if (chapter.isCompleted) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                contentDescription = if (chapter.isCompleted) "Mark as unread" else "Mark as read",
+                tint = if (chapter.isCompleted) Emerald500 else Muted.copy(alpha = 0.5f),
+                borderColor = Color.Transparent,
+                background = Color.Transparent,
+                enabled = !readPending,
+                onClick = { vm.toggleRead(chapter.number, !chapter.isCompleted) },
+            )
 
-                // Bookmark toggle — beside the read toggle and behaving the
-                // same way: the icon IS the control, so the state is readable
-                // at a glance and one click away (chapter-row.tsx; the passive
-                // marker that used to sit in the title line is gone).
-                SquareIconButton(
-                    icon = Icons.Filled.Bookmark,
-                    contentDescription = if (chapter.bookmarked) "Remove bookmark" else "Bookmark chapter",
-                    tint = if (chapter.bookmarked) Pink500 else Muted.copy(alpha = 0.5f),
-                    borderColor = Color.Transparent,
-                    background = Color.Transparent,
-                    enabled = chapter.number !in state.bookmarkPending,
-                    onClick = { vm.toggleBookmark(chapter.number, !chapter.bookmarked) },
-                )
-            }
+            // Bookmark toggle — beside the read toggle and behaving the
+            // same way: the icon IS the control, so the state is readable
+            // at a glance and one click away (chapter-row.tsx; the passive
+            // marker that used to sit in the title line is gone).
+            SquareIconButton(
+                icon = Icons.Filled.Bookmark,
+                contentDescription = if (chapter.bookmarked) "Remove bookmark" else "Bookmark chapter",
+                tint = if (chapter.bookmarked) Pink500 else Muted.copy(alpha = 0.5f),
+                borderColor = Color.Transparent,
+                background = Color.Transparent,
+                enabled = chapter.number !in state.bookmarkPending,
+                onClick = { vm.toggleBookmark(chapter.number, !chapter.bookmarked) },
+            )
+        
 
             // (Re-)download split button.
             if (state.canManageDownloads && !chapter.locked) {

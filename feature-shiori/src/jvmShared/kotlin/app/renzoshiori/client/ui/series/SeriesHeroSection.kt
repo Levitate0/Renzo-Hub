@@ -384,7 +384,7 @@ fun SeriesHeroSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(top = 4.dp),
             ) {
-                if (state.readerEnabled && readTarget != null) {
+                if (readTarget != null) {
                     HeroActionButton(
                         icon = Icons.Filled.MenuBook,
                         contentDescription = "${readTarget.label} — chapter ${formatNumber(readTarget.number)}",
