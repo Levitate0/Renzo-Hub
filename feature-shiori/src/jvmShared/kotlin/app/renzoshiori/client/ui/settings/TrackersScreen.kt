@@ -496,14 +496,29 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                                             }
                                         }
                                         connecting = null
+                                        // Reflect the server's state FIRST. This used to sit
+                                        // after the two calls below, so the card kept showing
+                                        // "Disconnected" until a full-library auto-match had
+                                        // finished — one rate-limited AniList search per
+                                        // unmatched series, minutes on a large library — and
+                                        // then until the snackbar had timed out, since
+                                        // showSnackbar suspends. The connection was already
+                                        // live the whole time; only the UI disagreed, which is
+                                        // why relaunching "fixed" it (startup calls refresh()
+                                        // directly).
+                                        refresh()
                                         if (connected) {
-                                            runCatching { api?.autoMatchAll(config.provider) }
-                                            runCatching { api?.triggerSync() }
+                                            // Best-effort follow-ups, off the path that updates
+                                            // the UI. Both are long and neither changes what the
+                                            // card says.
+                                            scope.launch {
+                                                runCatching { api?.autoMatchAll(config.provider) }
+                                                runCatching { api?.triggerSync() }
+                                            }
                                             snackbar.showSnackbar("${config.displayName} connected.")
                                         } else {
                                             snackbar.showSnackbar("${config.displayName} didn't finish connecting in time.")
                                         }
-                                        refresh()
                                     }
                                 }
                             },
