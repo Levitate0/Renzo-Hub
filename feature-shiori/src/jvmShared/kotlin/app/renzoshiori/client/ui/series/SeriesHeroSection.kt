@@ -54,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,8 +97,16 @@ fun SeriesHeroSection(
     onOpenChapter: (Double) -> Unit,
     onRequestDeleteSeries: () -> Unit,
 ) {
+    // Declared ABOVE the early return below: a `remember` that sits after a
+    // `?: return` lives in a conditional region, so the moment the guard trips
+    // every value under it is dropped and silently starts over.
+    // rememberSaveable, not remember: on the narrow layout this hero is a
+    // LazyColumn item, and a plain remember dies when the item scrolls out of
+    // view — expand it, scroll past, come back, and it has collapsed itself.
+    // Keyed on the series id so opening a DIFFERENT series starts collapsed,
+    // while the 10s/20s background re-pulls of the SAME series do not disturb it.
+    var descriptionExpanded by rememberSaveable(state.series?.id) { mutableStateOf(false) }
     val series = state.series ?: return
-    var descriptionExpanded by remember { mutableStateOf(false) }
     var coverExpanded by remember { mutableStateOf(false) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
@@ -314,9 +323,14 @@ fun SeriesHeroSection(
                             color = Muted,
                             maxLines = if (descriptionExpanded) Int.MAX_VALUE else 3,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = if (descriptionExpanded) {
-                                Modifier.heightIn(max = 256.dp).verticalScroll(rememberScrollState())
-                            } else Modifier,
+                            // Expanded means expanded. This used to drop the text
+                            // into a 256dp box with its own scrollbar, so "Read
+                            // more" showed the description in full for a moment
+                            // and then clipped it to a few lines more than it had
+                            // before — and every later expand went straight to the
+                            // clipped version. On the narrow layout that inner
+                            // scroller also sat inside the page's own vertical
+                            // scroll, so dragging the description fought the list.
                         )
                     }
                     if (series.description.length > 240) {
