@@ -58,6 +58,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.model.NsfwVisibility
+import app.renzoshiori.client.data.model.ContentPreferencesDto
 import app.renzoshiori.client.data.model.ServerSettingsDto
 import app.renzoshiori.client.data.model.TestEmailRequestDto
 import app.renzoshiori.client.data.network.ServerSettingsApi
@@ -87,6 +88,8 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
 
     var settings by remember { mutableStateOf<ServerSettingsDto?>(null) }
+    // Per-user, and loaded separately from the server-wide blob above.
+    var contentPrefs by remember { mutableStateOf<ContentPreferencesDto?>(null) }
     var languages by remember { mutableStateOf<List<String>>(emptyList()) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -98,6 +101,7 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
             .onSuccess { settings = it }
             .onFailure { loadError = it.apiMessage("Failed to load settings") }
         languages = runCatching { api?.languages() }.getOrNull() ?: emptyList()
+        contentPrefs = runCatching { api?.contentPreferences() }.getOrNull()
     }
 
     val sections = listOf(
@@ -177,8 +181,13 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
                                 saving = true
                                 scope.launch {
                                     runCatching {
-                                        app.network.currentServiceOf<ServerSettingsApi>()
-                                            ?.updateSettings(current)
+                                        val api = app.network.currentServiceOf<ServerSettingsApi>()
+                                        // The user's own preferences first: a
+                                        // failure saving the server-wide blob
+                                        // must not leave them believing their
+                                        // personal choices were stored.
+                                        contentPrefs?.let { api?.updateContentPreferences(it) }
+                                        api?.updateSettings(current)
                                     }
                                         .onSuccess { response ->
                                             // Turning authentication on for an
@@ -229,9 +238,14 @@ fun ServerSettingsScreen(onBack: () -> Unit) {
                         val title = sections.firstOrNull { it.id == activeSection }?.title ?: ""
                         SettingsCard(title = title, description = descriptions[activeSection]) {
                             val update: (ServerSettingsDto) -> Unit = { settings = it }
+                            val updatePrefs: (ContentPreferencesDto) -> Unit = { contentPrefs = it }
                             when (activeSection) {
                                 "security" -> SecuritySection(current, update, snackbar)
-                                "content-preferences" -> ContentPreferencesSection(current, update, languages)
+                                // Per-user, so it edits its own object and is
+                                // simply absent until that object has loaded.
+                                "content-preferences" -> contentPrefs?.let {
+                                    ContentPreferencesSection(it, updatePrefs, languages)
+                                }
                                 "mihon-repositories" -> MihonRepositoriesSection(current, update)
                                 "download-settings" -> DownloadSettingsSection(current, update)
                                 "schedule-tasks" -> ScheduleTasksSection(current, update)
@@ -474,14 +488,20 @@ private fun ColumnScope.SecuritySection(
 
 // ── Content preferences ──────────────────────────────────────────────────
 
+/**
+ * These three are PER USER, unlike every other section on this screen — one
+ * person's language order or 18+ choice must not change what anyone else sees.
+ * So this section edits [ContentPreferencesDto] and saves through its own
+ * endpoint; the server-wide blob keeps only the defaults new accounts inherit.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ColumnScope.ContentPreferencesSection(
-    s: ServerSettingsDto,
-    update: (ServerSettingsDto) -> Unit,
+    s: ContentPreferencesDto,
+    update: (ContentPreferencesDto) -> Unit,
     availableLanguages: List<String>,
 ) {
-    val preferred = s.preferredLanguages.orEmpty()
+    val preferred = s.preferredLanguages
 
     Text("Language", style = MaterialTheme.typography.titleSmall, color = RenzoColors.Foreground)
     Spacer(Modifier.height(8.dp))
@@ -577,7 +597,7 @@ private fun ColumnScope.ContentPreferencesSection(
     CardDivider()
     Text("NSFW", style = MaterialTheme.typography.titleSmall, color = RenzoColors.Foreground)
     Spacer(Modifier.height(6.dp))
-    val nsfw = s.nsfwVisibility ?: NsfwVisibility.HIDE_BY_DEFAULT
+    val nsfw = s.nsfwVisibility
     RadioRow(nsfw == NsfwVisibility.ALWAYS_HIDE, "Always hide", "NSFW sources are never shown") {
         update(s.copy(nsfwVisibility = NsfwVisibility.ALWAYS_HIDE))
     }
@@ -595,7 +615,7 @@ private fun ColumnScope.ContentPreferencesSection(
 
     CardDivider()
     SwitchRow(
-        checked = s.downloadAllChapters == true,
+        checked = s.downloadAllChapters,
         onCheckedChange = { update(s.copy(downloadAllChapters = it)) },
         label = "Download all chapters",
         hint = "Pull every chapter of every series, ignoring each series' start-point cutoff — " +

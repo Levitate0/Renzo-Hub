@@ -95,3 +95,18 @@ object NsfwVisibility {
     const val HIDE_BY_DEFAULT = "HideByDefault"
     const val SHOW = "Show"
 }
+
+/**
+ * One user's Content Preferences.
+ *
+ * Non-null on the way out — the server fills anything the user has not set
+ * from its own defaults, so this is always the values actually in force for
+ * them rather than a sparse patch the client has to reconcile.
+ */
+@Serializable
+data class ContentPreferencesDto(
+    val preferredLanguages: List<String> = emptyList(),
+    /** One of the [NsfwVisibility] constants — serialized by name. */
+    val nsfwVisibility: String = NsfwVisibility.HIDE_BY_DEFAULT,
+    val downloadAllChapters: Boolean = false,
+)
