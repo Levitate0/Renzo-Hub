@@ -73,6 +73,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -221,11 +222,16 @@ fun ReaderScreen(
         }
     }
     val hotkeyFocus = remember { FocusRequester() }
+    // Whether the shortcut sink actually holds focus. onKeyEvent only fires on
+    // a FOCUSED node, so this is the difference between the shortcuts working
+    // and silently doing nothing.
+    var hotkeysFocused by remember { mutableStateOf(false) }
     val hotkeyModifier = if (isTv) {
         Modifier
     } else {
         Modifier
             .focusRequester(hotkeyFocus)
+            .onFocusChanged { hotkeysFocused = it.hasFocus }
             .focusable()
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
@@ -259,12 +265,25 @@ fun ReaderScreen(
                 }
             }
     }
-    LaunchedEffect(isTv, overlayOpen, state.loading) {
-        // The panels are focusable popups/sheets; take the keys back when
-        // they close (and once loading settles on entry).
-        if (!isTv && !overlayOpen) {
+    // Take the keys back whenever nothing else should have them.
+    //
+    // Keyed on hotkeysFocused as well as the panels, which is what makes this
+    // self-healing: previously focus was requested ONCE per panel/loading
+    // change, and a single request that landed too early — or focus being
+    // taken afterwards by the page content — left every shortcut dead with no
+    // way back. The symptom was that a shortcut only started working after
+    // rebinding it, because opening and closing the settings sheet was the
+    // one thing that re-ran this effect.
+    //
+    // The retry exists for the same reason: requestFocus() throws if its node
+    // is not attached yet, and one frame after composition is often too early
+    // on entry, when the reader is still laying out pages.
+    LaunchedEffect(isTv, overlayOpen, state.loading, hotkeysFocused) {
+        if (isTv || overlayOpen || hotkeysFocused) return@LaunchedEffect
+        repeat(FOCUS_RETRY_FRAMES) {
             withFrameNanos { }
             runCatching { hotkeyFocus.requestFocus() }
+            if (hotkeysFocused) return@LaunchedEffect
         }
     }
 
@@ -683,6 +702,13 @@ private fun Pill(text: String, spinner: Boolean, modifier: Modifier = Modifier) 
  * a metre-long strip, so a page count says nothing about how much scrolling is
  * actually left. Paged mode is measured in PAGES, where one page is one turn.
  */
+/**
+ * Frames to keep re-requesting keyboard focus for. The reader is still laying
+ * out pages on entry, and a FocusRequester whose node is not attached yet
+ * simply throws — a single attempt loses the shortcuts for the whole session.
+ */
+private const val FOCUS_RETRY_FRAMES = 12
+
 private const val CONTINUOUS_PREFETCH_SCREENS = 1.5f
 private const val PAGED_PREFETCH_PAGES = 2
 
