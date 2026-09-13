@@ -304,12 +304,20 @@ internal class MiddleClickAutoScroll(private val window: ComposeWindow) {
     private fun dispatch(pixels: Double, horizontal: Boolean) {
         if (pixels == 0.0) return
         val contentPane = window.contentPane
-        // A cursor outside the window must still scroll SOMETHING: clamp the
-        // hit point into the content pane so the wheel event always lands on
-        // the scrollable nearest the exit edge.
+        // Deliver at the ANCHOR, not at the cursor.
+        //
+        // The cursor position is what sets the SPEED; it must not also choose
+        // what scrolls. Compose renders into one AWT surface and hit-tests the
+        // wheel event by its own coordinates, so sending it at the live cursor
+        // handed the scroll to whatever happened to be under the pointer — and
+        // a pan started inside a list stopped scrolling the moment the cursor
+        // wandered off it, which is the opposite of what the gesture is for.
+        // Windows scrolls whatever the middle click STARTED in, for as long as
+        // the pan lasts, wherever the pointer goes.
+        val origin = anchor.value ?: current
         val hit = Point(
-            current.x.coerceIn(0, (contentPane.width - 1).coerceAtLeast(0)),
-            current.y.coerceIn(0, (contentPane.height - 1).coerceAtLeast(0)),
+            origin.x.coerceIn(0, (contentPane.width - 1).coerceAtLeast(0)),
+            origin.y.coerceIn(0, (contentPane.height - 1).coerceAtLeast(0)),
         )
         val target = SwingUtilities.getDeepestComponentAt(contentPane, hit.x, hit.y) ?: contentPane
         val pt = SwingUtilities.convertPoint(contentPane, hit, target)
