@@ -430,16 +430,27 @@ fun SeriesDetailScreen(
  * The chapters card (header + loading/empty/rows), written once and mounted
  * either in the mobile page stream or the desktop right column.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private fun LazyListScope.chapterListItems(
     state: SeriesDetailUiState,
     vm: SeriesDetailViewModel,
     seriesId: String,
     onReadChapter: (seriesId: String, chapterNumber: Double) -> Unit,
 ) {
-    item(key = "chapters-header") {
+    // Sticky, not a plain item: this header carries the filter, the action
+    // chips and the whole multi-select toolbar, and a series can run to
+    // hundreds of chapters. Scrolling to chapter 300 and then having to scroll
+    // all the way back to the top to press "Mark read" on what you just
+    // selected is the thing that makes bulk actions painful.
+    //
+    // It needs its own opaque background while pinned — the rest of this list
+    // scrolls UNDER it, and the card's 40%-alpha fill would let chapter rows
+    // show through the toolbar.
+    stickyHeader(key = "chapters-header") {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(RenzoColors.Background)
                 .padding(horizontal = 16.dp)
                 .clip(MaterialTheme.shapes.large)
                 .background(RenzoColors.Card.copy(alpha = 0.4f))
