@@ -69,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -1374,6 +1375,7 @@ private fun PagedReader(
                                         model = seg.pages.getOrNull(p),
                                         index = p,
                                         fit = settings.fit,
+                                        dims = seg.dims.getOrNull(p),
                                         onImageLoaded = onImageLoaded,
                                     )
                                 }
@@ -1392,6 +1394,7 @@ private fun PagedReader(
                                         model = seg.pages.getOrNull(p),
                                         index = p,
                                         fit = settings.fit,
+                                        dims = seg.dims.getOrNull(p),
                                         onImageLoaded = onImageLoaded,
                                     )
                                 }
@@ -1404,6 +1407,7 @@ private fun PagedReader(
                         index = slot,
                         fit = settings.fit,
                         scale = scale,
+                        dims = seg.dims.getOrNull(slot),
                         vScroll = scrollFor("$slot:v"),
                         hScroll = scrollFor("$slot:h"),
                         onImageLoaded = onImageLoaded,
@@ -1468,12 +1472,60 @@ private fun quantizePagePx(px: Int): Int =
  * nothing keeps the page's panning private, which is what the double-page
  * layout wants (two pages per slot, each scrolling on its own).
  */
+/**
+ * A page that is too tall to upload as one texture, drawn as a stack of
+ * texture-sized slices — the paged reader's counterpart to the continuous
+ * reader's tall-page path. Both go through [TallPageLoader], so a page already
+ * decoded for one reader is reused by the other.
+ *
+ * Nothing is drawn until the slices exist. That is deliberate: a placeholder
+ * here would be the over-limit bitmap this exists to avoid.
+ */
+@Composable
+private fun TallPageColumn(
+    model: Any?,
+    index: Int,
+    width: Dp,
+    targetWidthPx: Int,
+    onLoaded: (Int, Int) -> Unit,
+    onFailed: () -> Unit,
+) {
+    var slices by remember(model, targetWidthPx) { mutableStateOf<PageSlices?>(null) }
+    LaunchedEffect(model, targetWidthPx) {
+        val loaded = TallPageLoader.load("paged:$model:$targetWidthPx", model, targetWidthPx)
+        if (loaded != null) {
+            slices = loaded
+            onLoaded(loaded.width, loaded.height)
+        } else {
+            onFailed()
+        }
+    }
+    val ready = slices ?: return
+    Column(modifier = Modifier.width(width)) {
+        ready.slices.forEach { slice ->
+            androidx.compose.foundation.Image(
+                bitmap = slice,
+                contentDescription = "Page ${index + 1}",
+                contentScale = ContentScale.FillWidth,
+                filterQuality = FilterQuality.Medium,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
 @Composable
 private fun PageImage(
     model: Any?,
     index: Int,
     fit: FitMode,
     scale: Float = 1f,
+    /**
+     * The page's true size when the server has measured it. Used only to spot a
+     * page that is over the GPU's texture limit BEFORE it is drawn; null (a
+     * streamed chapter) just means the check falls back to the decoded size.
+     */
+    dims: Pair<Int, Int>? = null,
     vScroll: ScrollState? = null,
     hScroll: ScrollState? = null,
     onImageLoaded: (Int, Int) -> Unit,
@@ -1509,10 +1561,56 @@ private fun PageImage(
             // Captured once, deliberately. Coil sizes its request from the
             // layout bounds, so a second capture would report the size we just
             // asked for and scale would compound on itself every load.
+            //
+            // >= not >: a clamped decode lands at EXACTLY the limit, which is
+            // itself the tell that this page needs slicing.
             if (natural == null) natural = w to h2
             onImageLoaded(w, h2)
         }
     }
+    // Over the GPU texture limit: the SAME defect the continuous reader fixes
+    // with TallPages.kt, which this reader never got. A webtoon page is 10-12k
+    // px tall; handed to one AsyncImage it becomes one over-limit texture, and
+    // the renderer power-of-two downsamples it at UPLOAD — halving horizontal
+    // detail too, so an 800px-wide page draws as 400. No decode size, fit mode
+    // or filter setting can touch it, which is why it looked like the source
+    // was low-res: in a chapter of 10k-px pages every page is soft except the
+    // short ones (a credits panel, a chapter-end banner), which stay under the
+    // limit and are visibly fine next to them.
+    val tall = (dims?.second ?: natural?.second ?: 0) >= TEXTURE_SAFE_HEIGHT_PX
+    val known = dims ?: natural
+    // A slice decode can still fail — a format Skia won't take, or no room to
+    // allocate one. Falling back to the single-texture draw gives a soft page
+    // instead of a blank one, so this is never worse than what it replaces.
+    var sliceFailed by remember(model) { mutableStateOf(false) }
+    if (tall && known != null && !sliceFailed) {
+        val (nativeW, nativeH) = known
+        // Fit-height on a 14:1 strip is degenerate by definition; it still has
+        // to mean what it says, so the width is derived from the aspect.
+        val drawnWidth: Dp = when (fit) {
+            FitMode.WIDTH -> screenWidth * scale
+            FitMode.HEIGHT -> (screenHeight * scale) * (nativeW.toFloat() / nativeH.toFloat())
+            FitMode.ORIGINAL -> with(density) { (nativeW * scale).toDp() }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(v)
+                .horizontalScroll(h),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            TallPageColumn(
+                model = model,
+                index = index,
+                width = drawnWidth,
+                targetWidthPx = quantizePagePx(with(density) { drawnWidth.toPx().toInt() }),
+                onLoaded = onImageLoaded,
+                onFailed = { sliceFailed = true },
+            )
+        }
+        return
+    }
+
     when (fit) {
         FitMode.HEIGHT -> if (!resized) {
             AsyncImage(

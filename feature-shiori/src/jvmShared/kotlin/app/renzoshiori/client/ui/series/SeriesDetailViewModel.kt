@@ -240,6 +240,12 @@ class SeriesDetailViewModel(
                 if (_state.value.deleted) return@launch
                 loadChapters()
                 loadSeries()
+                // Favourite lists were fetched once, in init, so a category
+                // created on ANOTHER surface — the library ribbon, the web UI,
+                // a second device — never appeared in this page's dropdown
+                // while the page stayed open. They ride the poll now, like the
+                // chapter list does.
+                loadFavorites()
             }
         }
         viewModelScope.launch {

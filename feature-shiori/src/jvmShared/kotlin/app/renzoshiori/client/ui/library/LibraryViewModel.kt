@@ -76,6 +76,18 @@ class LibraryViewModel : ViewModel() {
                         val seen = HashSet<String>()
                         _state.value = _state.value.copy(series = rows.filter { seen.add(it.id) })
                     }
+                // Favourite lists ride the same poll as the series rows. They
+                // used to be fetched ONCE, in init, so a category added from
+                // the series page, the web UI or another device never reached
+                // this screen's dropdown until the app was restarted — the
+                // list looked broken rather than stale. Same call the ribbon
+                // already makes, and equally silent on failure.
+                runCatching { api.favorites() }
+                    .onSuccess { lists ->
+                        if (lists != _state.value.favoriteLists) {
+                            _state.value = _state.value.copy(favoriteLists = lists)
+                        }
+                    }
             }
         }
     }
@@ -88,6 +100,11 @@ class LibraryViewModel : ViewModel() {
             _state.value = _state.value.copy(offlineMode = false, offlineForced = false)
         }
         _state.value = _state.value.copy(loading = true, error = null)
+        // Pulling to refresh means "make this screen current" — the ribbon's
+        // favourites, settings and trackers are part of the screen, so they go
+        // too. Cheap, and it is the gesture a user reaches for the moment
+        // something looks stale.
+        loadSideData()
         viewModelScope.launch {
             if (_state.value.offlineMode) {
                 loadOffline()
