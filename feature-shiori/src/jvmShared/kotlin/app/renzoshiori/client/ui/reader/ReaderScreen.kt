@@ -70,6 +70,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.Dp
+import coil3.request.maxBitmapSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -1441,6 +1442,30 @@ private fun pageModel(
     val ctx = LocalPlatformContext.current
     return remember(model, targetWidthPx, targetHeightPx) {
         val builder = ImageRequest.Builder(ctx).data(model)
+        // Coil clamps every decode to maxBitmapSize, which defaults to
+        // 4096x4096 — and it performs that resize with SamplingMode.DEFAULT,
+        // which is NEAREST NEIGHBOUR (coil3.util.Utils_nonAndroidKt.makeFromImage).
+        //
+        // A webtoon page is 10-18k px tall, so it is always over the cap: a
+        // 720x15300 page came back as 192x4096 point-sampled, and that 192px
+        // thumbnail was then stretched across the whole column. That is the
+        // "pixelated" report — it is not softness, and no draw-time filter can
+        // undo it, because the detail is already gone at decode. A page UNDER
+        // the cap is returned untouched, which is exactly why the one or two
+        // short pages in a chapter look perfect next to all the others.
+        //
+        // Lifting the cap means Coil returns the page at its true size and
+        // never point-samples it. The over-limit TEXTURE that then exists is a
+        // problem TallPages.kt already solves properly — and it needs the real
+        // height to spot one. With the cap in place every tall page reported
+        // 4096, and when the multiplier truncated it reported 4095, which
+        // slipped under the >= 4096 test and was never detected at all.
+        builder.maxBitmapSize(
+            coil3.size.Size(
+                coil3.size.Dimension.Pixels(MAX_DECODE_PX),
+                coil3.size.Dimension.Pixels(MAX_DECODE_PX),
+            ),
+        )
         when {
             targetWidthPx != null -> builder.size(
                 coil3.size.Size(coil3.size.Dimension.Pixels(targetWidthPx), coil3.size.Dimension.Undefined),
@@ -1453,6 +1478,13 @@ private fun pageModel(
         builder.build()
     }
 }
+
+/**
+ * Ceiling for a single decode, replacing Coil's 4096 default. High enough that
+ * no real page is ever point-sampled, low enough to stay a sane guard against a
+ * corrupt header claiming absurd dimensions.
+ */
+private const val MAX_DECODE_PX = 32768
 
 /** Headroom (~1.25×) then ceil to a 128px step — see [pageModel]. */
 private fun quantizePagePx(px: Int): Int =
