@@ -178,6 +178,7 @@ data class SeriesExtendedDto(
     val category: String? = null,
     val nsfw: Boolean = false,
     val hideDecimalChapters: Boolean = false,
+    val prioritizeFreeChapters: Boolean = false,
     val isNsfw: Boolean = false,
     val chapterList: String = "",
     val path: String = "",

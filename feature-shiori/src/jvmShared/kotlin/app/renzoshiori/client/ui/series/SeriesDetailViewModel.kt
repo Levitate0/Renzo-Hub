@@ -482,6 +482,7 @@ class SeriesDetailViewModel(
         pausedOverride: Boolean? = null,
         nsfwOverride: Boolean? = null,
         hideDecimalOverride: Boolean? = null,
+        prioritizeFreeOverride: Boolean? = null,
         switchOverrides: Map<String, ProviderSwitchState> = emptyMap(),
         disabledOverrides: Map<String, Boolean> = emptyMap(),
         fromChapterOverrides: Map<String, String> = emptyMap(),
@@ -516,6 +517,7 @@ class SeriesDetailViewModel(
             pausedDownloads = pausedOverride ?: s.pausedDownloads,
             nsfw = nsfwOverride ?: series.nsfw,
             hideDecimalChapters = hideDecimalOverride ?: series.hideDecimalChapters,
+            prioritizeFreeChapters = prioritizeFreeOverride ?: series.prioritizeFreeChapters,
             providers = providers,
         )
         return runCatching { d.updateSeries(payload) }
@@ -643,6 +645,14 @@ class SeriesDetailViewModel(
 
     fun toggleHideDecimalChapters() = viewModelScope.launch {
         pushSeries(hideDecimalOverride = !(_state.value.series?.hideDecimalChapters ?: false))
+    }
+
+    /**
+     * Prefer a free copy from a lower-priority source over a paywalled one, and
+     * come back for the preferred source's copy once it is free there too.
+     */
+    fun togglePrioritizeFreeChapters() = viewModelScope.launch {
+        pushSeries(prioritizeFreeOverride = !(_state.value.series?.prioritizeFreeChapters ?: false))
     }
 
     fun setCategory(category: String?) = viewModelScope.launch {

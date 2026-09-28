@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -436,6 +437,21 @@ fun SeriesHeroSection(
                         label = if (heroWide) "Pause Downloads" else null,
                         primary = true,
                         onClick = { vm.togglePausedDownloads() },
+                    )
+                }
+
+                // Deliberately a first-class toolbar control rather than a "More"
+                // menu item (web parity, series-hero.tsx): it decides which source a
+                // chapter comes from, so its state has to be visible at a glance.
+                if (state.canManageDownloads) {
+                    val preferFree = state.series?.prioritizeFreeChapters == true
+                    HeroActionButton(
+                        icon = Icons.Filled.LockOpen,
+                        contentDescription = if (preferFree) "Prioritizing free chapters" else "Prioritize free chapters",
+                        label = if (heroWide) (if (preferFree) "Prioritizing Free" else "Prioritize Free") else null,
+                        tint = if (preferFree) MaterialTheme.colorScheme.primary else RenzoColors.Foreground,
+                        borderColor = if (preferFree) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Border60,
+                        onClick = { vm.togglePrioritizeFreeChapters() },
                     )
                 }
 
