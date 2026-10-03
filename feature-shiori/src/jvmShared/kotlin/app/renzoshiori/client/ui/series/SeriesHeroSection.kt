@@ -440,6 +440,22 @@ fun SeriesHeroSection(
                     )
                 }
 
+                // Hide decimal chapters — a saved per-series setting, so it reads as
+                // an on/off control with visible state rather than a command buried
+                // in a menu (it used to be a "More" item, where nothing showed
+                // whether it was currently on). Web parity: series-hero.tsx.
+                if (state.canEdit) {
+                    val hideDecimals = state.series?.hideDecimalChapters == true
+                    HeroActionButton(
+                        icon = Icons.Filled.Numbers,
+                        contentDescription = if (hideDecimals) "Decimal chapters hidden" else "Hide decimal chapters",
+                        label = if (heroWide) (if (hideDecimals) "Decimals Hidden" else "Hide Decimals") else null,
+                        tint = if (hideDecimals) MaterialTheme.colorScheme.primary else RenzoColors.Foreground,
+                        borderColor = if (hideDecimals) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Border60,
+                        onClick = { vm.toggleHideDecimalChapters() },
+                    )
+                }
+
                 // Deliberately a first-class toolbar control rather than a "More"
                 // menu item (web parity, series-hero.tsx): it decides which source a
                 // chapter comes from, so its state has to be visible at a glance.
@@ -494,23 +510,6 @@ fun SeriesHeroSection(
                                         )
                                     },
                                     onClick = { moreOpen = false; vm.toggleNsfw() },
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            if (series.hideDecimalChapters) "Show decimal chapters (.5)"
-                                            else "Hide decimal chapters (.5)",
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Filled.Numbers,
-                                            contentDescription = null,
-                                            tint = if (series.hideDecimalChapters) MaterialTheme.colorScheme.primary
-                                            else RenzoColors.Foreground,
-                                        )
-                                    },
-                                    onClick = { moreOpen = false; vm.toggleHideDecimalChapters() },
                                 )
                                 if (state.categories.isNotEmpty()) {
                                     DropdownMenuItem(
