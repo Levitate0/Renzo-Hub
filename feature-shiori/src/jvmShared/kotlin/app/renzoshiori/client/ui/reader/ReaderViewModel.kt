@@ -361,8 +361,13 @@ class ReaderViewModel(
                 ?: return SegResult.Failed("Chapter not found.")
             val attempt = runCatching { api.previewPages(mihonId, sourceIndex) }
             val pages = attempt.getOrNull() ?: return SegResult.Failed(describeFailure(attempt.exceptionOrNull()))
-            if (pages.locked || pages.pageCount <= 0) {
+            if (pages.locked) {
                 return SegResult.Failed("This chapter is locked on the source, so it can't be previewed.")
+            }
+            if (pages.pageCount <= 0) {
+                // Same distinction as the library path below: no pages is not
+                // evidence of a paywall, so don't claim one.
+                return SegResult.Failed("No pages came back from the source for this chapter.")
             }
             return SegResult.Ok(
                 ReaderSegment(
@@ -443,7 +448,18 @@ class ReaderViewModel(
         val attempt = runCatching { api.streamPages(seriesId, number, refresh = !alreadyFresh) }
         val stream = attempt.getOrNull()
         if (stream == null) return SegResult.Failed(describeFailure(attempt.exceptionOrNull()))
-        if (stream.locked || stream.pageCount <= 0) return SegResult.Locked(chapter.url)
+        // Locked and "no pages" are NOT the same answer, and the server is careful
+        // to keep them apart: it sets `locked` only when a source actually said
+        // "requires purchase", because an empty page list also covers a timeout, a
+        // Cloudflare challenge, or the extension host restarting mid-read. Folding
+        // the two together here threw that away and showed the buy screen for a
+        // free chapter — "this is a paid chapter, buy it on the source site" for
+        // something nobody is selling.
+        if (stream.locked) return SegResult.Locked(chapter.url)
+        if (stream.pageCount <= 0) return SegResult.Failed(
+            "No pages came back for this chapter. No source reported it as paid, so this is " +
+                "usually the source having a bad moment — try again in a minute.",
+        )
         return SegResult.Ok(
             ReaderSegment(
                 key = "ch:$number",

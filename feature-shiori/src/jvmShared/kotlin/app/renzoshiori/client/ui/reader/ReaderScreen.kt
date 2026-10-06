@@ -61,6 +61,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,6 +71,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.Dp
+import coil3.request.CachePolicy
 import coil3.request.maxBitmapSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -340,6 +342,18 @@ fun ReaderScreen(
             ) {
                 Text(state.error ?: "", color = ReaderPalette.Text80, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(16.dp))
+                // Worth offering now that a failed read lands here rather than on
+                // the locked screen: the usual fix is simply asking the source
+                // again. openChapter() resets the error and reloads.
+                Button(
+                    onClick = { vm.openChapter(state.chapterNumber) },
+                    shape = MaterialTheme.shapes.small,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RenzoColors.Secondary,
+                        contentColor = ReaderPalette.Text,
+                    ),
+                ) { Text("Try again") }
+                Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = onExit,
                     shape = MaterialTheme.shapes.small,
@@ -1437,11 +1451,25 @@ private fun pageModel(
     model: Any?,
     targetWidthPx: Int? = null,
     targetHeightPx: Int? = null,
+    /**
+     * Bumped by the per-page Retry. Changing it rebuilds the request, and a
+     * retry deliberately skips the memory and disk caches — asking again is
+     * pointless if the answer can come from the same place the failure did.
+     */
+    attempt: Int = 0,
 ): Any? {
-    if (model == null || !HubPlatform.isDesktop) return model
+    if (model == null) return model
+    // Android needs no decode overrides; it only comes through here for a retry,
+    // where the cache-bypass below is the entire point.
+    if (!HubPlatform.isDesktop && attempt == 0) return model
     val ctx = LocalPlatformContext.current
-    return remember(model, targetWidthPx, targetHeightPx) {
+    return remember(model, targetWidthPx, targetHeightPx, attempt) {
         val builder = ImageRequest.Builder(ctx).data(model)
+        if (attempt > 0) {
+            builder.memoryCachePolicy(CachePolicy.WRITE_ONLY)
+            builder.diskCachePolicy(CachePolicy.WRITE_ONLY)
+        }
+        if (!HubPlatform.isDesktop) return@remember builder.build()
         // Coil clamps every decode to maxBitmapSize, which defaults to
         // 4096x4096 — and it performs that resize with SamplingMode.DEFAULT,
         // which is NEAREST NEIGHBOUR (coil3.util.Utils_nonAndroidKt.makeFromImage).
@@ -1513,18 +1541,49 @@ private fun quantizePagePx(px: Int): Int =
  * Nothing is drawn until the slices exist. That is deliberate: a placeholder
  * here would be the over-limit bitmap this exists to avoid.
  */
+/**
+ * Shown in place of a page whose image failed, with a Retry that refetches just
+ * that page. Replaces a silent blank: a single failed page in the middle of a
+ * chapter looked identical to a page that had simply not finished loading, so
+ * there was nothing to act on.
+ */
+@Composable
+private fun PageLoadFailed(index: Int, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "Page ${index + 1} didn't load.",
+            color = ReaderPalette.Text80,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = onRetry,
+            shape = MaterialTheme.shapes.small,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = RenzoColors.Secondary,
+                contentColor = ReaderPalette.Text,
+            ),
+        ) { Text("Retry page") }
+    }
+}
+
 @Composable
 private fun TallPageColumn(
     model: Any?,
     index: Int,
     width: Dp,
     targetWidthPx: Int,
+    attempt: Int,
     onLoaded: (Int, Int) -> Unit,
     onFailed: () -> Unit,
 ) {
-    var slices by remember(model, targetWidthPx) { mutableStateOf<PageSlices?>(null) }
-    LaunchedEffect(model, targetWidthPx) {
-        val loaded = TallPageLoader.load("paged:$model:$targetWidthPx", model, targetWidthPx)
+    var slices by remember(model, targetWidthPx, attempt) { mutableStateOf<PageSlices?>(null) }
+    LaunchedEffect(model, targetWidthPx, attempt) {
+        val loaded = TallPageLoader.load("paged:$model:$targetWidthPx:$attempt", model, targetWidthPx)
         if (loaded != null) {
             slices = loaded
             onLoaded(loaded.width, loaded.height)
@@ -1586,6 +1645,31 @@ private fun PageImage(
     // texture-limit slicing), not by refusing to scale.
     var natural by remember(model) { mutableStateOf<Pair<Int, Int>?>(null) }
 
+    // A page whose image never arrives used to simply stay blank, with no way to
+    // ask for it again short of leaving the chapter and coming back — and on a
+    // flaky source that is most of a chapter. `failed` is keyed on `attempt` so
+    // bumping the attempt clears it without a second piece of state to keep in
+    // step.
+    var attempt by remember(model) { mutableIntStateOf(0) }
+    var failed by remember(model, attempt) { mutableStateOf(false) }
+    val onError: (AsyncImagePainter.State.Error) -> Unit = { failed = true }
+
+    if (failed) {
+        PageLoadFailed(index = index, onRetry = { attempt++ })
+        return
+    }
+
+    // Same cache-bust ContinuousReader already uses for its own per-page retry
+    // (see retryTick there): a changed URL defeats the HTTP caches as well as
+    // Coil's, which a request-level cache policy alone would not. Only a String
+    // model can carry a query — an offline page is a file path, and for those
+    // pageModel's cache bypass is what makes the retry real.
+    val pageSource: Any? = if (attempt > 0 && model is String) {
+        model + (if (model.contains('?')) "&" else "?") + "retry=" + attempt
+    } else {
+        model
+    }
+
     val onSuccess: (AsyncImagePainter.State.Success) -> Unit = { success ->
         val w = success.result.image.width
         val h2 = success.result.image.height
@@ -1614,7 +1698,7 @@ private fun PageImage(
     // A slice decode can still fail — a format Skia won't take, or no room to
     // allocate one. Falling back to the single-texture draw gives a soft page
     // instead of a blank one, so this is never worse than what it replaces.
-    var sliceFailed by remember(model) { mutableStateOf(false) }
+    var sliceFailed by remember(model, attempt) { mutableStateOf(false) }
     if (tall && known != null && !sliceFailed) {
         val (nativeW, nativeH) = known
         // Fit-height on a 14:1 strip is degenerate by definition; it still has
@@ -1632,10 +1716,11 @@ private fun PageImage(
             contentAlignment = Alignment.TopCenter,
         ) {
             TallPageColumn(
-                model = model,
+                model = pageSource,
                 index = index,
                 width = drawnWidth,
                 targetWidthPx = quantizePagePx(with(density) { drawnWidth.toPx().toInt() }),
+                attempt = attempt,
                 onLoaded = onImageLoaded,
                 onFailed = { sliceFailed = true },
             )
@@ -1646,11 +1731,12 @@ private fun PageImage(
     when (fit) {
         FitMode.HEIGHT -> if (!resized) {
             AsyncImage(
-                model = pageModel(model, targetHeightPx = fitHeightTargetPx),
+                model = pageModel(pageSource, targetHeightPx = fitHeightTargetPx, attempt = attempt),
                 contentDescription = "Page ${index + 1}",
                 contentScale = ContentScale.Fit,
                 filterQuality = FilterQuality.Medium,
                 onSuccess = onSuccess,
+                onError = onError,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -1662,11 +1748,12 @@ private fun PageImage(
                 contentAlignment = Alignment.Center,
             ) {
                 AsyncImage(
-                    model = pageModel(model, targetHeightPx = fitHeightTargetPx),
+                    model = pageModel(pageSource, targetHeightPx = fitHeightTargetPx, attempt = attempt),
                     contentDescription = "Page ${index + 1}",
                     contentScale = ContentScale.Fit,
                     filterQuality = FilterQuality.Medium,
                     onSuccess = onSuccess,
+                    onError = onError,
                     modifier = Modifier.size(screenWidth * scale, screenHeight * scale),
                 )
             }
@@ -1680,11 +1767,12 @@ private fun PageImage(
             contentAlignment = Alignment.Center,
         ) {
             AsyncImage(
-                model = pageModel(model, targetWidthPx = fitWidthTargetPx),
+                model = pageModel(pageSource, targetWidthPx = fitWidthTargetPx, attempt = attempt),
                 contentDescription = "Page ${index + 1}",
                 contentScale = ContentScale.FillWidth,
                 filterQuality = FilterQuality.Medium,
                 onSuccess = onSuccess,
+                onError = onError,
                 modifier = if (resized) Modifier.width(screenWidth * scale) else Modifier.fillMaxWidth(),
             )
         }
@@ -1702,11 +1790,12 @@ private fun PageImage(
             val dims = natural
             val sized = resized && dims != null
             AsyncImage(
-                model = pageModel(model),
+                model = pageModel(pageSource, attempt = attempt),
                 contentDescription = "Page ${index + 1}",
                 contentScale = if (sized) ContentScale.Fit else ContentScale.None,
                 filterQuality = FilterQuality.Medium,
                 onSuccess = onSuccess,
+                onError = onError,
                 modifier = if (sized && dims != null) {
                     with(density) {
                         Modifier.size((dims.first * scale).toDp(), (dims.second * scale).toDp())
