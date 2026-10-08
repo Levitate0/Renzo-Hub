@@ -1,5 +1,7 @@
 package app.renzoshiori.client.ui.reader
 
+import app.renzoshiori.client.data.model.ReaderChapterDto
+import app.renzoshiori.client.data.network.encodeFilename
 import app.renzoshiori.client.ui.util.HubBackHandler
 import app.renzoshiori.client.ui.util.hubToast
 import androidx.compose.foundation.ScrollState
@@ -149,6 +151,21 @@ fun ReaderScreen(
     ),
 ) {
     val state by vm.state.collectAsState()
+
+    // Paged mode holds one chapter at a time, so once it is on screen everything
+    // but it and its two neighbours can go: the server drops those chapters'
+    // streamed pages, and this device drops their DECODED bitmaps from Coil's
+    // memory cache — the expensive half here, since a decoded webtoon page can
+    // run to tens of megabytes. The disk cache is left alone: it is size-bounded
+    // and is what makes a re-read cheap.
+    val readerContext = LocalPlatformContext.current
+    val pagedChapterKey = if (!state.loading && state.error == null && !state.resolvedMode().continuous)
+        state.segments.singleOrNull()?.key else null
+    LaunchedEffect(pagedChapterKey) {
+        if (pagedChapterKey == null) return@LaunchedEffect
+        val keep = vm.trimToNeighbours()
+        if (keep.isNotEmpty()) evictOtherChapterBitmaps(SingletonImageLoader.get(readerContext), seriesId, keep)
+    }
     val settings = state.settings
     val mode = state.resolvedMode()
     // The app provides LocalIsTv; the device check is a fallback so the reader
@@ -437,6 +454,9 @@ fun ReaderScreen(
                         onToggleChrome = { chromeVisible = !chromeVisible },
                         onNextChapter = { vm.goToChapter(1) },
                         onPrevChapter = { vm.goToChapter(-1) },
+                        // Silent at the very first chapter, like the web: an
+                        // arrow press there shouldn't raise a toast every time.
+                        onPrevChapterAtEnd = { if (state.hasPrev) vm.goToChapter(-1, atEnd = true) },
                         onExit = onExit,
                     )
                 }
@@ -1205,6 +1225,8 @@ private fun PagedReader(
     onToggleChrome: () -> Unit,
     onNextChapter: () -> Unit,
     onPrevChapter: () -> Unit,
+    /** Back past the first page: the previous chapter, opened on its LAST page. */
+    onPrevChapterAtEnd: () -> Unit,
     onExit: () -> Unit,
 ) {
     val settings = state.settings
@@ -1265,7 +1287,13 @@ private fun PagedReader(
             }
             scope.launch { pagerState.animateScrollToPage(slot + 1) }
         } else {
-            if (slot <= 0) return
+            if (slot <= 0) {
+                // The mirror of the forward case: back past the first page goes
+                // into the previous chapter and lands on its last page, as
+                // scrolling up does in the continuous reader.
+                onPrevChapterAtEnd()
+                return
+            }
             scope.launch { pagerState.animateScrollToPage(slot - 1) }
         }
     }
@@ -1542,32 +1570,58 @@ private fun quantizePagePx(px: Int): Int =
  * here would be the over-limit bitmap this exists to avoid.
  */
 /**
- * Shown in place of a page whose image failed, with a Retry that refetches just
- * that page. Replaces a silent blank: a single failed page in the middle of a
- * chapter looked identical to a page that had simply not finished loading, so
- * there was nothing to act on.
+ * Drops Coil memory-cache entries for this series' reader pages that belong to
+ * none of [keep]. Streamed pages carry the chapter number in their URL;
+ * downloaded ones carry the archive filename, so both are matched. Anything
+ * else in the cache (covers, other series) is untouched.
+ */
+private fun evictOtherChapterBitmaps(
+    loader: coil3.ImageLoader,
+    seriesId: String,
+    keep: List<ReaderChapterDto>,
+) {
+    val cache = loader.memoryCache ?: return
+    val keepNumbers = keep.map { it.number }.toSet()
+    val keepFiles = keep.mapNotNull { it.filename?.let(::encodeFilename) }.toSet()
+    val streamMarker = "/api/reader/stream/page?seriesId=$seriesId&chapter="
+    val fileMarker = "/api/reader/page?seriesId=$seriesId&filename="
+    for (key in cache.keys.toList()) {
+        val k = key.key
+        val stale = when {
+            streamMarker in k ->
+                k.substringAfter(streamMarker).substringBefore('&').toDoubleOrNull()?.let { it !in keepNumbers } ?: false
+            fileMarker in k -> k.substringAfter(fileMarker).substringBefore('&') !in keepFiles
+            else -> false
+        }
+        if (stale) cache.remove(key)
+    }
+}
+
+/**
+ * Shown in place of a page whose image failed. Styled exactly like a failed
+ * page in the continuous reader — a muted label over an accent "Tap to retry",
+ * the whole block being the target — so the two modes read as one reader, and
+ * the accent follows the user's theme rather than a fixed button colour.
  */
 @Composable
 private fun PageLoadFailed(index: Int, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            "Page ${index + 1} didn't load.",
-            color = ReaderPalette.Text80,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = onRetry,
-            shape = MaterialTheme.shapes.small,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = RenzoColors.Secondary,
-                contentColor = ReaderPalette.Text,
-            ),
-        ) { Text("Retry page") }
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable(onClick = onRetry).padding(24.dp),
+        ) {
+            Text(
+                "Page ${index + 1} didn't load",
+                fontSize = 13.sp,
+                color = ReaderPalette.Text70,
+            )
+            Text(
+                "Tap to retry",
+                fontSize = 12.sp,
+                color = RenzoColors.Primary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 package app.renzoshiori.client.ui.reader
 
+import app.renzoshiori.client.data.network.TrimStreamCacheRequestDto
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -201,7 +202,12 @@ class ReaderViewModel(
 
     // ── Loading ───────────────────────────────────────────────────────────
 
-    fun openChapter(number: Double, openingLabel: String? = null) {
+    /**
+     * @param atEnd open on the chapter's LAST page instead of its saved spot —
+     *   paging back past a chapter's first page, which is how continuous mode
+     *   behaves when you scroll up into the chapter above.
+     */
+    fun openChapter(number: Double, openingLabel: String? = null, atEnd: Boolean = false) {
         _state.update {
             it.copy(
                 loading = true,
@@ -314,8 +320,8 @@ class ReaderViewModel(
                             activeSegIndex = 0,
                             source = result.source,
                             serverSuggestedMode = result.suggestedMode,
-                            resumePage = resumeFrom(chapter, result.segment.pageCount),
-                            currentPage = resumeFrom(chapter, result.segment.pageCount),
+                            resumePage = startPage(chapter, result.segment.pageCount, atEnd),
+                            currentPage = startPage(chapter, result.segment.pageCount, atEnd),
                             arrivedLabel = it.openingLabel,
                             openingLabel = null,
                         )
@@ -474,6 +480,9 @@ class ReaderViewModel(
             source = PageSource.STREAM,
         )
     }
+
+    private fun startPage(chapter: ReaderChapterDto?, pageCount: Int, atEnd: Boolean): Int =
+        if (atEnd && pageCount > 0) pageCount - 1 else resumeFrom(chapter, pageCount)
 
     private fun resumeFrom(chapter: ReaderChapterDto?, pageCount: Int): Int {
         val ch = chapter ?: return 0
@@ -776,7 +785,7 @@ class ReaderViewModel(
     /** The chapter one step from the one on screen, or null at either end. */
     fun neighborChapter(direction: Int): ReaderChapterDto? = _state.value.neighbor(direction)
 
-    fun goToChapter(direction: Int) {
+    fun goToChapter(direction: Int, atEnd: Boolean = false) {
         val s = _state.value
         val next = s.neighbor(direction)
         if (next == null) {
@@ -785,7 +794,36 @@ class ReaderViewModel(
             }
             return
         }
-        openChapter(next.number, s.nameOf(next))
+        openChapter(next.number, s.nameOf(next), atEnd)
+    }
+
+    private var lastTrimSignature = ""
+
+    /**
+     * Paged mode: tell the server to keep only the chapter on screen and its two
+     * neighbours in its streamed-page cache — the previous one so stepping back
+     * is instant, the next because it is prefetched. Returns that window so the
+     * caller can drop the same chapters' decoded bitmaps on this device.
+     * Continuous mode keeps its own wider window and does not call this.
+     */
+    fun trimToNeighbours(): List<ReaderChapterDto> {
+        if (previewMihonId != null) return emptyList()
+        val s = _state.value
+        val current = s.activeChapter ?: return emptyList()
+        val keep = listOfNotNull(s.neighbor(-1), current, s.neighbor(1))
+        val signature = keep.joinToString(",") { it.number.toString() }
+        if (signature != lastTrimSignature) {
+            lastTrimSignature = signature
+            viewModelScope.launch {
+                val api = app.network.currentServiceOf<ReaderApi>() ?: return@launch
+                runCatching {
+                    api.trimStreamCache(
+                        TrimStreamCacheRequestDto(seriesId, keep.map { it.number }),
+                    )
+                }
+            }
+        }
+        return keep
     }
 
     fun jumpToChapter(number: Double) {
