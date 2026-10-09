@@ -67,6 +67,8 @@ data class ServerSettingsDto(
     val smtpUseSsl: Boolean? = null,
     val smtpFromAddress: String? = null,
     val downloadAllChapters: Boolean? = null,
+    /** Queue new chapters automatically. Null (older servers) = on. */
+    val autoDownloadNewChapters: Boolean? = null,
     val libraryScanIntervalHours: Int? = null,
     val storageFolder: String? = null,
     val importFolder: String? = null,

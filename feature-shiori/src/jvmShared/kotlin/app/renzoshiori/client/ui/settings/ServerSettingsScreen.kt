@@ -686,6 +686,19 @@ private fun ColumnScope.DownloadSettingsSection(
     s: ServerSettingsDto,
     update: (ServerSettingsDto) -> Unit,
 ) {
+    // Web: the section's master switch, above the grid (settings-manager.tsx).
+    // Null means an older server that predates the setting — treated as on.
+    SwitchRow(
+        checked = s.autoDownloadNewChapters != false,
+        onCheckedChange = { update(s.copy(autoDownloadNewChapters = it)) },
+        label = "Auto-download new chapters",
+        hint = "Download new chapters as soon as a source reports them. Turn this off on a " +
+            "capped or metered connection: chapter lists still update and new chapters can be " +
+            "read by streaming, but nothing is saved to disk until you ask for it (Download all, " +
+            "re-download, or re-applying source priority). Automatic re-downloads from a " +
+            "higher-priority source stop too.",
+    )
+    CardDivider()
     // Web: one `grid gap-4 md:grid-cols-2`, paired in source order.
     FieldPair(
         left = {
