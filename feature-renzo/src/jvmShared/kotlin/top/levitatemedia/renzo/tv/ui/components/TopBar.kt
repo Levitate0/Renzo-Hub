@@ -56,7 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import top.levitatemedia.renzo.tv.resources.Res
-import top.levitatemedia.renzo.tv.resources.renzo_wordmark
+import top.levitatemedia.renzo.tv.resources.renzo_mark
+import androidx.compose.material3.MaterialTheme
+import top.levitatemedia.renzo.hub.core.CenterClampedBar
 import top.levitatemedia.renzo.tv.Tab
 import top.levitatemedia.renzo.tv.api.PublicUser
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
@@ -84,7 +86,8 @@ fun TopBar(
     horizontalPadding: Dp = 12.dp,
     modifier: Modifier = Modifier,
 ) {
-    val borderColor = RenzoColors.Border
+    // Shiori's bar divider: the border colour at 60%.
+    val borderColor = RenzoColors.Border.copy(alpha = 0.6f)
     BoxWithConstraints(modifier.fillMaxWidth()) {
         // Raw screen width, NOT the measured width: TV overscan padding was
         // pushing this under the breakpoint and hiding the tab pills.
@@ -119,92 +122,122 @@ fun TopBar(
             }
             .padding(horizontal = horizontalPadding)
         if (wide) {
-            // Web topbar.tsx, layout and rationale verbatim: pills centered
-            // IN-FLOW between the brand and the right cluster by twin flex
-            // spacers — Renzo's right cluster is wide (search + type + mode
-            // pill + status + avatar), and absolute centering would underlap
-            // it below ~2300px. In-flow centering keeps the balanced look and
-            // makes overlap geometrically impossible; the tabs scroll when
-            // squeezed.
-            Row(barModifier, verticalAlignment = Alignment.CenterVertically) {
-                if (showHamburger) {
-                    HamburgerButton(onClick = onMenu)
-                    Spacer(Modifier.width(10.dp))
-                }
-                Image(
-                    painter = painterResource(Res.drawable.renzo_wordmark),
-                    contentDescription = "Renzo",
-                    modifier = Modifier.height(28.dp),
-                )
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            // Shiori's bar skeleton, shared from :core for exactly this: the
+            // pills sit at the TRUE centre of the window, clamped between the
+            // two clusters and capped at 60% width, scrolling instead of
+            // underlapping either side when squeezed. The in-flow twin-spacer
+            // centring used here before drifted off-centre whenever the right
+            // cluster was wider than the brand, so the two halves of the Hub
+            // never lined up.
+            CenterClampedBar(
+                modifier = barModifier,
+                left = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (showHamburger) {
+                            HamburgerButton(onClick = onMenu)
+                            Spacer(Modifier.width(10.dp))
+                        }
+                        Brand()
+                    }
+                },
+                center = {
                     if (!app.isTv) {
-                    Row(
-                        Modifier
-                            .horizontalScroll(rememberScrollState())
-                            // One D-pad region — matches the Shiori bar.
-                            .focusGroup()
-                            .padding(horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Tab.BAR_TABS.forEach { tab ->
-                            TabPill(
-                                label = tab.label,
-                                // TV: text-only pills — six icons of pill
-                                // chrome is what pushed the row under the
-                                // right cluster on a 1080p panel.
-                                icon = if (app.isTv) null else tabIcon(tab),
-                                active = tab == active,
-                                badge = when (tab) {
-                                    Tab.Updates -> updatesBadge
-                                    Tab.Downloads -> downloadsBadge
-                                    else -> 0
-                                },
-                            ) { onTab(tab) }
+                        Row(
+                            Modifier
+                                .horizontalScroll(rememberScrollState())
+                                // One D-pad region — matches the Shiori bar.
+                                .focusGroup(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Tab.BAR_TABS.forEach { tab ->
+                                TabPill(
+                                    label = tab.label,
+                                    icon = tabIcon(tab),
+                                    active = tab == active,
+                                    badge = when (tab) {
+                                        Tab.Updates -> updatesBadge
+                                        Tab.Downloads -> downloadsBadge
+                                        else -> 0
+                                    },
+                                ) { onTab(tab) }
+                            }
                         }
                     }
+                },
+                right = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        // One D-pad region — matches the Shiori bar.
+                        modifier = Modifier.focusGroup(),
+                    ) {
+                        SearchBox(onSearch = onSearch, modifier = Modifier.width(224.dp))
+                        if (!app.isTv) {
+                            Spacer(Modifier.width(8.dp))
+                            TypeSelect(app)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        OnlinePill()
+                        // Service-status line (HANDOFFrenzohub_topbarstatusline.md):
+                        // display-only chrome — hidden on TV, and below the width
+                        // where this cluster still fits beside the centred tabs.
+                        // It sits where Shiori shows its download counters.
+                        if (!app.isTv &&
+                            top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 1280
+                        ) {
+                            Spacer(Modifier.width(4.dp))
+                            StatusLine(app)
+                        }
+                        AvatarButton(
+                            user = user,
+                            onClick = onAccount,
+                            modifier = Modifier.padding(start = 6.dp, end = 4.dp),
+                        )
                     }
-                }
-                SearchBox(onSearch = onSearch, modifier = Modifier.width(256.dp))
-                if (!app.isTv) {
-                    Spacer(Modifier.width(8.dp))
-                    TypeSelect(app)
-                }
-                Spacer(Modifier.width(8.dp))
-                OnlinePill()
-                // Service-status line (HANDOFFrenzohub_topbarstatusline.md):
-                // display-only chrome — hidden on TV, and below the width
-                // where this cluster still fits beside the centred tabs (the
-                // bar's own 1800px analogue).
-                if (!app.isTv &&
-                    top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 1280
-                ) {
-                    Spacer(Modifier.width(8.dp))
-                    StatusLine(app)
-                }
-                Spacer(Modifier.width(8.dp))
-                AvatarButton(user = user, onClick = onAccount)
-            }
+                },
+            )
         } else {
             Row(barModifier, verticalAlignment = Alignment.CenterVertically) {
                 if (showHamburger) {
                     HamburgerButton(onClick = onMenu)
                     Spacer(Modifier.width(10.dp))
                 }
-                Image(
-                    painter = painterResource(Res.drawable.renzo_wordmark),
-                    contentDescription = "Renzo",
-                    modifier = Modifier.height(30.dp),
-                )
+                Brand()
                 Spacer(Modifier.width(8.dp))
                 // Flexible: it gives up space so the pill and avatar keep theirs.
                 SearchBox(onSearch = onSearch, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 OnlinePill()
-                Spacer(Modifier.width(8.dp))
-                AvatarButton(user = user, onClick = onAccount)
+                AvatarButton(
+                    user = user,
+                    onClick = onAccount,
+                    modifier = Modifier.padding(start = 6.dp, end = 4.dp),
+                )
             }
         }
+    }
+}
+
+/**
+ * Shiori's bar brand, metric for metric: the square mark at 28dp and the app
+ * name beside it in titleSmall. This used to be the full wordmark squeezed to
+ * 28dp tall, at which size its own "Renzo" lettering was a smudge.
+ */
+@Composable
+private fun Brand() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Image(
+            painter = painterResource(Res.drawable.renzo_mark),
+            contentDescription = "Renzo home",
+            modifier = Modifier.size(28.dp),
+        )
+        Text(
+            "Renzo",
+            style = MaterialTheme.typography.titleSmall,
+            color = RenzoColors.Foreground,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 8.dp),
+        )
     }
 }
 
@@ -256,14 +289,16 @@ private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier)
         kotlinx.coroutines.delay(320)
         onSearch(q)
     }
+    // Shiori's DesktopSearchField well: h-9, 8dp corners, muted fill at 50%,
+    // border at 60%. The focus ring stays for TV, where the D-pad needs it.
     Row(
         modifier
             .height(36.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .focusRing(focused, 999.dp)
-            .background(RenzoColors.Card, RoundedCornerShape(999.dp))
-            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Border, RoundedCornerShape(999.dp))
-            .padding(horizontal = 12.dp),
+            .clip(RoundedCornerShape(8.dp))
+            .focusRing(focused, 8.dp)
+            .background(RenzoColors.Muted.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .border(1.dp, RenzoColors.Border.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -277,8 +312,8 @@ private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier)
             value = text,
             onValueChange = { text = it },
             singleLine = true,
-            textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp, fontFamily = top.levitatemedia.renzo.hub.core.GeistFamily),
-            cursorBrush = SolidColor(RenzoColors.Primary),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
+            cursorBrush = SolidColor(RenzoColors.Foreground),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = {
                 if (text.isNotBlank()) onSearch(text.trim())
@@ -290,7 +325,12 @@ private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier)
             decorationBox = { inner ->
                 Box {
                     if (text.isEmpty()) {
-                        Text("Search anime…", color = RenzoColors.MutedForeground, fontSize = 14.sp, maxLines = 1)
+                        Text(
+                            "Search anime…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = RenzoColors.MutedForeground,
+                            maxLines = 1,
+                        )
                     }
                     inner()
                 }
@@ -301,11 +341,15 @@ private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier)
                 Modifier
                     .padding(start = 6.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(RenzoColors.Secondary.copy(alpha = 0.6f))
-                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(4.dp))
+                    .background(RenzoColors.Muted.copy(alpha = 0.6f))
+                    .border(1.dp, RenzoColors.Border.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
                     .padding(horizontal = 5.dp, vertical = 1.dp),
             ) {
-                Text("⌘K", color = RenzoColors.MutedForeground, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "⌘K",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = RenzoColors.MutedForeground,
+                )
             }
         }
     }
@@ -324,16 +368,19 @@ private fun TypeSelect(app: top.levitatemedia.renzo.tv.AppServices) {
         var focused by remember { mutableStateOf(false) }
         Row(
             Modifier
+                // Shiori has no type filter; this takes the search field's
+                // well so the right cluster reads as one family, not a mix of
+                // pill and box shapes.
                 .height(36.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .focusRing(focused, 999.dp)
-                .background(RenzoColors.Card, RoundedCornerShape(999.dp))
-                .border(1.dp, RenzoColors.Border, RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(8.dp))
+                .focusRing(focused, 8.dp)
+                .background(RenzoColors.Muted.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                .border(1.dp, RenzoColors.Border.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
                 .tvClickable(onFocused = { focused = it }, onClick = { open = true })
-                .padding(start = 12.dp, end = 6.dp),
+                .padding(start = 10.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(label, color = RenzoColors.MutedForeground, fontSize = 14.sp)
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = RenzoColors.MutedForeground)
             Icon(
                 Icons.Filled.ArrowDropDown,
                 contentDescription = "Type",
@@ -416,19 +463,25 @@ private fun statusLineText(h: top.levitatemedia.renzo.tv.api.HealthResponse): St
 /** Web topbar's mode pill: "● Online" — display-only (native is always online). */
 @Composable
 private fun OnlinePill() {
+    // Shiori's OnlineOfflinePill in its online state: a faint foreground wash
+    // rather than a solid secondary fill, emerald dot, 70% foreground label.
     Row(
         Modifier
-            .widthIn(min = 0.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(RenzoColors.Secondary.copy(alpha = 0.6f), RoundedCornerShape(999.dp))
+            .padding(end = 4.dp)
+            .clip(RoundedCornerShape(50))
+            .background(RenzoColors.Foreground.copy(alpha = 0.06f))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(7.dp).clip(CircleShape).background(RenzoColors.DownloadedGreen, CircleShape),
-        )
+        Box(Modifier.size(7.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color(0xFF10B981)))
         Spacer(Modifier.width(6.dp))
-        Text("Online", color = RenzoColors.Foreground, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(
+            "Online",
+            style = MaterialTheme.typography.labelMedium,
+            color = RenzoColors.Foreground.copy(alpha = 0.7f),
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
@@ -436,26 +489,13 @@ private fun OnlinePill() {
 @Composable
 fun PillBadge(n: Int, onActivePill: Boolean) {
     if (n <= 0) return
-    Box(
-        Modifier
-            .padding(start = 4.dp)
-            .height(16.dp)
-            .widthIn(min = 16.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(
-                if (onActivePill) RenzoColors.PrimaryForeground.copy(alpha = 0.2f)
-                else RenzoColors.Primary.copy(alpha = 0.15f),
-            )
-            .padding(horizontal = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            if (n > 99) "99+" else "$n",
-            color = if (onActivePill) RenzoColors.PrimaryForeground else RenzoColors.Primary,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-        )
-    }
+    // Shiori's pill count: plain labelSmall text in the accent, no disc.
+    Text(
+        if (n > 99) "99+" else "$n",
+        style = MaterialTheme.typography.labelSmall,
+        color = if (onActivePill) RenzoColors.PrimaryForeground else RenzoColors.Primary,
+        modifier = Modifier.padding(start = 4.dp),
+    )
 }
 
 @Composable
@@ -514,9 +554,8 @@ private fun TabPill(
         }
         Text(
             label,
+            style = MaterialTheme.typography.bodyMedium,
             color = fg,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
             maxLines = 1,
             modifier = if (icon != null) Modifier.padding(start = 6.dp) else Modifier,
         )
@@ -525,17 +564,21 @@ private fun TabPill(
 }
 
 @Composable
-private fun AvatarButton(user: PublicUser?, onClick: () -> Unit) {
+private fun AvatarButton(user: PublicUser?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
+    // Shiori's bar avatar: 32dp, accent ring at 30% over the 20% accent disc.
     Box(
-        Modifier
-            .size(36.dp)                       // never shrink: the web avatar is shrink-0
+        modifier
+            .size(32.dp)                       // never shrink: the web avatar is shrink-0
             .clip(CircleShape)
             .focusRing(focused, 999.dp)
-            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Border, CircleShape)
             .tvClickable(onFocused = { focused = it }, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        UserAvatar(user, 36.dp)
+        UserAvatar(
+            user,
+            32.dp,
+            ring = if (focused) RenzoColors.Primary else RenzoColors.Primary.copy(alpha = 0.3f),
+        )
     }
 }

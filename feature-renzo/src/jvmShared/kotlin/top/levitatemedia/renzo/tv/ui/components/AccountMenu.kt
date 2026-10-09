@@ -63,7 +63,13 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 
 /** The user's avatar: their uploaded image when present, else initials. */
 @Composable
-fun UserAvatar(user: PublicUser?, size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+fun UserAvatar(
+    user: PublicUser?,
+    size: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+    /** Outline colour; the top bar passes Shiori's accent ring. */
+    ring: androidx.compose.ui.graphics.Color = RenzoColors.Border,
+) {
     val bmp = remember(user?.avatarBase64) {
         user?.avatarBase64?.let {
             runCatching {
@@ -78,7 +84,7 @@ fun UserAvatar(user: PublicUser?, size: androidx.compose.ui.unit.Dp, modifier: M
             .clip(CircleShape)
             // Initials: accent letters on a dark accent disc (Shiori's style).
             .background(if (bmp != null) RenzoColors.Secondary else RenzoColors.Primary.copy(alpha = 0.22f), CircleShape)
-            .border(1.dp, RenzoColors.Border, CircleShape),
+            .border(1.dp, ring, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         if (bmp != null) {

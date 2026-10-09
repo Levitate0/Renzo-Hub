@@ -242,7 +242,9 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
             ) {
                 TopBar(
                     app = app,
-                    horizontalPadding = contentHPad,
+                    // Shiori's bar insets its content 6dp; TV keeps the overscan
+                    // inset so the brand and avatar stay on the panel.
+                    horizontalPadding = if (app.isTv) contentHPad else 6.dp,
                     active = nav.tab.value,
                     onTab = { nav.tab.value = it },
                     onAccount = { accountMenuOpen = true },

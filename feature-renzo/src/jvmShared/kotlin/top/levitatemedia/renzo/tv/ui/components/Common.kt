@@ -1,5 +1,10 @@
 package top.levitatemedia.renzo.tv.ui.components
 
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -346,55 +351,75 @@ private val CONTENT_LADDER = listOf(
 )
 
 /**
- * "🔞 Show up to" chip ladder — doubles as the current-mode indicator
- * (content-filter.tsx ContentChips: my-1.5 flex flex-wrap items-center gap-2;
- * label mr-0.5 text-xs font-semibold text-muted-foreground opacity-80; chips
- * rounded-full border px-3.5 py-1.5 text-[13px], active bg-primary).
+ * The 18+ ladder (content-filter.tsx ContentChips), drawn in Shiori's 18+ chip
+ * style: 32dp tall, 8dp corners, a muted card when adult content is hidden and
+ * an AMBER wash once it is allowed — the same signal Shiori's "18+ Shown" chip
+ * gives, so the two halves of the Hub say "adult content is on" the same way.
+ *
+ * Kept as four levels rather than collapsed into Shiori's single toggle: the
+ * anime side genuinely filters by degree (Ecchi < Erotica < Hentai), and a
+ * toggle would throw that setting away.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ContentChips(app: AppServices, modifier: Modifier = Modifier) {
+    val amber = androidx.compose.ui.graphics.Color(0xFFF59E0B)
+    val allowed = app.contentLevel.value != "none"
     FlowRow(
         modifier.fillMaxWidth().padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            "🔞 Show up to",
-            color = RenzoColors.MutedForeground.copy(alpha = 0.8f),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.align(Alignment.CenterVertically).padding(end = 2.dp),
-        )
+        ) {
+            androidx.compose.material3.Icon(
+                if (allowed) Icons.Filled.Visibility
+                else Icons.Filled.VisibilityOff,
+                contentDescription = null,
+                tint = if (allowed) amber else RenzoColors.MutedForeground,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                "18+ up to",
+                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                color = if (allowed) amber else RenzoColors.MutedForeground,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+        }
         CONTENT_LADDER.forEach { (id, label) ->
             val active = app.contentLevel.value == id
             var focused by remember { mutableStateOf(false) }
+            val shape = RoundedCornerShape(8.dp)
+            // Active "Off" = Shiori's hidden chip; an active level above it =
+            // Shiori's shown (amber) chip; inactive levels stay quiet.
+            val (bg, edge, fg) = when {
+                active && id == "none" -> Triple(RenzoColors.Card, RenzoColors.Border, RenzoColors.Foreground)
+                active -> Triple(amber.copy(alpha = 0.12f), amber.copy(alpha = 0.5f), amber)
+                else -> Triple(
+                    androidx.compose.ui.graphics.Color.Transparent,
+                    RenzoColors.Border.copy(alpha = 0.6f),
+                    if (focused) RenzoColors.Foreground else RenzoColors.MutedForeground,
+                )
+            }
             Box(
                 Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .focusRing(focused, 999.dp)
-                    .background(
-                        if (active) RenzoColors.Primary else RenzoColors.Card,
-                        RoundedCornerShape(999.dp),
-                    )
-                    .let {
-                        if (!active) it.border(
-                            1.dp,
-                            if (focused) RenzoColors.Primary else RenzoColors.Border,
-                            RoundedCornerShape(999.dp),
-                        ) else it
-                    }
+                    .height(32.dp)
+                    .clip(shape)
+                    .focusRing(focused, 8.dp)
+                    .background(bg, shape)
+                    .border(1.dp, if (focused && !active) RenzoColors.Primary else edge, shape)
                     .tvClickable(onFocused = { focused = it }, onClick = { app.setContentLevel(id) })
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     label,
-                    color = when {
-                        active -> RenzoColors.PrimaryForeground
-                        focused -> RenzoColors.Foreground
-                        else -> RenzoColors.MutedForeground
-                    },
-                    fontSize = 13.sp,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                    color = fg,
+                    maxLines = 1,
                 )
             }
         }
