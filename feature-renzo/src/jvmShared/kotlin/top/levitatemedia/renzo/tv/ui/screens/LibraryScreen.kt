@@ -42,6 +42,7 @@ import top.levitatemedia.renzo.tv.api.CardItem
 import top.levitatemedia.renzo.tv.api.FolderInfo
 import top.levitatemedia.renzo.tv.ui.components.ErrorBox
 import top.levitatemedia.renzo.tv.ui.components.MediaGrid
+import top.levitatemedia.renzo.tv.ui.components.HiddenByFilterNote
 import top.levitatemedia.renzo.tv.ui.components.isHidden
 import top.levitatemedia.renzo.tv.ui.kit.CARD_SIZES
 import top.levitatemedia.renzo.tv.ui.kit.CardSizePref
@@ -158,21 +159,26 @@ fun LibraryScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
             error != null -> ErrorBox(message = error!!, onRetry = { retryKey++ }, autoFocus = app.isTv)
             else -> {
                 val level = app.contentLevel.value
+                val hidden = remember(items, level) { items.filter { isHidden(it, level) } }
                 val shown = remember(items, level, orderBy) {
                     items.filter { !isHidden(it, level) }.let { list ->
                         if (orderBy == "title") list.sortedBy { it.title.lowercase() } else list
                     }
                 }
-                MediaGrid(
-                    items = shown,
-                    onOpen = onOpen,
-                    loading = loading,
-                    empty = if (activeFolder.isEmpty() && activeList.isEmpty()) {
-                        "Your library is empty. Add titles from Discover or Search, or import your AniList / MAL list."
-                    } else {
-                        "Nothing in this view yet."
-                    },
-                )
+                Column(Modifier.fillMaxSize()) {
+                    if (!loading) HiddenByFilterNote(app, hidden, Modifier.padding(horizontal = 16.dp))
+                    // Everything filtered out: the note alone, not "library is empty".
+                    if (shown.isNotEmpty() || hidden.isEmpty()) MediaGrid(
+                        items = shown,
+                        onOpen = onOpen,
+                        loading = loading,
+                        empty = if (activeFolder.isEmpty() && activeList.isEmpty()) {
+                            "Your library is empty. Add titles from Discover or Search, or import your AniList / MAL list."
+                        } else {
+                            "Nothing in this view yet."
+                        },
+                    )
+                }
             }
         }
     }

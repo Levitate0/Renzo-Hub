@@ -47,6 +47,7 @@ import top.levitatemedia.renzo.tv.AppServices
 import top.levitatemedia.renzo.tv.api.CardItem
 import top.levitatemedia.renzo.tv.api.ContentLevel
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
+import top.levitatemedia.renzo.tv.ui.kit.kitClickable
 
 /**
  * The web app's TV focus treatment: a primary-rose ring around the focused
@@ -342,6 +343,41 @@ fun contentCatsOf(item: CardItem): List<String> {
 /** True when the item sits ABOVE the chosen level (old isHidden). */
 fun isHidden(item: CardItem, level: String): Boolean =
     !ContentLevel.allows(level, contentCatsOf(item))
+
+/** The lowest level that shows every item in [items] (web levelToShow). */
+fun levelToShow(items: List<CardItem>): String {
+    val rank = mapOf("ecchi" to 1, "erotica" to 2, "hentai" to 3)
+    val max = items.flatMap { contentCatsOf(it) }.maxOfOrNull { rank[it] ?: 0 } ?: 0
+    return listOf("none", "ecchi", "erotica", "hentai")[max]
+}
+
+/**
+ * "2 titles hidden by the 18+ filter · Show up to Ecchi" above the Library and
+ * Search grids — raises the level just far enough to show them (owner,
+ * 2026-10-11: a saved series that vanished without a word looked like a bug).
+ * Web twin: media-grid.tsx HiddenNote.
+ */
+@Composable
+fun HiddenByFilterNote(app: AppServices, hidden: List<CardItem>, modifier: Modifier = Modifier) {
+    if (hidden.isEmpty()) return
+    val next = levelToShow(hidden)
+    Row(modifier.padding(vertical = 6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(
+            "${hidden.size} title${if (hidden.size == 1) "" else "s"} hidden by the 18+ filter · ",
+            color = RenzoColors.MutedForeground,
+            fontSize = 12.sp,
+        )
+        Text(
+            when (next) { "ecchi" -> "Show up to Ecchi"; "erotica" -> "Show up to Erotica"; else -> "Show all" },
+            color = RenzoColors.Primary,
+            fontSize = 12.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+            modifier = Modifier
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                .kitClickable(radius = 4.dp) { app.setContentLevel(next) },
+        )
+    }
+}
 
 private val CONTENT_LADDER = listOf(
     "none" to "Off",

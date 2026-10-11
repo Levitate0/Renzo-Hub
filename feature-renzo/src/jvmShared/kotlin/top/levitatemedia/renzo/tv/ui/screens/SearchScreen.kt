@@ -40,6 +40,7 @@ import top.levitatemedia.renzo.tv.ui.components.ErrorBox
 import top.levitatemedia.renzo.tv.ui.components.GridSkeleton
 import top.levitatemedia.renzo.tv.ui.components.MediaGrid
 import top.levitatemedia.renzo.tv.ui.components.focusRing
+import top.levitatemedia.renzo.tv.ui.components.HiddenByFilterNote
 import top.levitatemedia.renzo.tv.ui.components.isHidden
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 
@@ -189,7 +190,9 @@ fun SearchScreen(
                         onBack = { clearSearch(); onExit() },
                     )
                     val level = app.contentLevel.value
-                    MediaGrid(
+                    val hidden = results.filter { isHidden(it, level) }
+                    if (!searching) HiddenByFilterNote(app, hidden, Modifier.padding(horizontal = 16.dp))
+                    if (searching || hidden.size < results.size || hidden.isEmpty()) MediaGrid(
                         items = results.filter { !isHidden(it, level) },
                         onOpen = onOpen,
                         loading = searching,
