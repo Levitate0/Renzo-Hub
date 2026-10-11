@@ -1,6 +1,10 @@
 package top.levitatemedia.renzo.tv.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,13 +62,17 @@ class CardMetrics {
 fun rememberCardMetrics(): CardMetrics = remember { CardMetrics() }
 
 /**
- * PosterCard — literal port of poster-card.tsx. Root: `rounded-xl border
- * border-border bg-card` (16dp — globals.css sets --radius-xl: 16px — / 1dp
- * Border / Card; rendered card computes to 16px). Ribbon pill top-left,
- * downloaded dot (emerald + 3dp halo) top-right, 2/3 poster on bg black/40,
- * caption `px-3 pb-3 pt-2`: 13sp/600 two-line title, 11sp muted meta
- * ("year · genre · N seasons"), optional 11sp primary "▶ Up next · E7".
- * Web hover lift/ring maps to the TV focus ring + scale.
+ * PosterCard — Shiori's library SeriesCard (feature-shiori ui/library
+ * LibraryScreen.kt), the owner's direction being that Renzo look exactly like
+ * Shiori: a 2/3 cover with 6dp corners, a 2px status strip across the top
+ * (green = episodes on your server), the type / "New" badge top-left on
+ * black/70, the up-next episode top-right filled with the accent, and the
+ * centred semibold title on a black/60 bar along the bottom. Sized by the
+ * shared card-size choice ([currentCardSize]) unless a row passes a width.
+ *
+ * On TV the focus ring sits on a wrapper with a 3dp gutter (Shiori's
+ * TvFocusTile): drawn on the card itself, the full-bleed cover would paint
+ * over it.
  */
 @Composable
 fun PosterCard(
@@ -72,141 +80,123 @@ fun PosterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     /** Fixed width for rows; null = fill the parent (grid cells size the card). */
-    width: Dp? = 172.dp,
-    /** Shared with the other cards in this row/grid so all heights match. */
-    metrics: CardMetrics? = null,
+    width: Dp? = null,
+    /** Kept for callers; cards are uniform now that the title sits on the cover. */
+    @Suppress("UNUSED_PARAMETER") metrics: CardMetrics? = null,
 ) {
+    val size = top.levitatemedia.renzo.tv.ui.kit.currentCardSize()
+    val isTv = top.levitatemedia.renzo.tv.ui.kit.LocalIsTv.current
     var focused by remember { mutableStateOf(false) }
-    Column(
+    Box(
         modifier
             .let { if (width != null) it.width(width) else it.fillMaxWidth() }
-            .scale(if (focused) 1.04f else 1f)
-            .clip(RoundedCornerShape(16.dp))
-            .background(RenzoColors.Card, RoundedCornerShape(16.dp))
-            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Border, RoundedCornerShape(16.dp))
-            .focusRing(focused, 16.dp)
-            .tvClickable(onFocused = { focused = it }, onClick = onClick),
+            .then(
+                if (isTv) {
+                    Modifier
+                        .focusRing(focused, 9.dp)
+                        .tvClickable(onFocused = { focused = it }, onClick = onClick)
+                        .padding(3.dp)
+                } else {
+                    Modifier
+                },
+            ),
     ) {
-        // LazyImage: `poster block aspect-[2/3] w-full bg-black/40 object-cover`.
-        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).background(Color(0x66000000))) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(6.dp))
+                .background(RenzoColors.Muted)
+                .then(if (isTv) Modifier else Modifier.clickable(onClick = onClick)),
+        ) {
             AsyncImage(
                 model = item.poster,
                 contentDescription = item.title,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
+                modifier = Modifier.fillMaxSize(),
             )
-            Ribbon(item, Modifier.align(Alignment.TopStart).padding(8.dp))
+
+            // 2px status strip: episodes held on your server.
             if ((item.downloaded ?: 0) > 0) {
-                // `dot`: h/w 9px emerald-400, shadow-[0_0_0_3px_rgba(61,220,132,0.2)]
-                // — the 3dp halo ring sits OUTSIDE the 9dp dot (box-shadow spread),
-                // so the dot itself still lands 8dp (right-2 top-2) from the edge.
                 Box(
                     Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(5.dp)
-                        .size(15.dp)
-                        .background(RenzoColors.DownloadedGreenHalo, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(Modifier.size(9.dp).background(RenzoColors.DownloadedGreen, CircleShape))
-                }
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(top.levitatemedia.renzo.tv.ui.kit.Green500),
+                )
             }
-        }
-        // `cap px-3 pb-3 pt-2`
-        Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp)) {
-            // `t line-clamp-2 text-[13px] font-semibold leading-[1.3]`
-            Text(
-                item.title,
-                color = RenzoColors.Foreground,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 16.9.sp,
-                minLines = metrics?.titleLines ?: 1,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                onTextLayout = { metrics?.reportTitleLines(it.lineCount) },
-            )
-            // meta = [year, genres[0], seasonCount>1 && "N seasons"].join(" · ")
-            val meta = listOfNotNull(
-                item.year?.toString(),
-                item.genres.firstOrNull(),
-                item.seasonCount?.takeIf { it > 1 }?.let { "$it seasons" },
-            ).joinToString(" · ")
-            if (meta.isNotEmpty()) {
-                metrics?.reportMeta()
-                // `m mt-[3px] text-[11px] text-muted-foreground`
+
+            // Top-left badge — Shiori's provider badge slot.
+            ribbonText(item)?.let { (text, accent) ->
                 Text(
-                    meta,
-                    color = RenzoColors.MutedForeground,
-                    fontSize = 11.sp,
+                    text,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = size.badge, fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 3.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (accent) RenzoColors.Primary else Color.Black.copy(alpha = 0.7f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
                 )
-            } else if (metrics?.anyMeta == true) {
-                Spacer(Modifier.padding(top = 3.dp).height(14.dp))
             }
-            val up = item.upNext
-            if (up != null) {
-                metrics?.reportUpNext()
-                // `upnext mt-1 text-[11px] font-semibold text-primary`
+
+            // Top-right — Shiori's last-chapter badge slot: the next episode.
+            item.upNext?.let { up ->
                 Text(
-                    "▶ Up next · E$up",
-                    color = RenzoColors.Primary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 4.dp),
+                    "E$up",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = size.badge, fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(RenzoColors.Primary)
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
                 )
-            } else if (metrics?.anyUpNext == true) {
-                Spacer(Modifier.padding(top = 4.dp).height(14.dp))
             }
+
+            // Title bar.
+            Text(
+                item.title,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = size.title, fontWeight = FontWeight.SemiBold),
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
         }
     }
 }
 
 /**
- * Ribbon — literal port of poster-card.tsx Ribbon. Updates ribbons ("New ·
- * S2 E5" / "New season · S2" / "Soon" / "Available") are the dark pill with
- * the text in the THEME ACCENT (text-primary); everything else gets the type
- * pill ("Movie"/"Series", font-semibold, text-foreground). Both: rounded-full
- * border-white/10 bg-black/70 px-2 py-[3px] 10sp uppercase tracking 0.4.
+ * The top-left badge: the updates feed's "New · S2 E5" / "New season" /
+ * "Soon" / "Available" on the accent, otherwise "Movie" for films. Series
+ * carry no badge — it was on every card and said nothing.
  */
-@Composable
-private fun Ribbon(item: CardItem, modifier: Modifier) {
+private fun ribbonText(item: CardItem): Pair<String, Boolean>? {
     // The updates feed sends `kind`; the client-side name is `updKind`.
-    val kind = item.updKind ?: item.kind
-    val (text, weight, color) = when (kind) {
+    return when (item.updKind ?: item.kind) {
         "episode" -> {
             val sTag = item.season?.let { "S$it " } ?: ""
-            Triple("New · ${sTag}E${item.ep ?: ""}", FontWeight.Bold, RenzoColors.Primary)
+            "New · ${sTag}E${item.ep ?: ""}" to true
         }
         "season" -> {
             val head = if (item.upcoming == true) "Soon" else "New season"
-            val sTag = item.season?.let { " · S$it" } ?: ""
-            Triple(head + sTag, FontWeight.Bold, RenzoColors.Primary)
+            (head + (item.season?.let { " · S$it" } ?: "")) to true
         }
-        // Old client sent updKind "soon" for upcoming seasons — same ribbon.
-        "soon" -> Triple("Soon", FontWeight.Bold, RenzoColors.Primary)
-        "movie" -> Triple("Available", FontWeight.Bold, RenzoColors.Primary)
-        else -> Triple(
-            if (item.type == "movie") "Movie" else "Series",
-            FontWeight.SemiBold,
-            RenzoColors.Foreground,
-        )
-    }
-    Box(
-        modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(RenzoColors.OverlayBlack, RoundedCornerShape(999.dp))
-            .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(999.dp))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-    ) {
-        Text(
-            text.uppercase(),
-            color = color,
-            fontSize = 10.sp,
-            fontWeight = weight,
-            letterSpacing = 0.4.sp,
-        )
+        // Old client sent updKind "soon" for upcoming seasons — same badge.
+        "soon" -> "Soon" to true
+        "movie" -> "Available" to true
+        else -> if (item.type == "movie") "Movie" to false else null
     }
 }

@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -27,12 +31,14 @@ import top.levitatemedia.renzo.tv.AppServices
 import top.levitatemedia.renzo.tv.api.ApiError
 import top.levitatemedia.renzo.tv.api.CardItem
 import top.levitatemedia.renzo.tv.ui.components.BackHeading
-import top.levitatemedia.renzo.tv.ui.components.ContentChips
 import top.levitatemedia.renzo.tv.ui.components.ErrorBox
 import top.levitatemedia.renzo.tv.ui.components.MediaGrid
 import top.levitatemedia.renzo.tv.ui.components.MediaRow
 import top.levitatemedia.renzo.tv.ui.components.isHidden
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
+import top.levitatemedia.renzo.tv.ui.kit.ContentLevelSelect
+import top.levitatemedia.renzo.tv.ui.kit.SpotlightHero
+import top.levitatemedia.renzo.tv.ui.kit.SpotlightItem
 
 // Discover (app/page.tsx): content chips on top, then either the three browse
 // rows (Trending / Recommended / New & this season) or a full category grid
@@ -122,7 +128,7 @@ fun HomeScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
     if (cat != null) {
         // Category mode: chips, "‹ Back" heading, full wrapping grid.
         Column(Modifier.fillMaxSize()) {
-            ContentChips(app)
+            ContentRibbon(app)
             Notes(malNote, partialFail)
             BackHeading(heading = CAT_LABELS[cat] ?: cat, onBack = { category = null })
             MediaGrid(
@@ -133,20 +139,34 @@ fun HomeScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
             )
         }
     } else {
-        // Browse mode: the three rows in the web's order (#browseWrap mt-2).
-        // Desktop keeps the dashboard feel: the three rows split the window
-        // height evenly and the page never scrolls vertically — the rows'
-        // bounded height sizes their cards to fit (tileWidthFor). Phones/TV
-        // keep the web's scrolling column.
-        val fitToWindow = top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop
-        Column(
-            Modifier
-                .fillMaxSize()
-                .then(if (fitToWindow) Modifier else Modifier.verticalScroll(rememberScrollState())),
-        ) {
-            ContentChips(app)
+        // Shiori's Browse: the ribbon, the cinematic spotlight over the first
+        // picks, then the catalogue — here Renzo's three rows, scrolling as one
+        // page (the old fit-to-window split squeezed Shiori-sized cards).
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            ContentRibbon(app)
             Notes(malNote, partialFail)
-            Spacer(Modifier.height(8.dp))
+            val spot = rows["trending"].orEmpty().filter { it.id != null }.take(7)
+            if (spot.isNotEmpty()) {
+                // Discover cards carry no description or airing status; the
+                // title endpoint does (and the server caches it), so the
+                // spotlight fills in as each detail arrives.
+                val details = remember { androidx.compose.runtime.mutableStateMapOf<Int, top.levitatemedia.renzo.tv.api.TitleDetail>() }
+                LaunchedEffect(spot.map { it.id }) {
+                    for (c in spot) {
+                        val id = c.id ?: continue
+                        if (id in details) continue
+                        try { details[id] = app.repo.title(id) } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                SpotlightHero(
+                    items = spot.map { c -> spotlightOf(c, details[c.id]) },
+                    eyebrow = "TRENDING · THIS SEASON ON ANILIST",
+                    ctaLabel = "View title",
+                    onCtaClick = { s -> spot.firstOrNull { it.id.toString() == s.id }?.let(open) },
+                )
+                Spacer(Modifier.height(24.dp))
+            }
             CAT_LABELS.forEach { (key, label) ->
                 MediaRow(
                     heading = label,
@@ -154,11 +174,44 @@ fun HomeScreen(app: AppServices, onOpen: (CardItem) -> Unit) {
                     onOpen = open,
                     onMore = { category = key },
                     loading = loading,
-                    modifier = if (fitToWindow) Modifier.weight(1f) else Modifier,
                 )
             }
-            if (!fitToWindow) Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
         }
+    }
+}
+
+/** A Discover card as a spotlight slide, enriched once its detail has loaded. */
+private fun spotlightOf(c: CardItem, d: top.levitatemedia.renzo.tv.api.TitleDetail?): SpotlightItem {
+    val (label, color) = when (d?.airingStatus?.uppercase()) {
+        "RELEASING" -> "Airing" to androidx.compose.ui.graphics.Color(0xFF22C55E)
+        "FINISHED" -> "Finished" to androidx.compose.ui.graphics.Color(0xFF3B82F6)
+        "NOT_YET_RELEASED" -> "Upcoming" to androidx.compose.ui.graphics.Color(0xFFEAB308)
+        else -> (if (c.type == "movie") "Movie" else "Series") to androidx.compose.ui.graphics.Color(0xFF71717A)
+    }
+    val eps = d?.episodeCount ?: d?.episodeList?.size?.takeIf { it > 0 }
+    return SpotlightItem(
+        id = c.id.toString(),
+        title = c.title,
+        author = c.year?.toString(),
+        description = cleanDescription(d?.description),
+        thumbnailUrl = c.poster,
+        statusLabel = label,
+        statusColor = color,
+        genres = c.genres.ifEmpty { d?.genres.orEmpty() },
+        meta = listOfNotNull(c.year?.toString(), eps?.let { "$it episodes" }).joinToString(" · ").ifEmpty { null },
+    )
+}
+
+/** Shiori's library ribbon, Discover's share of it: the 18+ control. */
+@Composable
+private fun ContentRibbon(app: AppServices) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        ContentLevelSelect(app.contentLevel.value) { app.setContentLevel(it) }
     }
 }
 

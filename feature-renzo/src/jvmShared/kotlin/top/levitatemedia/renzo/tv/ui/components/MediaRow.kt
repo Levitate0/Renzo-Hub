@@ -176,9 +176,11 @@ fun MediaGrid(
         loading -> GridSkeleton(modifier = modifier.padding(top = 16.dp))
         items.isEmpty() -> EmptyState(empty, modifier)
         else -> BoxWithConstraints(modifier.fillMaxSize()) {
-            // contentPadding (16 top + 24 bottom) comes out of the tile budget.
-            val cellWidth = tileWidthFor(if (maxHeight > 0.dp) maxHeight - 40.dp else Dp.Unspecified)
-            val narrow = top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first < 420
+            // Shiori's library grid: adaptive columns of the shared card size,
+            // gap-4 on a wide window and gap-2 on a phone.
+            val cellWidth = top.levitatemedia.renzo.tv.ui.kit.currentCardSize().width
+            val wideGrid = top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 1024
+            val gridGap = if (wideGrid) 16.dp else 8.dp
             val gridState = rememberLazyGridState()
             var focusedIndex by remember { mutableStateOf(-1) }
             // Centre the focused card instead of the default "scroll just far
@@ -197,14 +199,10 @@ fun MediaGrid(
             }
             LazyVerticalGrid(
                 state = gridState,
-                columns = if (narrow) {
-                    androidx.compose.foundation.lazy.grid.GridCells.Fixed(2)
-                } else {
-                    androidx.compose.foundation.lazy.grid.GridCells.Adaptive(cellWidth)
-                },
-                horizontalArrangement = Arrangement.spacedBy(posterGridGap()),
-                verticalArrangement = Arrangement.spacedBy(posterGridGap()),
-                contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
+                columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(cellWidth),
+                horizontalArrangement = Arrangement.spacedBy(gridGap),
+                verticalArrangement = Arrangement.spacedBy(gridGap),
+                contentPadding = PaddingValues(top = if (wideGrid) 16.dp else 8.dp, bottom = 24.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
                 itemsIndexed(items) { index, item ->
@@ -269,13 +267,11 @@ fun MediaRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         ) {
+            // Shiori's section heading (titleMedium, SemiBold Geist).
             Text(
                 heading,
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                 color = RenzoColors.Foreground,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 28.sp,               // text-lg line-height
-                letterSpacing = (-0.45).sp,       // tracking-tight @18px
                 modifier = Modifier.weight(1f),
             )
             var focused by remember { mutableStateOf(false) }
@@ -297,9 +293,8 @@ fun MediaRow(
                 // Rows live in a scrolling column, so maxHeight is usually
                 // unbounded — tileWidthFor() then falls back to the screen
                 // fraction; on a bounded parent it uses the real space.
-                val cardWidth = tileWidthFor(
-                    if (maxHeight > 0.dp && maxHeight.value.isFinite()) maxHeight else Dp.Unspecified,
-                )
+                // The shared card size, as Shiori's Browse uses the Library's.
+                val cardWidth = top.levitatemedia.renzo.tv.ui.kit.currentCardSize().width
                 val rowMetrics = rememberCardMetrics()
                 val firstCard = remember { FocusRequester() }
                 val scroll = rememberScrollState()

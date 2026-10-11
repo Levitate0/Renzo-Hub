@@ -91,8 +91,14 @@ fun TopBar(
     BoxWithConstraints(modifier.fillMaxWidth()) {
         // Raw screen width, NOT the measured width: TV overscan padding was
         // pushing this under the breakpoint and hiding the tab pills.
-        val wide = top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 800 &&
-            maxWidth >= 700.dp
+        // Shiori's lg break (1024) for the desktop pills — below it the bar
+        // switches to the hamburger, as Shiori's command bar does, instead of
+        // squeezing the tabs. TV keeps its own 800 threshold.
+        val wide = if (app.isTv) {
+            top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 800 && maxWidth >= 700.dp
+        } else {
+            top.levitatemedia.renzo.tv.ui.theme.logicalScreenSize().first >= 1024
+        }
         // Desktop matches the web: the bar IS the nav, no hamburger while the
         // pills are visible. TV keeps the HAMBURGER instead (user direction
         // 2026-08-21, second pass): a full pill row was too tight on a 1080p
