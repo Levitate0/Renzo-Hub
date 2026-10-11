@@ -6,6 +6,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
+import top.levitatemedia.renzo.tv.ui.components.tvClickable
+import top.levitatemedia.renzo.tv.ui.components.focusRing
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -131,14 +138,16 @@ import java.util.Locale
  * the owner's direction (2026-10-11) is that Renzo look exactly like Shiori:
  *
  *  - wide: a 48dp "‹ Back" strip with the title centred, the blurred-cover
- *    hero, then a centred 1280dp two-column body — a 380dp left rail (seasons,
- *    download settings; Shiori's sources + downloads) and the episode list on
- *    the right (Shiori's chapter list), each column scrolling on its own.
- *  - narrow and TV: one scrolling column in Shiori's mobile order — hero,
- *    episodes, then the rail sections.
+ *    hero, then a centred 1280dp two-column body — a 380dp left rail (download
+ *    settings; Shiori's downloads panel) and the episodes on the right, each
+ *    column scrolling on its own.
+ *  - narrow and TV: one scrolling column — hero, episodes, then the rail.
  *
- * Episodes are rows in Shiori's chapter-row form rather than thumbnail tiles.
- * The previous banner-and-tiles page is on branch backup/pre-shiori-restyle.
+ * Owner direction 2026-10-11 ("keep renzo's original episode display"): the
+ * episodes are Renzo's own 16:9 thumbnail tiles under Shiori's header chips,
+ * and the seasons are Renzo's horizontal poster strip above them.
+ * The cover expands in Shiori's lightbox. The previous banner-and-tiles page
+ * is on branch backup/pre-shiori-restyle.
  */
 @Composable
 fun TitleScreen(
@@ -264,7 +273,15 @@ fun TitleScreen(
                     )
                 }
 
+                // Renzo's ep-grid: minmax(240px, 1fr) tiles with 16dp gaps, in
+                // whatever the episode column is given (the right column when
+                // wide, the full width otherwise), less its 16dp side padding.
+                val screenW = renzoScreenWidthDp()
+                val epColumnW = if (wide) minOf(screenW - 16, 1280) - 16 - 380 - 16 else screenW
+                val epCols = ((epColumnW - 32 + 16) / (240 + 16)).coerceAtLeast(1)
+
                 val episodes: LazyListScope.() -> Unit = {
+                    item(key = "season-bar") { SeasonBar(d, onOpenTitle) }
                     if (d.episodeList.isNotEmpty()) {
                         item(key = "eps-header") {
                             EpisodesHeader(
@@ -293,37 +310,46 @@ fun TitleScreen(
                                 },
                             )
                         }
-                        d.episodeList.forEach { ep ->
-                            item(key = "ep-${ep.number}") {
-                                EpisodeRow(
-                                    ep = ep,
-                                    durationMin = d.duration,
-                                    watched = ep.number <= watchedThrough,
-                                    unaired = isUnaired(ep, d, todayIso),
-                                    job = jobs.firstOrNull { it.episode == ep.number },
-                                    downloadsDenied = downloadsDenied,
-                                    isTv = app.isTv,
-                                    savedOffline = remember(offlineRevision, downloadRevision, d.id, ep.number) {
-                                        app.offline.isOffline(episodeKey(d.id, ep.number))
-                                    },
-                                    onPlay = { onPlay(d, ep.number) },
-                                    onToggleWatched = { w -> setProgress(if (w) ep.number else ep.number - 1) },
-                                    onDownload = { priority ->
-                                        scope.launch {
-                                            try { app.repo.downloadEpisode(d.id, ep.number, priority) } catch (_: Exception) {}
-                                        }
-                                    },
-                                    onSaveOffline = {
-                                        app.prefs.serverUrl?.let { base ->
-                                            enqueueEpisodes(d, listOf(ep.number), base)
+                        val chunks = d.episodeList.chunked(epCols)
+                        items(chunks.size, key = { "eps-row-$it" }) { i ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                chunks[i].forEach { ep ->
+                                    EpisodeTile(
+                                        ep = ep,
+                                        seriesTitle = d.displayTitle,
+                                        fallbackImage = ep.thumbnail ?: d.banner ?: d.poster,
+                                        watched = ep.number <= watchedThrough,
+                                        unaired = isUnaired(ep, d, todayIso),
+                                        durationMin = d.duration,
+                                        job = jobs.firstOrNull { it.episode == ep.number },
+                                        downloadsDenied = downloadsDenied,
+                                        savedOffline = remember(offlineRevision, downloadRevision, d.id, ep.number) {
+                                            app.offline.isOffline(episodeKey(d.id, ep.number))
+                                        },
+                                        onClick = { onPlay(d, ep.number) },
+                                        onSetProgress = { n -> setProgress(n) },
+                                        onDownload = { priority ->
+                                            scope.launch {
+                                                try { app.repo.downloadEpisode(d.id, ep.number, priority) } catch (_: Exception) {}
+                                            }
+                                        },
+                                        onSaveOffline = {
+                                            app.prefs.serverUrl?.let { base ->
+                                                enqueueEpisodes(d, listOf(ep.number), base)
+                                                offlineRevision++
+                                            }
+                                        },
+                                        onRemoveOffline = {
+                                            app.offline.deleteItem(episodeKey(d.id, ep.number))
                                             offlineRevision++
-                                        }
-                                    },
-                                    onRemoveOffline = {
-                                        app.offline.deleteItem(episodeKey(d.id, ep.number))
-                                        offlineRevision++
-                                    },
-                                )
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                                repeat(epCols - chunks[i].size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
                     }
@@ -348,14 +374,13 @@ fun TitleScreen(
                                     .fillMaxHeight()
                                     .verticalScroll(rememberScrollState()),
                             ) {
-                                SeasonsSection(d, onOpenTitle)
                                 DownloadSettingsSection(app, d, downloadsDenied)
                                 Spacer(Modifier.height(16.dp))
                             }
                             LazyColumn(
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
                                 contentPadding = PaddingValues(bottom = 24.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
                             ) { episodes() }
                         }
                     }
@@ -367,10 +392,6 @@ fun TitleScreen(
                     ) {
                         item(key = "hero") { hero() }
                         episodes()
-                        item(key = "seasons") {
-                            Spacer(Modifier.height(16.dp))
-                            SeasonsSection(d, onOpenTitle)
-                        }
                         item(key = "dl-settings") {
                             Spacer(Modifier.height(16.dp))
                             DownloadSettingsSection(app, d, downloadsDenied)
@@ -479,6 +500,8 @@ private fun TitleHero(
     val playEp = (watchedThrough + 1).coerceIn(1, maxAvailable)
     val scope = rememberCoroutineScope()
     var auto by remember(d.id) { mutableStateOf(d.autoDownload) }
+    // Shiori's cover lightbox (SeriesHeroSection): click the cover to expand.
+    var coverExpanded by remember(d.id) { mutableStateOf(false) }
 
     Box(Modifier.fillMaxWidth().clipToBounds()) {
         // Blurred cover + fade to the page + a faint primary tint, as Shiori.
@@ -519,7 +542,8 @@ private fun TitleHero(
                     .height(h)
                     .clip(RoundedCornerShape(12.dp))
                     .background(RenzoColors.Card)
-                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp)),
+                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                    .then(if (d.poster.isNullOrBlank()) Modifier else Modifier.kitClickable(radius = 12.dp) { coverExpanded = true }),
             ) {
                 AsyncImage(
                     model = d.poster,
@@ -737,6 +761,25 @@ private fun TitleHero(
             }
         }
     }
+
+    // ── Cover lightbox (Shiori SeriesHeroSection) ──
+    if (coverExpanded && !d.poster.isNullOrBlank()) {
+        Dialog(onDismissRequest = { coverExpanded = false }) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .kitClickable { coverExpanded = false },
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = d.poster,
+                    contentDescription = d.displayTitle,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
+                )
+            }
+        }
+    }
 }
 
 /** "Season 2" / "Season 2 Part 2" / "OVA" — the meta row's first entry. */
@@ -823,144 +866,209 @@ private fun EpisodesHeader(
     }
 }
 
+// Renzo's own episode tiles (the pre-restyle page, branch
+// backup/pre-shiori-restyle) — kept at the owner's direction (2026-10-11):
+// the Shiori header and hero above, Renzo's 16:9 thumbnail grid below.
+
 @Composable
-private fun EpisodeRow(
+private fun EpisodeTile(
     ep: EpisodeInfo,
-    durationMin: Int?,
+    /** The web's .ep-series overline — the series name above every card. */
+    seriesTitle: String,
+    fallbackImage: String?,
     watched: Boolean,
     unaired: Boolean,
+    /** Series runtime in minutes — the web's fallback badge ("24m"). */
+    durationMin: Int?,
+    /** Live job state for this episode from the jobs poll, if any. */
     job: JobItem?,
     downloadsDenied: Boolean,
-    isTv: Boolean,
     /** Already saved to THIS DEVICE — distinct from the server holding a file. */
     savedOffline: Boolean,
-    onPlay: () -> Unit,
-    onToggleWatched: (Boolean) -> Unit,
+    onClick: () -> Unit,
+    onSetProgress: (Int) -> Unit,
     onDownload: (Boolean) -> Unit,
     onSaveOffline: () -> Unit,
     onRemoveOffline: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val busy = job != null && job.active
-    val pct = ((job?.progress ?: 0.0) * 100).toInt()
-    val stacked = !isTv && renzoScreenWidthDp() < 640
-
-    val leading: @Composable RowScope.() -> Unit = {
-        when {
-            ep.hasFile -> Icon(Icons.Filled.CheckCircle, contentDescription = "Downloaded", tint = Emerald500, modifier = Modifier.size(16.dp))
-            unaired -> Icon(Icons.Filled.Schedule, contentDescription = "Not yet aired", tint = Amber500, modifier = Modifier.size(16.dp))
-            busy -> Icon(Icons.Filled.Download, contentDescription = "Downloading", tint = RenzoColors.Primary, modifier = Modifier.size(16.dp))
-            else -> Icon(Icons.Outlined.PlayCircle, contentDescription = "Streams on demand", tint = RenzoColors.MutedForeground, modifier = Modifier.size(16.dp))
-        }
-        Column(Modifier.weight(1f).then(if (watched) Modifier.alpha(0.5f) else Modifier)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "E${ep.number}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = RenzoColors.Foreground,
-                )
-                val name = ep.epTitle?.takeIf { it.isNotBlank() }
-                if (name != null) {
-                    Text(
-                        name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = RenzoColors.MutedForeground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false),
-                    )
-                }
-                if (busy) {
-                    Text(
-                        if (pct > 0) "$pct%" else job!!.status,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = RenzoColors.Primary,
-                        modifier = Modifier
-                            .padding(start = 6.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(RenzoColors.Primary.copy(alpha = 0.15f))
-                            .padding(horizontal = 4.dp, vertical = 1.dp),
-                    )
-                }
-            }
-            Row(Modifier.padding(top = 2.dp)) {
-                val dur = durationMin?.takeIf { it > 0 }?.let { " · ${it}m" } ?: ""
-                when {
-                    unaired -> Text("Not yet aired", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Amber500)
-                    ep.hasFile -> Text("On your server · Subtitled$dur", fontSize = 11.sp, color = RenzoColors.MutedForeground, maxLines = 1)
-                    busy -> Text("Downloading · ${job!!.status}", fontSize = 11.sp, color = RenzoColors.MutedForeground, maxLines = 1)
-                    else -> Text("Streams on demand · Subtitled$dur", fontSize = 11.sp, color = RenzoColors.MutedForeground, maxLines = 1)
-                }
-                if (watched) Text(" · Watched", fontSize = 11.sp, color = RenzoColors.MutedForeground.copy(alpha = 0.7f), maxLines = 1)
-            }
-        }
-    }
-
-    val actions: @Composable RowScope.() -> Unit = {
-        if (!unaired) {
-            // Device copy (Shiori: Save offline / phone icon once saved).
-            if (savedOffline) {
-                SquareIconButton(
-                    icon = Icons.Filled.PhoneAndroid,
-                    contentDescription = "Saved on this device — remove",
-                    tint = Emerald500,
-                    borderColor = Color.Transparent,
-                    background = Color.Transparent,
-                    onClick = onRemoveOffline,
-                )
-            } else if (ep.hasFile && !isTv) {
-                SquareIconButton(
-                    icon = Icons.Filled.CloudDownload,
-                    contentDescription = "Save to this device",
-                    borderColor = Color.Transparent,
-                    background = Color.Transparent,
-                    onClick = onSaveOffline,
-                )
-            }
-            SquareIconButton(
-                icon = if (watched) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-                contentDescription = if (watched) "Mark unwatched" else "Mark watched",
-                tint = if (watched) Emerald500 else RenzoColors.MutedForeground.copy(alpha = 0.5f),
-                borderColor = Color.Transparent,
-                background = Color.Transparent,
-                onClick = { onToggleWatched(!watched) },
+    var menuOpen by remember(ep.number) { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
+    Column(
+        modifier
+            .alpha(if (unaired) 0.5f else 1f)
+            .scale(if (focused) 1.02f else 1f)
+            .let {
+                if (unaired) it
+                else it.tvClickable(onFocused = { f -> focused = f }, onClick = onClick)
+            },
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(RenzoColors.EpThumbWell)
+                .focusRing(focused, 10.dp),
+        ) {
+            AsyncImage(
+                model = fallbackImage,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
             )
-            // Server-side fetch (NOT a device copy — that is the icon above).
-            if (!ep.hasFile && !downloadsDenied && !busy) {
-                val smLabel = !isTv && renzoScreenWidthDp() >= 640
-                if (smLabel) {
-                    RenzoButton(text = "Download", icon = Icons.Filled.Download, variant = "outline", small = true, onClick = { onDownload(false) })
-                } else {
-                    SquareIconButton(icon = Icons.Filled.Download, contentDescription = "Download", onClick = { onDownload(false) })
+            // Play overlay while focused (web: hover shows a centred ▶).
+            if (focused && !unaired) {
+                Box(
+                    Modifier.matchParentSize().background(Color(0x47060B0F)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(if (watched) "↺" else "▶", color = Color.White, fontSize = 34.sp)
+                }
+            }
+            // Badge ladder, in the web's exact order:
+            // Soon → Watched → ✓ Saved → "<status> NN%" → "<duration>m".
+            val busy = job != null && job.active
+            val pct = ((job?.progress ?: 0.0) * 100).toInt()
+            val badge: Pair<String, Color>? = when {
+                unaired -> "Soon" to RenzoColors.Foreground
+                watched -> "Watched" to RenzoColors.Foreground
+                ep.hasFile -> "✓ Saved" to RenzoColors.DownloadedGreen
+                busy -> (job!!.status + if (pct > 0) " $pct%" else "") to RenzoColors.Foreground
+                durationMin != null && durationMin > 0 -> "${durationMin}m" to RenzoColors.Foreground
+                else -> null
+            }
+            if (badge != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(RenzoColors.OverlayBlack, RoundedCornerShape(999.dp))
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                ) {
+                    Text(badge.first, color = badge.second, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            if (watched) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(RenzoColors.Primary),
+                )
+            } else if (job != null && job.active) {
+                // Live download progress, overlaid from the jobs poll.
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(job.progress.toFloat().coerceIn(0f, 1f))
+                        .height(3.dp)
+                        .background(RenzoColors.Primary),
+                )
+            }
+        }
+        // Web .ep-series: uppercase muted overline with the series name.
+        Text(
+            seriesTitle.uppercase(),
+            color = RenzoColors.MutedForeground,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.3.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 9.dp),
+        )
+        // Web .ep-title: "E{n} – {title}", falling back to "Episode n".
+        Text(
+            "E${ep.number} – " + (ep.epTitle?.takeIf { it.isNotBlank() } ?: "Episode ${ep.number}"),
+            color = RenzoColors.Foreground,
+            fontSize = 14.sp,
+            fontWeight = FontWeight(650),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 3.dp),
+        )
+        // Web `.ep-foot`: "Subtitled" left, ⋮ kebab right.
+        Row(
+            Modifier.fillMaxWidth().padding(top = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Subtitled",
+                color = RenzoColors.MutedForeground,
+                fontSize = 12.5.sp,
+                modifier = Modifier.weight(1f),
+            )
+            if (!unaired) {
+                var kebabFocused by remember { mutableStateOf(false) }
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .focusRing(kebabFocused, 8.dp)
+                        .background(
+                            if (kebabFocused) RenzoColors.Secondary else Color.Transparent,
+                            RoundedCornerShape(8.dp),
+                        )
+                        .tvClickable(onFocused = { kebabFocused = it }, onClick = { menuOpen = !menuOpen }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("⋮", color = RenzoColors.MutedForeground, fontSize = 18.sp)
+                }
+            }
+        }
+        // Web `.ep-menu` (160px popover) — inline here so the D-pad can walk it.
+        if (menuOpen && !unaired) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(RenzoColors.Secondary, RoundedCornerShape(10.dp))
+                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(10.dp))
+                    .padding(4.dp),
+            ) {
+                EpMenuItem(if (watched) "Mark unwatched" else "Mark watched") {
+                    menuOpen = false
+                    onSetProgress(if (watched) ep.number - 1 else ep.number)
+                }
+                if (!ep.hasFile && !downloadsDenied) {
+                    // Server-side: ask the server to fetch the episode. NOT a
+                    // copy on this device — that is "Save to device" below, and
+                    // conflating the two is exactly the confusion to avoid.
+                    EpMenuItem("Download") { menuOpen = false; onDownload(false) }
+                    EpMenuItem("Download now") { menuOpen = false; onDownload(true) }
+                }
+                // Device-side: only offerable once the server actually has the
+                // file to hand over.
+                if (ep.hasFile) {
+                    if (savedOffline) {
+                        EpMenuItem("Remove from device") { menuOpen = false; onRemoveOffline() }
+                    } else {
+                        EpMenuItem("Save to device") { menuOpen = false; onSaveOffline() }
+                    }
                 }
             }
         }
     }
+}
 
-    val rowModifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp)
-        .clip(MaterialTheme.shapes.small)
-        .background(RenzoColors.Card.copy(alpha = 0.5f))
-        .border(1.dp, Border40, MaterialTheme.shapes.small)
-        .then(if (unaired) Modifier.alpha(0.6f) else Modifier.kitClickable(onClick = onPlay))
-        .padding(horizontal = 12.dp, vertical = 10.dp)
-
-    if (stacked) {
-        Column(rowModifier) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) { leading() }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-            ) { actions() }
-        }
-    } else {
-        Row(rowModifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            leading()
-            actions()
-        }
+/** One row of the web's per-episode ⋮ menu (13sp, hover/focus = muted fill). */
+@Composable
+private fun EpMenuItem(label: String, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .focusRing(focused, 6.dp)
+            .background(if (focused) RenzoColors.Muted else Color.Transparent, RoundedCornerShape(6.dp))
+            .tvClickable(onFocused = { focused = it }, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        Text(label, color = RenzoColors.Foreground, fontSize = 13.sp)
     }
 }
 
@@ -983,64 +1091,69 @@ private fun RailHeading(title: String, count: Int? = null) {
     }
 }
 
-/** The franchise: this title and its seasons/movies/OVAs, one row each. */
+/**
+ * The franchise as Renzo's horizontal poster strip (the pre-restyle season
+ * chain, Crunchyroll-style) — this title outlined in the accent, the next
+ * season marked "Up next". Owner direction 2026-10-11: brought back over
+ * Shiori's rail list.
+ */
 @Composable
-private fun SeasonsSection(d: TitleDetail, onOpenTitle: (Int) -> Unit) {
+private fun SeasonBar(d: TitleDetail, onOpenTitle: (Int) -> Unit) {
     val chain = remember(d) { orderedSeasons(d) }
     if (chain.size < 2) return
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         RailHeading("Seasons", chain.size)
-        chain.forEach { ref ->
-            val current = ref.id == d.id
-            SeasonRow(ref, current = current, upNext = d.nextUp?.id == ref.id, onClick = { if (!current) onOpenTitle(ref.id) })
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(end = 24.dp)) {
+            items(chain, key = { it.id }) { ref ->
+                SeasonCard(
+                    ref = ref,
+                    current = ref.id == d.id,
+                    upNext = d.nextUp?.id == ref.id,
+                    onOpen = { if (ref.id != d.id) onOpenTitle(ref.id) },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun SeasonRow(ref: SeasonRef, current: Boolean, upNext: Boolean, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.small)
-            .background(if (current) RenzoColors.Primary.copy(alpha = 0.10f) else RenzoColors.Card.copy(alpha = 0.5f))
-            .border(1.dp, if (current) RenzoColors.Primary.copy(alpha = 0.5f) else Border40, MaterialTheme.shapes.small)
-            .kitClickable(onClick = onClick)
-            .padding(8.dp),
+private fun SeasonCard(ref: SeasonRef, current: Boolean, upNext: Boolean, onOpen: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Column(
+        Modifier
+            .width(118.dp)
+            .scale(if (focused) 1.05f else 1f)
+            .tvClickable(onFocused = { focused = it }, onClick = onOpen),
     ) {
-        AsyncImage(
-            model = ref.poster,
-            contentDescription = ref.title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.width(36.dp).height(54.dp).clip(RoundedCornerShape(6.dp)).background(RenzoColors.Muted),
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(RenzoColors.Card)
+                .border(
+                    if (current) 2.dp else 1.dp,
+                    if (current) RenzoColors.Primary else RenzoColors.Border,
+                    RoundedCornerShape(10.dp),
+                )
+                .focusRing(focused, 10.dp),
+        ) {
+            AsyncImage(
+                model = ref.poster,
+                contentDescription = ref.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+        Text(
+            seasonLabel(ref, short = true) + if (current) " (this)" else if (upNext) " · Up next" else "",
+            color = if (current) RenzoColors.Foreground else RenzoColors.MutedForeground,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp),
         )
-        Column(Modifier.weight(1f)) {
-            Text(
-                seasonLabel(ref),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = if (current) RenzoColors.Primary else RenzoColors.Foreground,
-                maxLines = 1,
-            )
-            ref.title?.let {
-                Text(it, fontSize = 11.sp, color = RenzoColors.MutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        when {
-            current -> Text("Viewing", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = RenzoColors.Primary)
-            upNext -> Text(
-                "Up next",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                color = RenzoColors.Primary,
-                modifier = Modifier.clip(PillShape).background(RenzoColors.Primary.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp),
-            )
-        }
     }
 }
 
@@ -1261,7 +1374,7 @@ internal fun orderedSeasons(d: TitleDetail): List<SeasonRef> {
 }
 
 /** Web seasonChip + year: "S1 · 2013", "OVA · 2023". */
-internal fun seasonLabel(ref: SeasonRef): String {
+internal fun seasonLabel(ref: SeasonRef, short: Boolean = false): String {
     val chip = when {
         ref.kind == "movie" -> "Movie"
         ref.kind == "extra" -> when (ref.format?.uppercase(Locale.US)) {
@@ -1269,6 +1382,8 @@ internal fun seasonLabel(ref: SeasonRef): String {
             "OVA" -> "OVA"
             else -> "Special"
         }
+        // short = the web seasonChip on the poster strip: "S2 Pt2".
+        short -> "S${ref.num ?: 1}" + (ref.part?.takeIf { it > 1 }?.let { " Pt$it" } ?: "")
         else -> "Season ${ref.num ?: 1}" + (ref.part?.takeIf { it > 1 }?.let { " Part $it" } ?: "")
     }
     return chip + (ref.year?.let { " · $it" } ?: "")
