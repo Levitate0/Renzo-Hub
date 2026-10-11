@@ -74,6 +74,9 @@ kotlin {
             dependsOn(jvmShared)
             dependencies {
                 implementation(libs.kotlinx.coroutines.swing)
+                // Built-in desktop player: libvlc via JNA. The installer bundles
+                // libvlc itself (tools/build-windows-exe.sh), so users need no VLC.
+                implementation(libs.vlcj)
             }
         }
     }

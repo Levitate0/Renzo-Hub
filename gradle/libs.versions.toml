@@ -6,6 +6,8 @@
 # "take the newer of each", with two deliberate exceptions noted below.
 
 [versions]
+# Desktop built-in Renzo player (libvlc 3.x binding). GPLv3 — see the player's KDoc.
+vlcj = "4.8.3"
 agp = "8.13.0"
 kotlin = "2.4.10"
 # Compose Multiplatform — runs the same Compose code on the desktop JVM
@@ -53,6 +55,7 @@ serialization = "1.9.0"
 media3 = "1.7.1"
 
 [libraries]
+vlcj = { module = "uk.co.caprica:vlcj", version.ref = "vlcj" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }

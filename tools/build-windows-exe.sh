@@ -14,6 +14,11 @@ OUT_DIR="${OUT_DIR:-/export/Main/Renzo-out}"
 SIGN_DIR="/export/Main/Renzo-Apps/signing"
 JDK_ZIP_URL="https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
 ICON="$HUB/hub-desktop/windows/renzohub.ico"
+# libvlc for the built-in anime player (VlcRuntime finds <app>/vlc). Pinned:
+# the hash is videolan's published .sha256 for this exact zip.
+VLC_VER="3.0.24"
+VLC_ZIP_URL="https://download.videolan.org/pub/videolan/vlc/$VLC_VER/win64/vlc-$VLC_VER-win64.zip"
+VLC_SHA256="fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323"
 
 # The Windows jmods are Java 21 (class 65) — a 17 jlink can't read them, and
 # which JDK is first on PATH varies by shell. Pin to a 21 jlink explicitly.
@@ -46,6 +51,20 @@ rm -rf "$WORK/stage"
 mkdir -p "$WORK/stage"
 cp "$JAR" "$WORK/stage/RenzoHub.jar"
 cp -r "$WORK/jre" "$WORK/stage/jre"
+# libvlc + plugins. Pruned of what an embedded player never loads (Qt GUI,
+# visualisations, streaming/mux output, Lua scripts, remote control); the
+# LGPL text ships alongside. plugins.dat is a cache — libvlc rebuilds it.
+if [ ! -d "$WORK/vlc-$VLC_VER" ]; then
+  curl -sL -o "$WORK/vlc.zip" "$VLC_ZIP_URL"
+  echo "$VLC_SHA256  $WORK/vlc.zip" | sha256sum -c --quiet - || { echo "vlc zip checksum mismatch"; exit 1; }
+  (cd "$WORK" && unzip -q vlc.zip)
+fi
+mkdir -p "$WORK/stage/vlc"
+cp "$WORK/vlc-$VLC_VER/libvlc.dll" "$WORK/vlc-$VLC_VER/libvlccore.dll" "$WORK/stage/vlc/"
+cp "$WORK/vlc-$VLC_VER/COPYING.txt" "$WORK/stage/vlc/COPYING.txt"
+cp -r "$WORK/vlc-$VLC_VER/plugins" "$WORK/stage/vlc/plugins"
+(cd "$WORK/stage/vlc/plugins" && rm -rf gui visualization services_discovery control stream_out \
+  access_output mux lua video_splitter && rm -f plugins.dat)
 makensis -DOUTDIR="$WORK/stage" -DICON="$ICON" "$HUB/hub-desktop/windows/renzohub-launcher.nsi" >/dev/null
 
 echo "── 4/5 signing the launcher, building + signing the installer"

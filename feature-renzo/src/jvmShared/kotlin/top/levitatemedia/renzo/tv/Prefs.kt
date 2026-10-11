@@ -85,6 +85,11 @@ class Prefs {
         get() = p.getString("externalPlayerPath", null)?.takeIf { it.isNotBlank() }
         set(v) = p.putString("externalPlayerPath", v)
 
+    /** Desktop: "builtin" (libvlc inside the app) or "external" (mpv / VLC). */
+    var desktopPlayer: String
+        get() = p.getString("desktopPlayer", null)?.takeIf { it == "external" } ?: "builtin"
+        set(v) = p.putString("desktopPlayer", v)
+
     fun clearSession() { sessionCookie = null }
     fun forgetServer() {
         p.remove("serverUrl"); p.remove("session"); p.remove("lastUsername")

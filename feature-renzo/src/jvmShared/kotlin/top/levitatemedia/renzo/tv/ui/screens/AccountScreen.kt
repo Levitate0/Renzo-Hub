@@ -899,6 +899,33 @@ private fun DefaultsPane(app: AppServices) {
             }
         }
         StatusText(msg)
+
+        // Desktop only, and stored on this computer — not a server default:
+        // the choice depends on what is installed here.
+        if (top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) {
+            var player by remember { mutableStateOf(app.prefs.desktopPlayer) }
+            PaneSection(
+                title = "Playback on this computer",
+                sub = plain("Which player opens when you press Play. Saved on this computer only."),
+            ) {
+                Field(
+                    "Video player",
+                    hint = {
+                        Hint(plain("The external player uses mpv or VLC if one is installed. The built-in player can still hand any episode to it."))
+                    },
+                ) {
+                    SelectBox(
+                        value = player,
+                        options = listOf(
+                            "builtin" to "Built-in player",
+                            "external" to "External player (mpv / VLC)",
+                        ),
+                        onSelect = { player = it; app.prefs.desktopPlayer = it },
+                        modifier = fieldWidth(288),
+                    )
+                }
+            }
+        }
     }
 }
 

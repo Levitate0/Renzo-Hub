@@ -1,7 +1,12 @@
 package top.levitatemedia.renzo.tv
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import top.levitatemedia.renzo.tv.player.VlcRuntime
+import top.levitatemedia.renzo.tv.ui.screens.BuiltInPlayerScreen
 import top.levitatemedia.renzo.tv.ui.screens.ExternalPlayerScreen
 import java.awt.FileDialog
 import java.awt.Frame
@@ -67,12 +72,29 @@ actual fun RenzoPlayerRoute(
     onSwitchEpisode: (Int) -> Unit,
     onSwitchTitle: (Int, Int, String) -> Unit,
 ) {
-    ExternalPlayerScreen(
-        app = app,
-        titleId = titleId,
-        ep = ep,
-        titleName = titleName,
-        onExit = onExit,
-        onSwitchEpisode = onSwitchEpisode,
-    )
+    // Built-in (libvlc) unless the user chose an external player, or libvlc is
+    // missing — then the external launcher, which was the only option before.
+    // "Open in external player" in the built-in one switches just this episode.
+    var forceExternal by remember(titleId, ep) { mutableStateOf(false) }
+    val builtIn = !forceExternal && app.prefs.desktopPlayer == "builtin" && VlcRuntime.available
+    if (builtIn) {
+        BuiltInPlayerScreen(
+            app = app,
+            titleId = titleId,
+            ep = ep,
+            titleName = titleName,
+            onExit = onExit,
+            onSwitchEpisode = onSwitchEpisode,
+            onUseExternal = { forceExternal = true },
+        )
+    } else {
+        ExternalPlayerScreen(
+            app = app,
+            titleId = titleId,
+            ep = ep,
+            titleName = titleName,
+            onExit = onExit,
+            onSwitchEpisode = onSwitchEpisode,
+        )
+    }
 }

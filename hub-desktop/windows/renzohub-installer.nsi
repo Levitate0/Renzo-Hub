@@ -48,6 +48,8 @@ Section "Install"
   ; Start the JRE clean: a newer JRE may drop files the old one shipped,
   ; and overwrite-in-place would leave a mixed runtime behind.
   RMDir /r "$INSTDIR\jre"
+  ; Same for libvlc: a plugin dropped by a newer VLC must not linger.
+  RMDir /r "$INSTDIR\vlc"
   SetOutPath "$INSTDIR"
   File /r "${SRC}/*"
   CreateShortcut "$SMPROGRAMS\${APPNAME}.lnk" "$INSTDIR\RenzoHub.exe" "" "$INSTDIR\RenzoHub.exe" 0

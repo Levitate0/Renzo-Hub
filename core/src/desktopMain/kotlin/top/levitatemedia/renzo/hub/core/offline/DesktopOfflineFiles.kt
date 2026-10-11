@@ -32,6 +32,9 @@ class DesktopOfflineFiles : HubOfflineFiles {
 
     private fun fileFor(relPath: String): File = File(root(), relPath.trimStart('/'))
 
+    /** The real file behind [relPath] — a video player streams it instead of reading it into memory. */
+    fun localFile(relPath: String): File? = fileFor(relPath).takeIf { it.isFile }
+
     override fun readFile(relPath: String): ByteArray? =
         runCatching { fileFor(relPath).takeIf { it.isFile }?.readBytes() }.getOrNull()
 
