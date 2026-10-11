@@ -45,9 +45,19 @@ import top.levitatemedia.renzo.tv.Screen
 import top.levitatemedia.renzo.tv.api.AutodlStatus
 import top.levitatemedia.renzo.tv.api.CardItem
 import top.levitatemedia.renzo.tv.api.JobItem
-import top.levitatemedia.renzo.tv.ui.components.OutlineButton
-import top.levitatemedia.renzo.tv.ui.components.dashedBorder
-import top.levitatemedia.renzo.tv.ui.components.tvClickable
+import top.levitatemedia.renzo.tv.ui.kit.kitClickable
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 import java.text.DateFormat
 import java.text.SimpleDateFormat
@@ -153,111 +163,171 @@ fun DownloadsScreen(app: AppServices, @Suppress("UNUSED_PARAMETER") onOpen: (Car
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        // `h2 text-xl font-semibold`
-        Text("Downloads", color = RenzoColors.Foreground, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+    // Shiori's Queue page (feature-shiori ui/queue/QueueScreen.kt): a centred
+    // 1100dp column, the filter pills, the "Downloads  N" header with its
+    // actions, the auto-downloader line, then flat rows — status dot, title +
+    // episode, the % or state on the right, icon actions, and a thin progress
+    // bar along the bottom of a downloading row.
+    var filterIndex by remember { mutableIntStateOf(0) }
+    val jobList = jobs ?: emptyList()
+    val visible = remember(jobList, filterIndex) {
+        jobList
+            .filter { j ->
+                when (filterIndex) {
+                    1 -> j.status == "downloading" || j.status == "searching"
+                    2 -> j.status == "queued"
+                    3 -> j.status == "downloaded"
+                    4 -> j.status == "failed"
+                    else -> true
+                }
+            }
+            // Active first, then queued, failed, done — the queue's own order.
+            .sortedWith(compareBy<JobItem>({ statusRank(it.status) }, { it.title.lowercase() }, { it.episode }))
+    }
+    val wide = top.levitatemedia.renzo.tv.ui.kit.screenWidthDp() >= 1024.dp
 
-        if (jobs == null && error != null) {
-            Text(
-                error!!,
-                color = RenzoColors.MutedForeground,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-            return@Column
-        }
-
-        // `mt-4 grid grid-cols-1 gap-4` [AutodlBar, JobsList(gap-3)]
-        val jobList = jobs ?: emptyList()
-        val groups: Map<Int, List<JobItem>> = jobList.groupBy { it.titleId }
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "autodl") {
-                AutodlBar(
-                    s = autodl,
-                    runBusy = runBusy,
-                    showRetryAll = failed.isNotEmpty(),
-                    retryBusy = retryBusy,
-                    onRetryAll = { retryAll() },
-                    onRun = { runNow() },
-                    onOpenCredentials = { app.nav.push(Screen.Account("credentials")) },
-                    modifier = Modifier.padding(bottom = 4.dp), // gap-4 vs the list's gap-3
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.then(if (wide) Modifier.widthIn(max = 1100.dp) else Modifier).fillMaxSize()) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                top.levitatemedia.renzo.tv.ui.kit.SegmentedPills(
+                    labels = DL_FILTERS,
+                    selectedIndex = filterIndex,
+                    onSelect = { filterIndex = it },
                 )
             }
-            if (jobList.isEmpty()) {
-                item(key = "empty") {
-                    // `empty rounded-lg border border-dashed p-8 text-center text-sm`
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .dashedBorder(RenzoColors.Border, 8.dp)
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("No downloads.", color = RenzoColors.MutedForeground, fontSize = 14.sp)
-                    }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    "Downloads",
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.SemiBold),
+                    color = RenzoColors.Foreground,
+                )
+                Text(
+                    jobList.size.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = RenzoColors.MutedForeground.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(start = 12.dp).weight(1f),
+                )
+                if (failed.isNotEmpty()) {
+                    HeaderAction(
+                        label = if (retryBusy) "Retrying…" else "Retry all failed",
+                        icon = Icons.Filled.Refresh,
+                        color = RenzoColors.Red,
+                        enabled = !retryBusy,
+                        onClick = { retryAll() },
+                    )
+                    Spacer(Modifier.width(8.dp))
                 }
-            } else {
-                items(groups.entries.toList(), key = { it.key }) { (_, gjobs) ->
-                    JobGroup(
-                        gjobs = gjobs,
-                        denied = denied,
-                        onPrioritize = { job, done ->
-                            scope.launch {
-                                try {
-                                    app.repo.prioritizeJob(job.id)
-                                    toast("Moved to the front")
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    toast(e.message ?: "Failed")
-                                } finally {
-                                    done()
-                                    refetchJobs()
-                                }
-                            }
-                        },
-                        onRetry = { job, done ->
-                            scope.launch {
-                                try {
-                                    app.repo.retryEpisode(job.titleId, job.episode)
-                                    toast("Retrying…")
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    toast(e.message ?: "Failed")
-                                } finally {
-                                    done()
-                                    refetchJobs()
-                                }
-                            }
-                        },
-                        onRetryGroup = { gj, done ->
-                            scope.launch {
-                                try {
-                                    for (j in gj.filter { canRetryJob(it, denied) }) {
-                                        try {
-                                            app.repo.retryEpisode(j.titleId, j.episode)
-                                        } catch (e: CancellationException) {
-                                            throw e
-                                        } catch (_: Exception) {
-                                            // keep going; one bad job shouldn't stop the rest
-                                        }
-                                    }
-                                } finally {
-                                    done()
-                                    refetchJobs()
-                                }
-                            }
-                        },
+                if (autodl?.canRun == true) {
+                    // Shiori's "Update now" pill.
+                    HeaderAction(
+                        label = if (runBusy || autodl?.running == true) "Running…" else "Run now",
+                        icon = Icons.Filled.PlayArrow,
+                        color = RenzoColors.Primary,
+                        enabled = !(runBusy || autodl?.running == true),
+                        onClick = { runNow() },
                     )
                 }
             }
+
+            AutodlLine(autodl, onOpenCredentials = { app.nav.push(Screen.Account("credentials")) })
+
+            when {
+                jobs == null && error != null -> Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Text(error!!, style = MaterialTheme.typography.bodySmall, color = RenzoColors.MutedForeground)
+                }
+                jobs == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Loading…", style = MaterialTheme.typography.bodySmall, color = RenzoColors.MutedForeground)
+                }
+                visible.isEmpty() -> Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        if (filterIndex == 0) "No downloads. Episodes you download, or auto-download picks up, appear here."
+                        else "Nothing to show for \"${DL_FILTERS[filterIndex]}\".",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RenzoColors.MutedForeground,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 8.dp, bottom = 64.dp)) {
+                    items(visible, key = { it.id }) { job ->
+                        if (job != visible.first()) {
+                            Box(Modifier.fillMaxWidth().height(1.dp).background(RenzoColors.Foreground.copy(alpha = 0.04f)))
+                        }
+                        JobFeedRow(
+                            job = job,
+                            denied = denied,
+                            onPrioritize = { done ->
+                                scope.launch {
+                                    try {
+                                        app.repo.prioritizeJob(job.id)
+                                        toast("Moved to the front")
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        toast(e.message ?: "Failed")
+                                    } finally {
+                                        done()
+                                        refetchJobs()
+                                    }
+                                }
+                            },
+                            onRetry = { done ->
+                                scope.launch {
+                                    try {
+                                        app.repo.retryEpisode(job.titleId, job.episode)
+                                        toast("Retrying…")
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        toast(e.message ?: "Failed")
+                                    } finally {
+                                        done()
+                                        refetchJobs()
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
         }
+    }
+}
+
+private val DL_FILTERS = listOf("All", "Downloading", "Queued", "Completed", "Failed")
+
+private fun statusRank(s: String): Int = when (s) {
+    "downloading", "searching" -> 0
+    "queued" -> 1
+    "failed" -> 2
+    else -> 3
+}
+
+/** Shiori's queue status dot colours. */
+private fun jobDot(s: String): Color = when (s) {
+    "downloaded" -> Color(0xFF31C46B)
+    "failed" -> Color(0xFFD84343)
+    "downloading", "searching" -> Color(0xFF3B8FEE)
+    else -> Color(0xFFEEA51F)
+}
+
+/** Shiori's tinted header pill ("Update now"). */
+@Composable
+private fun HeaderAction(label: String, icon: ImageVector, color: Color, enabled: Boolean, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.10f))
+            .kitClickable(enabled = enabled, radius = 16.dp, onClick = onClick)
+            .padding(horizontal = 12.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1, modifier = Modifier.padding(start = 6.dp))
     }
 }
 
@@ -272,278 +342,144 @@ private fun lastRunTime(iso: String): String = try {
 }
 
 /**
- * Auto-downloader status bar + self-check warning chips (autodl-bar.tsx):
- * `autodl flex flex-wrap items-center gap-3 rounded-lg border bg-card/50
- * px-3.5 py-2.5`; the status line, the retry slot, owner-only "Run now" and
- * the amber `autodl-check` chips (credentials ones open that settings pane).
+ * The auto-downloader's status (autodl-bar.tsx) as one muted line under the
+ * header — where Shiori shows its scan progress — plus the amber self-check
+ * warnings (the credentials ones open that Account section).
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AutodlBar(
-    s: AutodlStatus?,
-    runBusy: Boolean,
-    showRetryAll: Boolean,
-    retryBusy: Boolean,
-    onRetryAll: () -> Unit,
-    onRun: () -> Unit,
-    onOpenCredentials: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun AutodlLine(s: AutodlStatus?, onOpenCredentials: () -> Unit) {
     val you = s?.scope == "you"
-    val checks = s?.checks ?: emptyList()
-    Column(
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(RenzoColors.Card.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-            .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-    ) {
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            val text = buildAnnotatedString {
-                when {
-                    s == null -> append("Auto-downloader…")
-                    s.enabled -> {
-                        withStyle(SpanStyle(color = RenzoColors.Emerald400)) { append("●") }
-                        append(" Auto-downloader on — every ${s.intervalMin}m, ${s.trackedTitles} ")
-                        append(if (you) "tracked for you" else "tracked")
-                        append(" · ")
-                        val lastRun = s.lastRun
-                        if (lastRun != null) {
-                            append("last run ${lastRunTime(lastRun)} (queued ${s.lastQueued}${if (you) " for you" else ""})")
-                        } else {
-                            append("first run pending")
-                        }
-                        if (s.lastError != null) {
-                            withStyle(SpanStyle(color = RenzoColors.Amber400)) { append(" · ⚠ ${s.lastError}") }
-                        }
-                    }
-                    else -> append("○ Auto-downloader off — set AUTO_DOWNLOAD=true in .env")
+    val text = buildAnnotatedString {
+        when {
+            s == null -> append("Auto-downloader…")
+            s.enabled -> {
+                withStyle(SpanStyle(color = RenzoColors.Emerald400)) { append("● ") }
+                append("Auto-download on — every ${s.intervalMin}m, ${s.trackedTitles} ")
+                append(if (you) "tracked for you" else "tracked")
+                append(" · ")
+                val lastRun = s.lastRun
+                if (lastRun != null) {
+                    append("last run ${lastRunTime(lastRun)} (queued ${s.lastQueued}${if (you) " for you" else ""})")
+                } else {
+                    append("first run pending")
+                }
+                if (s.lastError != null) {
+                    withStyle(SpanStyle(color = RenzoColors.Amber400)) { append(" · ⚠ ${s.lastError}") }
                 }
             }
-            Text(
-                text,
-                color = RenzoColors.MutedForeground,
-                fontSize = 13.sp,
-                modifier = Modifier.align(Alignment.CenterVertically).weight(1f),
-            )
-            if (showRetryAll) {
-                OutlineButton(
-                    label = "↻ Retry all failed",
-                    onClick = onRetryAll,
-                    enabled = !retryBusy,
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                )
-            }
-            if (s?.canRun == true) {
-                OutlineButton(
-                    label = "Run now",
-                    onClick = onRun,
-                    enabled = !(s.running || runBusy),
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                )
-            }
-        }
-        if (checks.isNotEmpty()) {
-            // `autodl-checks mt-1 flex basis-full flex-col gap-1`
-            Column(
-                Modifier.fillMaxWidth().padding(top = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                checks.forEach { c ->
-                    val clickable = c.action == "settings:credentials"
-                    var focused by remember { mutableStateOf(false) }
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                RenzoColors.Amber400.copy(alpha = if (clickable && focused) 0.2f else 0.1f),
-                                RoundedCornerShape(8.dp),
-                            )
-                            .border(1.dp, RenzoColors.Amber400.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
-                            .let {
-                                if (clickable) it.tvClickable(
-                                    onFocused = { f -> focused = f },
-                                    onClick = onOpenCredentials,
-                                ) else it
-                            }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Text("⚠ ${c.message}", color = RenzoColors.Amber300, fontSize = 12.5.sp)
-                    }
-                }
-            }
+            else -> append("○ Auto-download off — set AUTO_DOWNLOAD=true in .env")
         }
     }
-}
-
-/** One series group (`job-group rounded-lg border bg-card/50`): head with the
- *  truncating title, the "N eps · x active · y failed" summary and "↻ Retry
- *  failed"; then the per-episode rows separated by `divide-border/60`. */
-@Composable
-private fun JobGroup(
-    gjobs: List<JobItem>,
-    denied: Boolean,
-    onPrioritize: (JobItem, done: () -> Unit) -> Unit,
-    onRetry: (JobItem, done: () -> Unit) -> Unit,
-    onRetryGroup: (List<JobItem>, done: () -> Unit) -> Unit,
-) {
-    var groupBusy by remember { mutableStateOf(false) }
-    val dl = gjobs.count { it.status == "downloading" || it.status == "searching" }
-    val q = gjobs.count { it.status == "queued" }
-    val failed = gjobs.count { it.status == "failed" }
-    val done = gjobs.count { it.status == "downloaded" }
-    val parts = listOfNotNull(
-        dl.takeIf { it > 0 }?.let { "$it active" },
-        q.takeIf { it > 0 }?.let { "$it queued" },
-        failed.takeIf { it > 0 }?.let { "$it failed" },
-        done.takeIf { it > 0 }?.let { "$it done" },
-    )
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(RenzoColors.Card.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-            .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp)),
-    ) {
-        // `job-group-head flex flex-wrap items-center gap-2 border-b px-3 py-2.5`
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+        Text(text, style = MaterialTheme.typography.bodySmall, color = RenzoColors.MutedForeground)
+        (s?.checks ?: emptyList()).forEach { c ->
+            val clickable = c.action == "settings:credentials"
             Text(
-                gjobs.first().title,
-                color = RenzoColors.Foreground,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                "${gjobs.size} ep" + (if (gjobs.size == 1) "" else "s") +
-                    (if (parts.isNotEmpty()) " · " + parts.joinToString(" · ") else ""),
-                color = RenzoColors.MutedForeground,
-                fontSize = 12.sp,
-            )
-            if (gjobs.any { canRetryJob(it, denied) }) {
-                OutlineButton(
-                    label = "↻ Retry failed",
-                    onClick = {
-                        if (!groupBusy) {
-                            groupBusy = true
-                            onRetryGroup(gjobs) { groupBusy = false }
-                        }
-                    },
-                    enabled = !groupBusy,
-                    height = 28.dp,
-                    horizontalPadding = 8.dp,
-                )
-            }
-        }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(RenzoColors.Border))
-        gjobs.sortedBy { it.episode }.forEachIndexed { i, job ->
-            if (i > 0) {
-                Box(Modifier.fillMaxWidth().height(1.dp).background(RenzoColors.Border.copy(alpha = 0.6f)))
-            }
-            JobRow(
-                job = job,
-                denied = denied,
-                onPrioritize = { done -> onPrioritize(job, done) },
-                onRetry = { done -> onRetry(job, done) },
+                "⚠ ${c.message}",
+                style = MaterialTheme.typography.bodySmall,
+                color = RenzoColors.Amber300,
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(RenzoColors.Amber400.copy(alpha = 0.1f))
+                    .border(1.dp, RenzoColors.Amber400.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                    .then(if (clickable) Modifier.kitClickable(onClick = onOpenCredentials) else Modifier)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }
     }
 }
 
-/** One episode row (`job px-3 py-2`): "E{n}" + status/percent line, optional
- *  message, the progress track and the queued/failed action buttons. */
+/** Shiori's QueueRow, for one episode job. */
 @Composable
-private fun JobRow(
+private fun JobFeedRow(
     job: JobItem,
     denied: Boolean,
     onPrioritize: (done: () -> Unit) -> Unit,
     onRetry: (done: () -> Unit) -> Unit,
 ) {
     var busy by remember { mutableStateOf(false) }
-    val pct = ((job.progress) * 100).roundToInt()
-    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+    val pct = (job.progress * 100).roundToInt().coerceIn(0, 100)
+    val downloading = job.status == "downloading" || job.status == "searching"
+    Box(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
         ) {
-            Text(
-                "E${job.episode}",
-                color = RenzoColors.Foreground,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            // `st text-xs capitalize text-muted-foreground`
-            Text(
-                job.status.replaceFirstChar { it.uppercase() } +
-                    (if (job.status == "downloading") " $pct%" else ""),
-                color = RenzoColors.MutedForeground,
-                fontSize = 12.sp,
-            )
-        }
-        job.message?.takeIf { it.isNotBlank() }?.let {
-            Text(it, color = RenzoColors.MutedForeground, fontSize = 12.sp)
-        }
-        // `track mt-1.5 h-1.5 rounded-full bg-foreground/10` + status fill
-        val fillPct = if (job.status == "downloaded") 100 else pct
-        Box(
-            Modifier
-                .padding(top = 6.dp)
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(RenzoColors.Foreground.copy(alpha = 0.1f)),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth((fillPct / 100f).coerceIn(0f, 1f))
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(if (job.status == "failed") RenzoColors.Destructive else RenzoColors.Primary),
-            )
-        }
-        val showPrioritize = job.status == "queued" && job.mine
-        val showRetry = canRetryJob(job, denied)
-        if (showPrioritize || showRetry) {
-            // `job-actions mt-1.5 flex flex-wrap gap-2` — h-7 px-2 text-xs buttons
-            Row(
-                Modifier.padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (showPrioritize) {
-                    OutlineButton(
-                        label = "↑ Download now",
-                        onClick = { if (!busy) { busy = true; onPrioritize { busy = false } } },
-                        enabled = !busy,
-                        height = 28.dp,
-                        horizontalPadding = 8.dp,
+            Box(Modifier.size(7.dp).clip(CircleShape).background(jobDot(job.status)))
+            Column(Modifier.padding(start = 12.dp, end = 8.dp).weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        job.title,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                        color = RenzoColors.Foreground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    Text(
+                        "E${job.episode}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                        color = RenzoColors.MutedForeground,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                    if (!job.mine) {
+                        Text(
+                            "· another user",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            color = RenzoColors.MutedForeground.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                    }
                 }
-                if (showRetry) {
-                    OutlineButton(
-                        label = "↻ Retry",
-                        onClick = { if (!busy) { busy = true; onRetry { busy = false } } },
-                        enabled = !busy,
-                        height = 28.dp,
-                        horizontalPadding = 8.dp,
+                job.message?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = RenzoColors.MutedForeground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                 }
             }
+            Text(
+                if (job.status == "downloading" && pct > 0) "$pct%" else job.status,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = if (downloading) Color(0xFF83B9F5) else RenzoColors.MutedForeground,
+                maxLines = 1,
+            )
+            if (job.status == "queued" && job.mine) {
+                RowIcon(Icons.Filled.ArrowUpward, "Download now", enabled = !busy) { busy = true; onPrioritize { busy = false } }
+            }
+            if (canRetryJob(job, denied)) {
+                RowIcon(Icons.Filled.Refresh, "Retry download", enabled = !busy) { busy = true; onRetry { busy = false } }
+            }
         }
+        if (downloading) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth(pct / 100f)
+                    .height(2.dp)
+                    .background(Color(0xFF3B8FEE)),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RowIcon(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .padding(start = 4.dp)
+            .size(28.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .kitClickable(enabled = enabled, radius = 6.dp, onClick = onClick),
+    ) {
+        Icon(icon, contentDescription = label, tint = RenzoColors.MutedForeground, modifier = Modifier.size(14.dp))
     }
 }

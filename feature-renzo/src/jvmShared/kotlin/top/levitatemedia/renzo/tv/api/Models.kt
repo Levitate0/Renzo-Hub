@@ -88,7 +88,7 @@ data class CardItem(
     val season: Int? = null,
     val upcoming: Boolean? = null, // season news: true => "Soon" ribbon
     // history extras
-    val at: Long? = null,
+    val at: String? = null,       // ISO-8601 watch time (api.ts recordHistory)
 )
 
 @Serializable
