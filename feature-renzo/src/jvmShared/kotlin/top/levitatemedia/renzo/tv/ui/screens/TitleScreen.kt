@@ -765,7 +765,7 @@ private fun SeasonCard(ref: SeasonRef, current: Boolean, onOpen: () -> Unit) {
 }
 
 /** Web seasonChip + the row's suffixes: "S1 · 2013 (this)", "OVA · 2023". */
-private fun seasonLabel(ref: SeasonRef, current: Boolean = false): String {
+internal fun seasonLabel(ref: SeasonRef, current: Boolean = false): String {
     val chip = when {
         ref.kind == "movie" -> "Movie"
         ref.kind == "extra" -> when (ref.format?.uppercase()) {
@@ -1039,7 +1039,7 @@ private fun EpMenuItem(label: String, onClick: () -> Unit) {
  * An episode is unaired when it has no file AND any signal says future:
  * status text, the AniList next-airing pointer, or an ISO air date > today.
  */
-private fun isUnaired(ep: EpisodeInfo, d: TitleDetail, todayIso: String): Boolean {
+internal fun isUnaired(ep: EpisodeInfo, d: TitleDetail, todayIso: String): Boolean {
     if (ep.hasFile) return false
     val st = ep.status?.lowercase(Locale.US)
     if (st != null && (st.contains("soon") || st.contains("unaired") || st.contains("upcoming") || st.contains("future"))) {
@@ -1054,7 +1054,7 @@ private fun isUnaired(ep: EpisodeInfo, d: TitleDetail, todayIso: String): Boolea
 // --- helpers ----------------------------------------------------------------
 
 /** AniList descriptions carry light HTML — strip tags, decode common entities. */
-private fun cleanDescription(html: String?): String? = html
+internal fun cleanDescription(html: String?): String? = html
     ?.replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), " ")
     ?.replace(Regex("<[^>]+>"), "")
     ?.replace("&amp;", "&")

@@ -55,6 +55,7 @@ actual fun RenzoPlayerRoute(
     onExit: () -> Unit,
     onSwitchEpisode: (Int) -> Unit,
     onSwitchTitle: (Int, Int, String) -> Unit,
+    onOpenTitle: (Int) -> Unit,
 ) {
     PlayerScreen(
         app = app,

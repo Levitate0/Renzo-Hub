@@ -209,6 +209,12 @@ class Repo(val client: ApiClient) {
     }
 
     /** Absolute, cookie-authed URL for a subtitle track. */
+    /** The web player's link for an episode (web play.ts watchHref). Scoped to this user. */
+    suspend fun watchLink(id: Int, ep: Int): String {
+        val r: WatchStart = client.post("/api/titles/$id/watch")
+        return client.absolute("/watch/?id=" + java.net.URLEncoder.encode(r.watchId, "UTF-8") + "&ep=$ep")
+    }
+
     fun captionUrl(subId: String): String = client.absolute("/api/captions/$subId.vtt")
 
     // --- account settings (web-parity surface) ------------------------------

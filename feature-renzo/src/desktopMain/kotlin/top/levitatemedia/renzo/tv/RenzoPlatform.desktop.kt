@@ -71,6 +71,7 @@ actual fun RenzoPlayerRoute(
     onExit: () -> Unit,
     onSwitchEpisode: (Int) -> Unit,
     onSwitchTitle: (Int, Int, String) -> Unit,
+    onOpenTitle: (Int) -> Unit,
 ) {
     // Built-in (libvlc) unless the user chose an external player, or libvlc is
     // missing — then the external launcher, which was the only option before.
@@ -85,6 +86,8 @@ actual fun RenzoPlayerRoute(
             titleName = titleName,
             onExit = onExit,
             onSwitchEpisode = onSwitchEpisode,
+            onSwitchTitle = onSwitchTitle,
+            onOpenTitle = onOpenTitle,
             onUseExternal = { forceExternal = true },
         )
     } else {

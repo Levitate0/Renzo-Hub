@@ -28,7 +28,11 @@ object RenzoDesktop {
 
     val services: AppServices by lazy {
         install()
-        AppServices(isTv = false, offlineStore = DesktopOfflineFiles())
+        AppServices(isTv = false, offlineStore = DesktopOfflineFiles()).also {
+            // libVLC's first open scans its plugins (about a second on Windows):
+            // do it now, in the background, so the first Play doesn't wait on it.
+            if (it.prefs.desktopPlayer == "builtin") top.levitatemedia.renzo.tv.player.VlcRuntime.warmUp()
+        }
     }
 }
 

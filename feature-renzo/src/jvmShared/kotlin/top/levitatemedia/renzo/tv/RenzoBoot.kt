@@ -321,6 +321,12 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
             onExit = { nav.back() },
             onSwitchEpisode = { newEp: Int -> nav.replaceTop(Screen.Player(screen.titleId, newEp, screen.titleName)) },
             onSwitchTitle = { newId: Int, newEp: Int, name: String -> nav.replaceTop(Screen.Player(newId, newEp, name)) },
+            // Web series link: pop back to the series page when it is the entry
+            // behind the player, else open it in the player's place.
+            onOpenTitle = { id: Int ->
+                val below = nav.stack.getOrNull(nav.stack.size - 2)
+                if (below is Screen.Title && below.id == id) nav.back() else nav.replaceTop(Screen.Title(id))
+            },
         )
         is Screen.Appearance -> AppearanceScreen(app, onClose = { nav.back() })
         is Screen.Users -> UsersScreen(app, onClose = { nav.back() })

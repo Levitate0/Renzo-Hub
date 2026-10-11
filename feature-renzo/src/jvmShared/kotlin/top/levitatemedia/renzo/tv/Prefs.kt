@@ -90,6 +90,11 @@ class Prefs {
         get() = p.getString("desktopPlayer", null)?.takeIf { it == "external" } ?: "builtin"
         set(v) = p.putString("desktopPlayer", v)
 
+    /** Desktop player: count down into the next episode when one ends. */
+    var autoplayNext: Boolean
+        get() = p.getBoolean("autoplayNext", true)
+        set(v) = p.putBoolean("autoplayNext", v)
+
     fun clearSession() { sessionCookie = null }
     fun forgetServer() {
         p.remove("serverUrl"); p.remove("session"); p.remove("lastUsername")

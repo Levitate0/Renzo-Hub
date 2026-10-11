@@ -14,11 +14,14 @@ OUT_DIR="${OUT_DIR:-/export/Main/Renzo-out}"
 SIGN_DIR="/export/Main/Renzo-Apps/signing"
 JDK_ZIP_URL="https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
 ICON="$HUB/hub-desktop/windows/renzohub.ico"
-# libvlc for the built-in anime player (VlcRuntime finds <app>/vlc). Pinned:
-# the hash is videolan's published .sha256 for this exact zip.
+# libvlc for the built-in anime player (VlcRuntime finds <app>/vlc), from
+# VideoLAN's own embedding package, which they publish as LGPL-2.1-or-later:
+# the release binaries minus the plugins that wrap GPL libraries (x264,
+# postproc, libdvdnav, libmad, faad2, the Qt GUI). NOT the vlc-*-win64.zip —
+# that is the GPL application build. Pinned by the nupkg's sha256.
 VLC_VER="3.0.24"
-VLC_ZIP_URL="https://download.videolan.org/pub/videolan/vlc/$VLC_VER/win64/vlc-$VLC_VER-win64.zip"
-VLC_SHA256="fcf30850371ad10c9373cc4f0f4501e7dee49e3e9ae9f20c72fb2661a1ca6323"
+VLC_NUPKG_URL="https://api.nuget.org/v3-flatcontainer/videolan.libvlc.windows/$VLC_VER/videolan.libvlc.windows.$VLC_VER.nupkg"
+VLC_SHA256="3da3f37ee2b2b10e5c788d830a3b513658c36521ea1b0f966ed86eb69f41ef3c"
 
 # The Windows jmods are Java 21 (class 65) — a 17 jlink can't read them, and
 # which JDK is first on PATH varies by shell. Pin to a 21 jlink explicitly.
@@ -51,20 +54,33 @@ rm -rf "$WORK/stage"
 mkdir -p "$WORK/stage"
 cp "$JAR" "$WORK/stage/RenzoHub.jar"
 cp -r "$WORK/jre" "$WORK/stage/jre"
-# libvlc + plugins. Pruned of what an embedded player never loads (Qt GUI,
-# visualisations, streaming/mux output, Lua scripts, remote control); the
-# LGPL text ships alongside. plugins.dat is a cache — libvlc rebuilds it.
-if [ ! -d "$WORK/vlc-$VLC_VER" ]; then
-  curl -sL -o "$WORK/vlc.zip" "$VLC_ZIP_URL"
-  echo "$VLC_SHA256  $WORK/vlc.zip" | sha256sum -c --quiet - || { echo "vlc zip checksum mismatch"; exit 1; }
-  (cd "$WORK" && unzip -q vlc.zip)
+# libvlc + plugins. Pruned of what an embedded player never loads (scripting,
+# streaming/mux output, visualisations, discovery) and of the four plugins the
+# package still carries under a GPL label; the guard below then refuses to
+# ship ANY plugin whose embedded licence string says GPL.
+VLC_PKG="$WORK/libvlc-$VLC_VER"
+if [ ! -d "$VLC_PKG" ]; then
+  curl -sL -o "$WORK/libvlc.nupkg" "$VLC_NUPKG_URL"
+  echo "$VLC_SHA256  $WORK/libvlc.nupkg" | sha256sum -c --quiet - || { echo "libvlc nupkg checksum mismatch"; exit 1; }
+  mkdir -p "$VLC_PKG" && unzip -q "$WORK/libvlc.nupkg" 'build/x64/*' -d "$VLC_PKG"
 fi
 mkdir -p "$WORK/stage/vlc"
-cp "$WORK/vlc-$VLC_VER/libvlc.dll" "$WORK/vlc-$VLC_VER/libvlccore.dll" "$WORK/stage/vlc/"
-cp "$WORK/vlc-$VLC_VER/COPYING.txt" "$WORK/stage/vlc/COPYING.txt"
-cp -r "$WORK/vlc-$VLC_VER/plugins" "$WORK/stage/vlc/plugins"
-(cd "$WORK/stage/vlc/plugins" && rm -rf gui visualization services_discovery control stream_out \
-  access_output mux lua video_splitter && rm -f plugins.dat)
+cp -p "$VLC_PKG/build/x64/libvlc.dll" "$VLC_PKG/build/x64/libvlccore.dll" "$WORK/stage/vlc/"
+cp -rp "$VLC_PKG/build/x64/plugins" "$WORK/stage/vlc/plugins"
+(cd "$WORK/stage/vlc/plugins" && rm -rf lua services_discovery stream_out access_output mux visualization video_splitter \
+  && rm -f codec/libx26410b_plugin.dll audio_filter/libheadphone_channel_mixer_plugin.dll \
+     audio_filter/libdolby_surround_decoder_plugin.dll)
+GPL_PLUGINS="$(grep -rla 'GNU General Public License, version 2 or later' "$WORK/stage/vlc/plugins" || true)"
+[ -z "$GPL_PLUGINS" ] || { echo "GPL-licensed libvlc plugins would ship:"; echo "$GPL_PLUGINS"; exit 1; }
+cp "$HUB/hub-desktop/windows/libvlc-LGPL-2.1.txt" "$WORK/stage/vlc/COPYING.LIB.txt"
+cat > "$WORK/stage/vlc/NOTICE.txt" <<NOTICE
+Renzo Hub's built-in video player uses libVLC $VLC_VER by VideoLAN,
+licensed under the GNU Lesser General Public License, version 2.1 or later
+(COPYING.LIB.txt). These are VideoLAN's unmodified binaries, from their
+VideoLAN.LibVLC.Windows package. Source code:
+https://download.videolan.org/pub/videolan/vlc/$VLC_VER/vlc-$VLC_VER.tar.xz
+You may replace the files in this folder with your own build of libVLC.
+NOTICE
 makensis -DOUTDIR="$WORK/stage" -DICON="$ICON" "$HUB/hub-desktop/windows/renzohub-launcher.nsi" >/dev/null
 
 echo "── 4/5 signing the launcher, building + signing the installer"

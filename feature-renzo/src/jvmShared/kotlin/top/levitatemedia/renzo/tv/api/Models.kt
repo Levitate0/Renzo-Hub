@@ -241,6 +241,10 @@ data class JobItem(
     val active: Boolean get() = status == "queued" || status == "searching" || status == "downloading"
 }
 
+/** POST /api/titles/{id}/watch — a per-user watch link id for the web player. */
+@Serializable
+data class WatchStart(val watchId: String, val titleId: Int = 0)
+
 @Serializable
 data class WatchedResponse(val ok: Boolean = true, val upNext: Int? = null)
 

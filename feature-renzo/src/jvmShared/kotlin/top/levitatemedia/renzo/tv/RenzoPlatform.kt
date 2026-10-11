@@ -58,4 +58,6 @@ expect fun RenzoPlayerRoute(
     onExit: () -> Unit,
     onSwitchEpisode: (Int) -> Unit,
     onSwitchTitle: (Int, Int, String) -> Unit,
+    /** The series page (the desktop player's series link). */
+    onOpenTitle: (Int) -> Unit,
 )
