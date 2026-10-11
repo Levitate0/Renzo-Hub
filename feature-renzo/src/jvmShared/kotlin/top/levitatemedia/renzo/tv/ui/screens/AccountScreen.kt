@@ -88,6 +88,28 @@ import top.levitatemedia.renzo.tv.ui.components.UserAvatar
 import top.levitatemedia.renzo.tv.ui.components.focusRing
 import top.levitatemedia.renzo.tv.ui.components.tvClickable
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
+import top.levitatemedia.renzo.tv.ui.kit.LocalIsTv
+import top.levitatemedia.renzo.tv.ui.kit.CardDivider
+import top.levitatemedia.renzo.tv.ui.kit.ErrorBox
+import top.levitatemedia.renzo.tv.ui.kit.FieldLabel
+import top.levitatemedia.renzo.tv.ui.kit.FieldPair
+import top.levitatemedia.renzo.tv.ui.kit.LabelledField
+import top.levitatemedia.renzo.tv.ui.kit.SettingsCard
+import top.levitatemedia.renzo.tv.ui.kit.Hint as KitHint
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Mail
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import top.levitatemedia.renzo.tv.ui.kit.PageHeading
+import top.levitatemedia.renzo.tv.ui.kit.RenzoBadge
+import top.levitatemedia.renzo.tv.ui.kit.RenzoButton
+import top.levitatemedia.renzo.tv.ui.kit.RenzoTextField
+import top.levitatemedia.renzo.tv.ui.kit.SettingsNavSection
+import top.levitatemedia.renzo.tv.ui.kit.SettingsScaffold
+import top.levitatemedia.renzo.tv.ui.kit.SettingsSectionNav
+import top.levitatemedia.renzo.tv.ui.kit.kitClickable
+import top.levitatemedia.renzo.tv.ui.kit.screenWidthDp
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 
 // Web spec: frontend/src/app/account/account-view.tsx SECTIONS (id, label, icon).
 private data class SectionDef(val id: String, val label: String, val icon: ImageVector)
@@ -100,10 +122,12 @@ private val SECTIONS = listOf(
 )
 
 /**
- * /account/ — literal translation of the web client's account page
- * (account-view.tsx + the section panes, SettingsRouteShell chrome): header with
- * ✕ close, the section nav (sidebar ≥768dp, collapsed dropdown below — the
- * web's mobile Sheet), and the four panes ported element-for-element.
+ * /account/ — laid out exactly like Shiori's Account page (feature-shiori
+ * ui/settings/AccountScreen.kt): the persistent command bar above (wide) or a
+ * back-arrow bar (narrow) via SettingsScaffold, an 896dp column with the page
+ * heading, then the section nav as a 200dp sidebar at lg or Shiori's drawer
+ * trigger below it, beside one section's cards. Renzo's own sections and panes
+ * are unchanged in what they do.
  */
 @Composable
 fun AccountScreen(
@@ -113,43 +137,22 @@ fun AccountScreen(
     section: String = "account",
 ) {
     var current by remember { mutableStateOf(section) }
-    var pickerOpen by remember { mutableStateOf(false) }
     val user = app.user.value
-    val isMd = top.levitatemedia.renzo.tv.renzoScreenWidthDp() >= 768
-    val active = SECTIONS.firstOrNull { it.id == current } ?: SECTIONS[0]
+    val snackbar = remember { SnackbarHostState() }
+    val sections = SECTIONS.map { SettingsNavSection(it.id, it.label, it.icon) }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Column(Modifier.widthIn(max = 1024.dp)) { // web: mx-auto max-w-5xl
-            // Header — SettingsRouteShell: h1 + description + ghost ✕ close.
-            Row(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "Account",
-                        color = RenzoColors.Foreground,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = (-0.5).sp,
-                    )
-                    Text(
-                        "Personal settings for ${user?.username ?: "your account"} — private to you.",
-                        color = RenzoColors.MutedForeground,
-                        // Shiori PageHeading subtitle: bodySmall (12sp).
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                GhostIconButton(Icons.Outlined.Close) { app.nav.back() }
-            }
-
-            val pane: @Composable () -> Unit = {
+    SettingsScaffold(title = "Account", onBack = { app.nav.back() }, snackbar = snackbar) { padding ->
+        val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
+        val sectionNav: @Composable () -> Unit = {
+            SettingsSectionNav(
+                sections = sections,
+                activeId = current,
+                onChange = { current = it },
+                drawerTitle = "Account",
+            )
+        }
+        val sectionContent: @Composable () -> Unit = {
+            Column(Modifier.fillMaxWidth()) {
                 when (current) {
                     "credentials" -> CredentialsPane(app)
                     "defaults" -> DefaultsPane(app)
@@ -157,49 +160,35 @@ fun AccountScreen(
                     else -> AccountPane(app, onLogout, onChangeServer)
                 }
             }
-
-            if (isMd) {
-                // Desktop: left sidebar (w-56) + pane, gap-6.
-                Row {
-                    Column(
-                        Modifier.width(224.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        SECTIONS.forEach { def ->
-                            key(def.id) {
-                                NavPill(def, active = def.id == current) { current = def.id }
-                            }
-                        }
+        }
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // mx-auto max-w-4xl
+            Column(Modifier.widthIn(max = 896.dp).fillMaxWidth()) {
+                PageHeading(
+                    "Account",
+                    "Personal settings for ${user?.username ?: "your account"} — private to you.",
+                )
+                Spacer(Modifier.height(16.dp))
+                if (wide) {
+                    // lg:grid-cols-[200px_1fr] lg:items-start, gap-5
+                    Row(Modifier.fillMaxWidth()) {
+                        Column(Modifier.width(200.dp)) { sectionNav() }
+                        Spacer(Modifier.width(20.dp))
+                        Column(Modifier.weight(1f)) { sectionContent() }
                     }
-                    Spacer(Modifier.width(24.dp))
-                    Column(Modifier.weight(1f)) { pane() }
+                } else {
+                    sectionNav()
+                    Spacer(Modifier.height(16.dp))
+                    sectionContent()
                 }
-            } else {
-                // Mobile: section picker — the web's Sheet trigger (outline
-                // button, icon + label, chevron) expanding to the nav list.
-                SectionPickerTrigger(active) { pickerOpen = !pickerOpen }
-                if (pickerOpen) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(RenzoColors.Popover, RoundedCornerShape(8.dp))
-                            .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-                            .padding(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        SECTIONS.forEach { def ->
-                            key(def.id) {
-                                NavPill(def, active = def.id == current) {
-                                    current = def.id; pickerOpen = false
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(16.dp)) // web mb-4
-                pane()
+                Spacer(Modifier.height(28.dp))
             }
         }
     }
@@ -239,52 +228,18 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
     val ani = health?.trackers?.anilist == true
     val mal = health?.trackers?.mal == true
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        PaneSection {
-            // Profile header (old .profile) — live avatar + role badge.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                UserAvatar(user, 48.dp)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            user?.username ?: "—",
-                            color = RenzoColors.Foreground,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        if (user != null) RoleBadge(user.role)
-                    }
-                    Text("Your account & connections", color = RenzoColors.MutedForeground, fontSize = 14.sp)
-                }
-            }
+    // Shiori's Account section, card for card (feature-shiori AccountScreen
+    // "account"): Profile picture, Security, then Renzo's Connections and the
+    // session card where Shiori keeps Sign out.
+    Column {
+        SettingsCard(
+            title = "Profile picture",
+            description = "Shown on the account menu and the users list.",
+        ) {
+            if (error != null) ErrorBox(error ?: "")
 
-            Column {
-                Text("Profile picture", color = RenzoColors.Foreground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Shown on the account menu and the users list.",
-                    color = RenzoColors.MutedForeground,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-
-            // --- AvatarEditor (avatar-dialog.tsx, inline) --------------------
-            if (error != null) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(RenzoColors.Destructive.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .padding(12.dp),
-                ) {
-                    Text(error ?: "", color = RenzoColors.Destructive, fontSize = 14.sp, lineHeight = 20.sp)
-                }
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // 96px preview: pending pick beats the saved avatar beats initials.
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                // Pending pick beats the saved avatar beats initials.
                 val pendingBmp = remember(pendingAvatar) {
                     pendingAvatar?.let {
                         runCatching {
@@ -298,58 +253,96 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
                         pendingBmp,
                         contentDescription = "New avatar preview",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(96.dp).clip(CircleShape),
+                        modifier = Modifier.size(64.dp).clip(CircleShape),
                     )
                 } else {
-                    UserAvatar(user, 96.dp)
+                    UserAvatar(user, 64.dp)
                 }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row {
-                        WebButton("Upload image", variant = BtnVariant.Outline, icon = Icons.Outlined.Upload, enabled = !busy) {
-                            pickImage()
-                        }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RenzoButton(
+                            text = "Upload image",
+                            icon = Icons.Outlined.Upload,
+                            variant = "outline",
+                            small = true,
+                            enabled = !busy,
+                            onClick = { pickImage() },
+                        )
                         if (user?.avatarBase64 != null) {
                             Spacer(Modifier.width(8.dp))
-                            WebButton("Remove", variant = BtnVariant.GhostDanger, icon = Icons.Outlined.Delete, enabled = !busy) {
-                                scope.launch {
-                                    busy = true; error = null
-                                    try {
-                                        app.repo.setAvatar(null, null)
-                                        refreshUser(user.copy(avatarBase64 = null, avatarContentType = null))
-                                        pendingAvatar = null
-                                        msg = "Avatar removed"
-                                    } catch (e: Exception) { fail(e, "Couldn't remove avatar") } finally { busy = false }
-                                }
-                            }
+                            RenzoButton(
+                                text = "Remove",
+                                variant = "ghost",
+                                small = true,
+                                busy = busy,
+                                onClick = {
+                                    scope.launch {
+                                        busy = true; error = null
+                                        try {
+                                            app.repo.setAvatar(null, null)
+                                            refreshUser(user.copy(avatarBase64 = null, avatarContentType = null))
+                                            pendingAvatar = null
+                                            msg = "Avatar removed"
+                                        } catch (e: Exception) { fail(e, "Couldn't remove avatar") } finally { busy = false }
+                                    }
+                                },
+                            )
                         }
                     }
-                    Hint(plain("Any image works — it's center-cropped and resized to 128×128 in your browser before upload."))
+                    KitHint("Any image works — it's center-cropped and resized before upload.")
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Use Gravatar", color = RenzoColors.Foreground, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    WebInput(gravatarEmail, { gravatarEmail = it }, "you@example.com", Modifier.weight(1f), email = true)
-                    Spacer(Modifier.width(8.dp))
-                    WebButton("Fetch", variant = BtnVariant.Outline, enabled = !busy) {
-                        val email = gravatarEmail.trim()
-                        if (email.isEmpty()) { fail(null, "Enter an email address to look up"); return@WebButton }
+            Spacer(Modifier.height(14.dp))
+            FieldLabel("Use Gravatar")
+            val gravatarField: @Composable () -> Unit = {
+                RenzoTextField(
+                    value = gravatarEmail,
+                    onValueChange = { gravatarEmail = it },
+                    placeholder = "you@example.com",
+                    keyboardType = KeyboardType.Email,
+                )
+            }
+            val fetchButton: @Composable () -> Unit = {
+                RenzoButton(
+                    text = "Fetch",
+                    variant = "secondary",
+                    small = true,
+                    enabled = gravatarEmail.isNotBlank() && !busy,
+                    onClick = {
                         scope.launch {
                             busy = true; error = null
                             try {
-                                val g = app.repo.gravatar(email)
+                                val g = app.repo.gravatar(gravatarEmail.trim())
                                 pendingAvatar = g.avatarBase64 to g.avatarContentType
                             } catch (e: Exception) { fail(e, "Gravatar lookup failed") } finally { busy = false }
                         }
-                    }
-                }
-                Hint(plain("Looks up that address's Gravatar (via the server) as a preview — nothing changes until you save."))
+                    },
+                )
             }
+            if (!LocalIsTv.current && screenWidthDp() >= 640.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Box(Modifier.weight(1f)) { gravatarField() }
+                    Spacer(Modifier.width(8.dp))
+                    fetchButton()
+                }
+            } else {
+                gravatarField()
+                Spacer(Modifier.height(8.dp))
+                fetchButton()
+            }
+            KitHint(
+                "Looks up that address's Gravatar (via the server) as a preview — nothing changes " +
+                    "until you save.",
+            )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                WebButton(if (busy) "Saving…" else "Save avatar", enabled = pendingAvatar != null && !busy) {
+            Spacer(Modifier.height(12.dp))
+            RenzoButton(
+                text = if (busy) "Saving…" else "Save avatar",
+                busy = busy,
+                enabled = pendingAvatar != null,
+                onClick = {
                     scope.launch {
                         busy = true; error = null
                         try {
@@ -360,14 +353,127 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
                             msg = "Avatar updated"
                         } catch (e: Exception) { fail(e, "Couldn't save avatar") } finally { busy = false }
                     }
-                }
-                if (pendingAvatar != null) {
-                    Spacer(Modifier.width(12.dp))
-                    Text("New image ready — save to apply.", color = RenzoColors.MutedForeground, fontSize = 12.sp)
-                }
-            }
+                },
+            )
+        }
 
-            // Connection overview (old "Account" pane conn rows).
+        Spacer(Modifier.height(16.dp))
+
+        // ── Security ────────────────────────────────────────────────────
+        SettingsCard(
+            title = "Security",
+            description = "Changing your password signs out all your other sessions.",
+        ) {
+            var email by remember(user?.email) { mutableStateOf(user?.email ?: "") }
+            var savingEmail by remember { mutableStateOf(false) }
+            var curPass by remember { mutableStateOf("") }
+            var newPass by remember { mutableStateOf("") }
+            var confirmPass by remember { mutableStateOf("") }
+            var passError by remember { mutableStateOf("") }
+            var savingPass by remember { mutableStateOf(false) }
+
+            FieldLabel("Email", Icons.Outlined.Mail)
+            val emailField: @Composable () -> Unit = {
+                RenzoTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    placeholder = "Optional — used for password reset",
+                    keyboardType = KeyboardType.Email,
+                )
+            }
+            val emailSave: @Composable () -> Unit = {
+                RenzoButton(
+                    text = if (savingEmail) "Saving…" else "Save",
+                    busy = savingEmail,
+                    enabled = email.trim() != (user?.email ?: ""),
+                    onClick = {
+                        savingEmail = true
+                        scope.launch {
+                            try {
+                                val u = app.repo.setEmail(email.trim())
+                                refreshUser(u)
+                                msg = if (!u.email.isNullOrEmpty()) "Email updated" else "Email cleared"
+                            } catch (e: Exception) { msg = e.message ?: "Failed to update email" }
+                            savingEmail = false
+                        }
+                    },
+                )
+            }
+            if (!LocalIsTv.current && screenWidthDp() >= 640.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Box(Modifier.weight(1f)) { emailField() }
+                    Spacer(Modifier.width(8.dp))
+                    emailSave()
+                }
+            } else {
+                emailField()
+                Spacer(Modifier.height(8.dp))
+                emailSave()
+            }
+            KitHint("Password-reset links are sent here. Leave empty to disable email reset for this account.")
+
+            CardDivider(top = 20, bottom = 12)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
+                Icon(
+                    Icons.Outlined.Lock, contentDescription = null,
+                    tint = RenzoColors.Foreground,
+                    modifier = Modifier.padding(end = 6.dp).size(14.dp),
+                )
+                Text("Password", style = MaterialTheme.typography.titleSmall, color = RenzoColors.Foreground)
+            }
+            if (passError.isNotEmpty()) ErrorBox(passError)
+            FieldPair(
+                breakpoint = 640.dp,
+                left = { LabelledField("Current password", curPass, { curPass = it }, password = true) },
+                right = {
+                    LabelledField(
+                        label = "New password",
+                        value = newPass,
+                        onValueChange = { newPass = it },
+                        placeholder = "At least 8 characters",
+                        password = true,
+                    )
+                },
+            )
+            FieldPair(
+                breakpoint = 640.dp,
+                left = { LabelledField("Confirm new password", confirmPass, { confirmPass = it }, password = true) },
+            )
+            RenzoButton(
+                text = if (savingPass) "Changing…" else "Update password",
+                icon = Icons.Outlined.Check,
+                busy = savingPass,
+                onClick = {
+                    passError = ""
+                    when {
+                        newPass.length < 8 -> passError = "New password must be at least 8 characters"
+                        newPass != confirmPass -> passError = "Passwords do not match"
+                        else -> {
+                            savingPass = true
+                            scope.launch {
+                                try {
+                                    app.repo.changePassword(curPass, newPass)
+                                    curPass = ""; newPass = ""; confirmPass = ""
+                                    msg = "Password changed"
+                                } catch (e: Exception) {
+                                    passError = e.message ?: "Failed to change password"
+                                }
+                                savingPass = false
+                            }
+                        }
+                    }
+                },
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ── Connections (Renzo: what streaming and scrobbling run on) ───
+        SettingsCard(
+            title = "Connections",
+            description = "Your debrid service streams and downloads; AniList and MyAnimeList " +
+                "import lists and track what you watch. Set them up under Required credentials.",
+        ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ConnRow(
                     Icons.Outlined.Link,
@@ -390,91 +496,24 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
             }
         }
 
-        // --- Security (old security pane merged in) --------------------------
-        PaneSection(title = "Security") {
-            var email by remember(user?.email) { mutableStateOf(user?.email ?: "") }
-            var curPass by remember { mutableStateOf("") }
-            var newPass by remember { mutableStateOf("") }
-            var confirmPass by remember { mutableStateOf("") }
-            var passError by remember { mutableStateOf<String?>(null) }
+        Spacer(Modifier.height(16.dp))
 
-            Field("Email", hint = { Hint(plain("Used to deliver password-reset links.")) }) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    WebInput(email, { email = it }, "you@example.com", Modifier.weight(1f), email = true)
-                    Spacer(Modifier.width(8.dp))
-                    WebButton("Save") {
-                        scope.launch {
-                            try {
-                                val u = app.repo.setEmail(email.trim())
-                                refreshUser(u)
-                                msg = if (!u.email.isNullOrEmpty()) "Email saved" else "Email cleared"
-                            } catch (e: Exception) { msg = e.message }
-                        }
-                    }
-                }
-            }
-
-            Column {
-                Text("Password", color = RenzoColors.Foreground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Changing your password signs out all your other sessions.",
-                    color = RenzoColors.MutedForeground,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(top = 2.dp),
+        // ── Session — Shiori ends its Account section with Sign out ──────
+        SettingsCard(
+            title = "Session",
+            description = "Signed in as ${user?.username ?: "—"}" +
+                (user?.role?.let { " (${roleLabel(it)})" } ?: "") + " on this device.",
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RenzoButton(
+                    text = "Sign out",
+                    icon = Icons.AutoMirrored.Outlined.Logout,
+                    variant = "destructive",
+                    onClick = onLogout,
                 )
+                Spacer(Modifier.width(8.dp))
+                RenzoButton(text = "Change server", variant = "outline", onClick = onChangeServer)
             }
-            // change-password-dialog's error box (rounded-md bg-destructive/10 p-3).
-            if (passError != null) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(RenzoColors.Destructive.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .padding(12.dp),
-                ) {
-                    Text(passError ?: "", color = RenzoColors.Destructive, fontSize = 14.sp, lineHeight = 20.sp)
-                }
-            }
-            Field("Current password") {
-                WebInput(curPass, { curPass = it }, "Current password", fieldWidth(384), masked = true)
-            }
-            Field("New password") {
-                WebInput(newPass, { newPass = it }, "At least 8 characters", fieldWidth(384), masked = true)
-            }
-            Field("Confirm new password") {
-                WebInput(confirmPass, { confirmPass = it }, "", fieldWidth(384), masked = true)
-            }
-            Row {
-                WebButton("Update password") {
-                    passError = null
-                    // change-password-dialog's client floor (8..128 chars, match).
-                    if (newPass.length < 8) {
-                        passError = "New password must be at least 8 characters"
-                        return@WebButton
-                    }
-                    if (newPass != confirmPass) {
-                        passError = "Passwords do not match"
-                        return@WebButton
-                    }
-                    scope.launch {
-                        try {
-                            app.repo.changePassword(curPass, newPass)
-                            curPass = ""; newPass = ""; confirmPass = ""
-                            msg = "Password updated"
-                        } catch (e: Exception) {
-                            passError = e.message ?: "Failed to change password"
-                        }
-                    }
-                }
-            }
-        }
-
-        // Native-only session actions (the web keeps these in the account menu,
-        // which has no D-pad-reachable home on TV).
-        Row {
-            WebButton("Log out", variant = BtnVariant.GhostDanger) { onLogout() }
-            Spacer(Modifier.width(8.dp))
-            WebButton("Change server", variant = BtnVariant.Outline) { onChangeServer() }
         }
 
         StatusText(msg)
@@ -1098,22 +1137,16 @@ private fun debridPill(v: String?): Pair<PillState, String> = when (v) {
     else -> PillState.Err to "Not connected"
 }
 
+/** Connection state pill — Shiori's RenzoBadge in the matching status colour. */
 @Composable
 private fun StatePill(state: PillState, label: String) {
-    val (bg, fg) = when (state) {
-        PillState.Ok -> RenzoColors.Emerald500.copy(alpha = 0.15f) to RenzoColors.Emerald400
-        PillState.Warn -> RenzoColors.Amber500.copy(alpha = 0.15f) to RenzoColors.Amber400
-        PillState.Err -> RenzoColors.Red500.copy(alpha = 0.15f) to RenzoColors.Red400
-        PillState.Muted -> RenzoColors.Muted to RenzoColors.MutedForeground
+    val color = when (state) {
+        PillState.Ok -> RenzoColors.Emerald
+        PillState.Warn -> RenzoColors.Amber
+        PillState.Err -> RenzoColors.Red
+        PillState.Muted -> RenzoColors.MutedForeground
     }
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(bg, RoundedCornerShape(999.dp))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-    ) {
-        Text(label, color = fg, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-    }
+    RenzoBadge(label, color)
 }
 
 private fun roleLabel(r: String): String =
@@ -1121,25 +1154,19 @@ private fun roleLabel(r: String): String =
 
 @Composable
 private fun RoleBadge(role: String) {
-    val (bg, fg) = when (role) {
-        "owner" -> RenzoColors.Primary.copy(alpha = 0.15f) to RenzoColors.Primary
-        "manager" -> Color(0xFFD8B4FE).copy(alpha = 0.15f) to Color(0xFFD8B4FE)
-        else -> Color(0xFF93C5FD).copy(alpha = 0.15f) to Color(0xFF93C5FD)
+    val color = when (role) {
+        "owner" -> RenzoColors.Primary
+        "manager" -> Color(0xFFD8B4FE)
+        else -> Color(0xFF93C5FD)
     }
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(bg, RoundedCornerShape(999.dp))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Filled.MilitaryTech, contentDescription = null, tint = fg, modifier = Modifier.size(12.dp))
-        Spacer(Modifier.width(4.dp))
-        Text(roleLabel(role), color = fg, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-    }
+    RenzoBadge(roleLabel(role), color, icon = Icons.Filled.MilitaryTech)
 }
 
-/** Section wrapper — Shiori-style card with title + description (PaneSection). */
+/**
+ * Shiori's SettingsCard (rounded-xl border bg-card, titleMedium + bodySmall
+ * description), with the two things Renzo's panes need on top: a rich-text
+ * description and header actions beside the title at sm.
+ */
 @Composable
 private fun PaneSection(
     title: String? = null,
@@ -1147,64 +1174,45 @@ private fun PaneSection(
     actions: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val pad = if (top.levitatemedia.renzo.tv.renzoScreenWidthDp() >= 640) 20.dp else 16.dp
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(RenzoColors.Card, RoundedCornerShape(12.dp))
             .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
-            .padding(pad),
+            .background(RenzoColors.Card)
+            .padding(16.dp),
     ) {
-        if (title != null || actions != null) {
-            // Web header: mb-3 flex-col gap-3 sm:flex-row sm:items-center
-            // sm:justify-between — actions sit right of the title at sm+.
-            val sm = top.levitatemedia.renzo.tv.renzoScreenWidthDp() >= 640
-            val header: @Composable () -> Unit = {
-                if (title != null) {
-                    Text(title, color = RenzoColors.Foreground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                }
-                if (sub != null) {
-                    Text(
-                        sub,
-                        color = RenzoColors.MutedForeground,
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
+        val header: @Composable () -> Unit = {
+            if (title != null) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = RenzoColors.Foreground)
             }
-            if (sm && actions != null) {
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+            if (sub != null) {
+                Text(
+                    sub,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RenzoColors.MutedForeground,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+        if (title != null || sub != null || actions != null) {
+            if (actions != null && screenWidthDp() >= 640.dp) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { header() }
                     Spacer(Modifier.width(12.dp))
                     Row { actions() }
                 }
             } else {
-                Column(Modifier.padding(bottom = 12.dp)) {
-                    header()
-                    if (actions != null) {
-                        Row(Modifier.padding(top = 12.dp)) { actions() }
-                    }
-                }
+                header()
+                if (actions != null) Row(Modifier.padding(top = 12.dp)) { actions() }
             }
-        } else if (sub != null) {
-            Text(
-                sub,
-                color = RenzoColors.MutedForeground,
-                fontSize = 12.sp,
-                lineHeight = 18.sp,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
+            Spacer(Modifier.height(14.dp))
         }
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
     }
 }
 
-/** One labeled form field (shared.tsx Field: label row + control + hint). */
+/** One labelled form field — Shiori's FieldLabel + control + Hint. */
 @Composable
 private fun Field(
     label: String,
@@ -1212,9 +1220,9 @@ private fun Field(
     hint: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = RenzoColors.Foreground, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
+            Text(label, style = MaterialTheme.typography.labelLarge, color = RenzoColors.Foreground)
             if (pill != null) {
                 Spacer(Modifier.width(8.dp))
                 pill()
@@ -1225,25 +1233,17 @@ private fun Field(
     }
 }
 
-/** text-xs muted helper line; optionally focusable/clickable (hint links). */
+/** Shiori's Hint (bodySmall, muted); optionally focusable/clickable (hint links). */
 @Composable
 private fun Hint(text: AnnotatedString, onClick: (() -> Unit)? = null) {
-    if (onClick == null) {
-        Text(text, color = RenzoColors.MutedForeground, fontSize = 12.sp, lineHeight = 19.sp)
-    } else {
-        var focused by remember { mutableStateOf(false) }
-        Text(
-            text,
-            color = if (focused) RenzoColors.Foreground else RenzoColors.MutedForeground,
-            fontSize = 12.sp,
-            lineHeight = 19.sp,
-            modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .focusRing(focused, 4.dp)
-                .tvClickable(onFocused = { focused = it }, onClick = onClick)
-                .padding(2.dp),
-        )
-    }
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = RenzoColors.MutedForeground,
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .then(if (onClick != null) Modifier.clip(RoundedCornerShape(4.dp)).kitClickable(radius = 4.dp, onClick = onClick) else Modifier),
+    )
 }
 
 /** Connection row (shared.tsx ConnRow): icon · name/desc · pill · action. */
@@ -1259,24 +1259,23 @@ private fun ConnRow(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(RenzoColors.Background.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
             .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier
-                .size(36.dp)
+                .size(32.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(RenzoColors.Muted, RoundedCornerShape(8.dp)),
+                .background(RenzoColors.Muted),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = RenzoColors.MutedForeground, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(name, color = RenzoColors.Foreground, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            Text(desc, color = RenzoColors.MutedForeground, fontSize = 12.sp, maxLines = 1)
+            Text(name, style = MaterialTheme.typography.labelLarge, color = RenzoColors.Foreground, maxLines = 1)
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = RenzoColors.MutedForeground, maxLines = 1)
         }
         Spacer(Modifier.width(12.dp))
         pill()
@@ -1290,6 +1289,7 @@ private fun ConnRow(
 /** shadcn button variants (ui/button.tsx) the account page uses. */
 private enum class BtnVariant { Primary, Outline, Ghost, GhostDanger }
 
+/** Shiori's RenzoButton, under the variant names these panes were written with. */
 @Composable
 private fun WebButton(
     label: String,
@@ -1299,58 +1299,22 @@ private fun WebButton(
     icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    val bg = when (variant) {
-        BtnVariant.Primary -> if (focused) RenzoColors.Primary.copy(alpha = 0.9f) else RenzoColors.Primary
-        BtnVariant.Outline -> if (focused) RenzoColors.Accent else RenzoColors.Background
-        BtnVariant.Ghost -> if (focused) RenzoColors.Accent else Color.Transparent
-        BtnVariant.GhostDanger -> if (focused) RenzoColors.Red500.copy(alpha = 0.1f) else Color.Transparent
-    }
-    val fg = when (variant) {
-        BtnVariant.Primary -> RenzoColors.PrimaryForeground
-        BtnVariant.GhostDanger -> RenzoColors.Red400
-        else -> RenzoColors.Foreground
-    }
-    val h = if (small) 32.dp else 36.dp
-    val px = if (small) 12.dp else 16.dp
-    Row(
-        Modifier
-            .height(h)
-            .clip(RoundedCornerShape(8.dp))
-            .focusRing(focused, 8.dp)
-            .background(bg, RoundedCornerShape(8.dp))
-            .let { if (variant == BtnVariant.Outline) it.border(1.dp, RenzoColors.Input, RoundedCornerShape(8.dp)) else it }
-            .let { m -> if (enabled) m.tvClickable(onFocused = { f -> focused = f }, onClick = onClick) else m.alpha(0.5f) }
-            .padding(horizontal = px),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null) {
-            // Web sm buttons: h-3.5 w-3.5 icon + mr-1.5 (Refresh in credentials).
-            Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(if (small) 14.dp else 16.dp))
-            Spacer(Modifier.width(if (small) 6.dp else 8.dp))
-        }
-        Text(label, color = fg, fontSize = if (small) 12.sp else 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-    }
+    RenzoButton(
+        text = label,
+        onClick = onClick,
+        icon = icon,
+        variant = when (variant) {
+            BtnVariant.Primary -> "default"
+            BtnVariant.Outline -> "outline"
+            BtnVariant.Ghost -> "ghost"
+            BtnVariant.GhostDanger -> "destructive"
+        },
+        small = small,
+        enabled = enabled,
+    )
 }
 
-/** Ghost icon button (h-9 w-9) — the route shell's ✕ close. */
-@Composable
-private fun GhostIconButton(icon: ImageVector, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .focusRing(focused, 8.dp)
-            .background(if (focused) RenzoColors.Accent else Color.Transparent, RoundedCornerShape(8.dp))
-            .tvClickable(onFocused = { focused = it }, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = "Close account", tint = RenzoColors.Foreground, modifier = Modifier.size(20.dp))
-    }
-}
-
-/** shadcn Input (ui/input.tsx): h-9 rounded-md border bg-transparent px-3 text-sm. */
+/** Shiori's RenzoTextField (input.tsx), under the old parameter names. */
 @Composable
 internal fun WebInput(
     value: String,
@@ -1363,46 +1327,20 @@ internal fun WebInput(
     email: Boolean = false,
     numeric: Boolean = false,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        modifier
-            .height(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .focusRing(focused, 8.dp)
-            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Input, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            singleLine = true,
-            readOnly = readOnly,
-            // Web email fields set inputMode="email".
-            keyboardOptions = when {
-                email -> KeyboardOptions(keyboardType = KeyboardType.Email)
-                // Web `tracking-row.tsx:99,109` are <input type="number">.
-                numeric -> KeyboardOptions(keyboardType = KeyboardType.Number)
-                else -> KeyboardOptions.Default
-            },
-            textStyle = TextStyle(
-                color = RenzoColors.Foreground,
-                fontSize = if (mono) 12.sp else 14.sp,
-                fontFamily = if (mono) FontFamily.Monospace else top.levitatemedia.renzo.hub.core.GeistFamily,
-            ),
-            cursorBrush = SolidColor(RenzoColors.Primary),
-            visualTransformation = if (masked && value.isNotEmpty()) PasswordVisualTransformation() else VisualTransformation.None,
-            modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
-            decorationBox = { inner ->
-                Box {
-                    if (value.isEmpty()) {
-                        Text(placeholder, color = RenzoColors.MutedForeground, fontSize = if (mono) 12.sp else 14.sp, maxLines = 1)
-                    }
-                    inner()
-                }
-            },
-        )
-    }
+    RenzoTextField(
+        value = value,
+        onValueChange = onChange,
+        modifier = modifier,
+        placeholder = placeholder,
+        password = masked,
+        keyboardType = when {
+            email -> KeyboardType.Email
+            numeric -> KeyboardType.Number
+            else -> KeyboardType.Text
+        },
+        readOnly = readOnly,
+        monospace = mono,
+    )
 }
 
 /** TvSelect translation: closed trigger + expanding option list. */
@@ -1547,97 +1485,18 @@ private fun Details(
     }
 }
 
-/** Shiori SectionList pill (account-view.tsx nav): icon + label + accent bar. */
-@Composable
-private fun NavPill(def: SectionDef, active: Boolean, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .focusRing(focused, 8.dp)
-                .background(
-                    when {
-                        active -> RenzoColors.Primary.copy(alpha = 0.10f)
-                        focused -> RenzoColors.Accent.copy(alpha = 0.5f)
-                        else -> Color.Transparent
-                    },
-                    RoundedCornerShape(8.dp),
-                )
-                .tvClickable(onFocused = { focused = it }, onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val fg = when {
-                active -> RenzoColors.Primary
-                focused -> RenzoColors.Foreground
-                else -> RenzoColors.MutedForeground
-            }
-            Icon(def.icon, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(12.dp))
-            Text(def.label, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
-        }
-        if (active) {
-            // 2px rounded left accent bar, inset top-2/bottom-2.
-            Box(Modifier.matchParentSize()) {
-                Box(
-                    Modifier
-                        .align(Alignment.CenterStart)
-                        .fillMaxHeight()
-                        .padding(vertical = 8.dp)
-                        .width(2.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(RenzoColors.Primary, RoundedCornerShape(999.dp)),
-                )
-            }
-        }
-    }
-}
-
-/** Web mobile Sheet trigger: outline button, icon + section label, chevron. */
-@Composable
-private fun SectionPickerTrigger(active: SectionDef, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .focusRing(focused, 8.dp)
-            .background(if (focused) RenzoColors.Accent else RenzoColors.Background, RoundedCornerShape(8.dp))
-            .border(1.dp, RenzoColors.Input, RoundedCornerShape(8.dp))
-            .tvClickable(onFocused = { focused = it }, onClick = onClick)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(active.icon, contentDescription = null, tint = RenzoColors.Foreground, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(
-            active.label,
-            color = RenzoColors.Foreground,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        // Shiori's SettingsSectionNav trigger ends in a Menu glyph.
-        Icon(
-            Icons.Filled.Menu,
-            contentDescription = null,
-            tint = RenzoColors.MutedForeground.copy(alpha = 0.6f),
-            modifier = Modifier.size(16.dp),
-        )
-    }
-}
-
-/** Toast stand-in — the repos' save confirmations (web used sonner toasts). */
+/** Save confirmations — Shiori shows these as a snackbar; inline here, same style. */
 @Composable
 private fun StatusText(msg: String?) {
     if (msg != null) {
-        Text(msg, color = RenzoColors.Primary, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
+        Text(
+            msg,
+            style = MaterialTheme.typography.bodySmall,
+            color = RenzoColors.MutedForeground,
+            modifier = Modifier.padding(top = 12.dp),
+        )
     }
-    Spacer(Modifier.height(32.dp))
+    Spacer(Modifier.height(28.dp))
 }
 
 /** w-full below the sm break, fixed width above (web `w-full sm:w-NN`). */

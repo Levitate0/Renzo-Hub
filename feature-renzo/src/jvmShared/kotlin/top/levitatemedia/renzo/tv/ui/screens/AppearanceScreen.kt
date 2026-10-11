@@ -48,6 +48,9 @@ import top.levitatemedia.renzo.tv.ui.components.focusRing
 import top.levitatemedia.renzo.tv.ui.components.tvClickable
 import top.levitatemedia.renzo.tv.ui.theme.ACCENT_SWATCHES
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
+import top.levitatemedia.renzo.tv.ui.kit.PageHeading
+import top.levitatemedia.renzo.tv.ui.kit.SettingsCard
+import top.levitatemedia.renzo.tv.ui.kit.SettingsScaffold
 import top.levitatemedia.renzo.tv.ui.theme.THEME_PRESETS
 import top.levitatemedia.renzo.tv.ui.theme.ThemePreset
 
@@ -87,89 +90,63 @@ fun AppearanceScreen(app: AppServices, onClose: () -> Unit) {
         }
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 20.dp)
-            .widthIn(max = 720.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.weight(1f)) {
-                Text("Appearance", color = RenzoColors.Foreground, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Theme and accent — saved on this device.",
-                    color = RenzoColors.MutedForeground,
-                    // Shiori PageHeading subtitle: bodySmall (12sp).
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            var xFocused by remember { mutableStateOf(false) }
-            // Shiori's close affordance: the Close glyph in a 1dp circle.
-            Box(
-                Modifier
-                    .clip(CircleShape)
-                    .focusRing(xFocused, 999.dp)
-                    .background(if (xFocused) RenzoColors.Card else Color.Transparent, CircleShape)
-                    .tvClickable(onFocused = { xFocused = it }, onClick = onClose),
-                contentAlignment = Alignment.Center,
+    // Shiori's Appearance page (feature-shiori ui/settings/AppearanceScreen.kt):
+    // the settings scaffold, the page heading, and one card per choice.
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
+    SettingsScaffold(title = "Appearance", onBack = onClose, snackbar = snackbar) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+        ) {
+            PageHeading(
+                "Appearance",
+                "Personalize how Renzo looks for ${app.user.value?.username ?: "you"} — saved to your " +
+                    "account, so it follows you on every device.",
+            )
+            Spacer(Modifier.height(20.dp))
+
+            SettingsCard(
+                title = "Theme",
+                description = "Pick a look. Applies instantly and syncs to your account.",
             ) {
-                Icon(
-                    Icons.Filled.Close, contentDescription = "Close",
-                    tint = RenzoColors.MutedForeground,
-                    modifier = Modifier.border(1.dp, RenzoColors.Border, CircleShape).padding(6.dp),
-                )
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    THEME_PRESETS.forEach { preset ->
+                        PresetCard(preset, selected = preset.id == presetId) { push(preset.id, accent) }
+                    }
+                }
             }
-        }
 
-        Text(
-            "Theme",
-            color = RenzoColors.Foreground,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 22.dp, bottom = 8.dp),
-        )
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            THEME_PRESETS.forEach { preset ->
-                PresetCard(preset, selected = preset.id == presetId) { push(preset.id, accent) }
-            }
-        }
+            Spacer(Modifier.height(16.dp))
 
-        Text(
-            "Accent",
-            color = RenzoColors.Foreground,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 24.dp, bottom = 2.dp),
-        )
-        Text(
-            "Used for the play button, active tabs and focus rings.",
-            color = RenzoColors.MutedForeground,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(bottom = 10.dp),
-        )
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            // "Theme default" first — clears any custom accent.
-            AccentSwatch(
-                color = top.levitatemedia.renzo.tv.ui.theme.presetById(presetId).primary,
-                label = "Default",
-                selected = accent == null,
-            ) { push(presetId, null) }
-            ACCENT_SWATCHES.forEach { (label, c) ->
-                AccentSwatch(color = c, label = label, selected = accent == c) { push(presetId, c) }
+            SettingsCard(
+                title = "Accent",
+                description = "Used for the play button, active tabs and focus rings.",
+            ) {
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    // "Theme default" first — clears any custom accent.
+                    AccentSwatch(
+                        color = top.levitatemedia.renzo.tv.ui.theme.presetById(presetId).primary,
+                        label = "Default",
+                        selected = accent == null,
+                    ) { push(presetId, null) }
+                    ACCENT_SWATCHES.forEach { (label, c) ->
+                        AccentSwatch(color = c, label = label, selected = accent == c) { push(presetId, c) }
+                    }
+                }
             }
+            Spacer(Modifier.height(28.dp))
         }
-        Spacer(Modifier.height(32.dp))
     }
 }
 

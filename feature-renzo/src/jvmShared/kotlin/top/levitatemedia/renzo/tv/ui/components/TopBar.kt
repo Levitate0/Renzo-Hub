@@ -73,7 +73,7 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 @Composable
 fun TopBar(
     app: top.levitatemedia.renzo.tv.AppServices,
-    active: Tab,
+    active: Tab?,
     onTab: (Tab) -> Unit,
     onAccount: () -> Unit,
     onMenu: () -> Unit,

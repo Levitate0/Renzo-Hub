@@ -4,6 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.darkColorScheme
 import top.levitatemedia.renzo.hub.core.GeistFamily
 
@@ -59,6 +63,17 @@ object RenzoColors {
     val Indigo400 = Color(0xFF818CF8)
     // PosterCard downloaded-dot halo: shadow-[0_0_0_3px_rgba(61,220,132,0.2)].
     val DownloadedGreenHalo = Color(0x333DDC84)
+
+    // Shiori's status names (feature-shiori ui/theme RenzoColors), so screens
+    // ported from that half compile against the same vocabulary.
+    val Green = Color(0xFF22C55E)
+    val Yellow = Color(0xFFEAB308)
+    val Amber = Color(0xFFF59E0B)
+    val Blue = Color(0xFF3B82F6)
+    val Emerald = Color(0xFF10B981)
+    val Red = Color(0xFFEF4444)
+    /** Overlay behind full-window dialogs (Shiori: the web's bg-black/80). */
+    val DialogScrim = Color(0xCC000000)
 }
 
 /**
@@ -81,34 +96,45 @@ fun logicalScreenSize(): Pair<Float, Float> {
 }
 
 /**
- * Geist across every text style. Renzo's screens set size/weight per call and
- * inherit the face from LocalTextStyle, so carrying the family in the theme
- * typography is what flips the whole half from Roboto to the web's actual
- * font — the same face the Shiori half has always bundled.
+ * Shiori's typography, verbatim (feature-shiori ui/theme/Theme.kt): Geist on
+ * every style, with Shiori's weights — SemiBold headings and titles, Medium
+ * labels. The two halves must render the same text the same way; Renzo used
+ * to keep Material's Regular weights, which is a large part of why its pages
+ * looked thinner than Shiori's.
  */
 private val base = Typography()
 private val RenzoTypography = Typography(
     displayLarge = base.displayLarge.copy(fontFamily = GeistFamily),
     displayMedium = base.displayMedium.copy(fontFamily = GeistFamily),
     displaySmall = base.displaySmall.copy(fontFamily = GeistFamily),
-    headlineLarge = base.headlineLarge.copy(fontFamily = GeistFamily),
-    headlineMedium = base.headlineMedium.copy(fontFamily = GeistFamily),
-    headlineSmall = base.headlineSmall.copy(fontFamily = GeistFamily),
-    titleLarge = base.titleLarge.copy(fontFamily = GeistFamily),
-    titleMedium = base.titleMedium.copy(fontFamily = GeistFamily),
-    titleSmall = base.titleSmall.copy(fontFamily = GeistFamily),
+    headlineLarge = base.headlineLarge.copy(fontFamily = GeistFamily, fontWeight = FontWeight.Bold),
+    headlineMedium = base.headlineMedium.copy(fontFamily = GeistFamily, fontWeight = FontWeight.Bold),
+    headlineSmall = base.headlineSmall.copy(fontFamily = GeistFamily, fontWeight = FontWeight.SemiBold),
+    titleLarge = base.titleLarge.copy(fontFamily = GeistFamily, fontWeight = FontWeight.SemiBold),
+    titleMedium = base.titleMedium.copy(fontFamily = GeistFamily, fontWeight = FontWeight.SemiBold),
+    titleSmall = base.titleSmall.copy(fontFamily = GeistFamily, fontWeight = FontWeight.Medium),
     bodyLarge = base.bodyLarge.copy(fontFamily = GeistFamily),
     bodyMedium = base.bodyMedium.copy(fontFamily = GeistFamily),
     bodySmall = base.bodySmall.copy(fontFamily = GeistFamily),
-    labelLarge = base.labelLarge.copy(fontFamily = GeistFamily),
-    labelMedium = base.labelMedium.copy(fontFamily = GeistFamily),
-    labelSmall = base.labelSmall.copy(fontFamily = GeistFamily),
+    labelLarge = base.labelLarge.copy(fontFamily = GeistFamily, fontWeight = FontWeight.Medium),
+    labelMedium = base.labelMedium.copy(fontFamily = GeistFamily, fontWeight = FontWeight.Medium),
+    labelSmall = base.labelSmall.copy(fontFamily = GeistFamily, fontWeight = FontWeight.Medium),
+)
+
+// Shiori's shapes: the web's 8px radius, 12px cards — never Material pills.
+private val RenzoShapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(8.dp),
+    large = RoundedCornerShape(12.dp),
+    extraLarge = RoundedCornerShape(16.dp),
 )
 
 @Composable
 fun RenzoTvTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         typography = RenzoTypography,
+        shapes = RenzoShapes,
         colorScheme = darkColorScheme(
             primary = RenzoColors.Primary,
             onPrimary = RenzoColors.PrimaryForeground,
@@ -118,9 +144,15 @@ fun RenzoTvTheme(content: @Composable () -> Unit) {
             onSurface = RenzoColors.Foreground,
             surfaceVariant = RenzoColors.Secondary,
             onSurfaceVariant = RenzoColors.MutedForeground,
+            secondary = RenzoColors.Secondary,
+            onSecondary = RenzoColors.Foreground,
             outline = RenzoColors.Border,
-            error = RenzoColors.Destructive,
+            outlineVariant = RenzoColors.Border,
+            error = RenzoColors.Red,
             onError = RenzoColors.DestructiveForeground,
+            surfaceContainer = RenzoColors.Card,
+            surfaceContainerHigh = RenzoColors.Popover,
+            surfaceContainerHighest = RenzoColors.Secondary,
         ),
         content = content,
     )

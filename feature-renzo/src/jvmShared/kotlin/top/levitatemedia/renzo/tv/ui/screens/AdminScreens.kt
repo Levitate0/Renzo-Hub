@@ -58,87 +58,67 @@ import kotlinx.coroutines.launch
 import top.levitatemedia.renzo.tv.AppServices
 import top.levitatemedia.renzo.tv.api.InviteItem
 import top.levitatemedia.renzo.tv.api.PublicUser
-import top.levitatemedia.renzo.tv.ui.components.PillButton
 import top.levitatemedia.renzo.tv.ui.components.UserAvatar
 import top.levitatemedia.renzo.tv.ui.components.focusRing
 import top.levitatemedia.renzo.tv.ui.components.tvClickable
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
+import top.levitatemedia.renzo.tv.ui.kit.PageHeading
+import top.levitatemedia.renzo.tv.ui.kit.RenzoBadge
+import top.levitatemedia.renzo.tv.ui.kit.RenzoButton
+import top.levitatemedia.renzo.tv.ui.kit.RenzoTextField
+import top.levitatemedia.renzo.tv.ui.kit.SettingsCard
+import top.levitatemedia.renzo.tv.ui.kit.SettingsScaffold
 
 // ---------------------------------------------------------------------------
-// /users/ and /settings/ — the staff/owner pages, built on the SAME shell as
-// the Account page (page header with ✕, card sections, shared field/row bits)
-// so the three settings-family screens look identical.
+// /users/ and /settings/ — the staff/owner pages, on Shiori's settings shell
+// (SettingsScaffold + PageHeading + SettingsCard from ui/kit), the same one
+// the Account and Appearance pages use, so all four read as one family.
 // ---------------------------------------------------------------------------
 
-/** Shared settings-family page shell (web SettingsRouteShell). */
+/**
+ * Shiori's settings page: the command bar above at wide (back-arrow bar
+ * below), then the heading and the cards. Shiori's Users page runs full
+ * width; its Settings page keeps the settings-manager's max-w-4xl column.
+ */
 @Composable
 private fun SettingsPage(
     title: String,
     subtitle: String,
     onClose: () -> Unit,
+    maxWidth: androidx.compose.ui.unit.Dp? = null,
     content: @Composable () -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 20.dp)
-            .widthIn(max = 720.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.weight(1f)) {
-                Text(title, color = RenzoColors.Foreground, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    subtitle,
-                    color = RenzoColors.MutedForeground,
-                    // Shiori PageHeading subtitle: bodySmall (12sp).
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            var xFocused by remember { mutableStateOf(false) }
-            // Shiori's close affordance: the Close glyph in a 1dp circle.
-            Box(
-                Modifier
-                    .clip(CircleShape)
-                    .focusRing(xFocused, 999.dp)
-                    .background(if (xFocused) RenzoColors.Card else Color.Transparent, CircleShape)
-                    .tvClickable(onFocused = { xFocused = it }, onClick = onClose),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.Close, contentDescription = "Close",
-                    tint = RenzoColors.MutedForeground,
-                    modifier = Modifier.border(1.dp, RenzoColors.Border, CircleShape).padding(6.dp),
-                )
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
+    SettingsScaffold(title = title, onBack = onClose, snackbar = snackbar) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Column(Modifier.then(if (maxWidth != null) Modifier.widthIn(max = maxWidth) else Modifier).fillMaxWidth()) {
+                PageHeading(title, subtitle)
+                Spacer(Modifier.height(20.dp))
+                content()
+                Spacer(Modifier.height(28.dp))
             }
         }
-        Spacer(Modifier.height(18.dp))
-        content()
-        Spacer(Modifier.height(32.dp))
     }
 }
 
-/** Card section (web PaneSection: rounded-xl border bg-card p-4/5). */
+/** Shiori's SettingsCard, with the 16dp gap the pages stack them at. */
 @Composable
 private fun Section(title: String, sub: String? = null, content: @Composable () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(bottom = 14.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(RenzoColors.Card, RoundedCornerShape(12.dp))
-            .border(1.dp, RenzoColors.Border, RoundedCornerShape(12.dp))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(title, color = RenzoColors.Foreground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        if (sub != null) Text(sub, color = RenzoColors.MutedForeground, fontSize = 12.sp, lineHeight = 18.sp)
-        content()
+    Box(Modifier.padding(bottom = 16.dp)) {
+        SettingsCard(title = title, description = sub) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
+        }
     }
 }
 
+/** Shiori's RenzoTextField. */
 @Composable
 private fun AdminField(
     value: String,
@@ -147,32 +127,10 @@ private fun AdminField(
     modifier: Modifier = Modifier,
     password: Boolean = false,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        modifier
-            .clip(RoundedCornerShape(8.dp))
-            .focusRing(focused, 8.dp)
-            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Border, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-    ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            singleLine = true,
-            textStyle = TextStyle(color = RenzoColors.Foreground, fontSize = 14.sp, fontFamily = top.levitatemedia.renzo.hub.core.GeistFamily),
-            cursorBrush = SolidColor(RenzoColors.Primary),
-            visualTransformation = if (password && value.isNotEmpty()) PasswordVisualTransformation() else VisualTransformation.None,
-            modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
-            decorationBox = { inner ->
-                Box {
-                    if (value.isEmpty()) Text(placeholder, color = RenzoColors.MutedForeground, fontSize = 14.sp)
-                    inner()
-                }
-            },
-        )
-    }
+    RenzoTextField(value = value, onValueChange = onChange, modifier = modifier, placeholder = placeholder, password = password)
 }
 
+/** Shiori's RenzoBadge in the role colour. */
 @Composable
 private fun RolePill(role: String) {
     val color = when (role) {
@@ -180,43 +138,13 @@ private fun RolePill(role: String) {
         "manager" -> Color(0xFFD8B4FE)
         else -> Color(0xFF93C5FD)
     }
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(color.copy(alpha = 0.15f), RoundedCornerShape(999.dp))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Filled.MilitaryTech, contentDescription = null, tint = color, modifier = Modifier.size(12.dp))
-        Spacer(Modifier.width(4.dp))
-        Text(
-            role.replaceFirstChar { it.uppercase() },
-            color = color,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
+    RenzoBadge(role.replaceFirstChar { it.uppercase() }, color, icon = Icons.Filled.MilitaryTech)
 }
 
+/** Shiori's small outline button (destructive actions in the destructive variant). */
 @Composable
 private fun SmallButton(label: String, destructive: Boolean = false, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .focusRing(focused, 8.dp)
-            .background(if (focused) RenzoColors.Secondary else Color.Transparent, RoundedCornerShape(8.dp))
-            .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
-            .tvClickable(onFocused = { focused = it }, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-    ) {
-        Text(
-            label,
-            color = if (destructive) Color(0xFFFF6B6B) else RenzoColors.Foreground,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
+    RenzoButton(text = label, onClick = onClick, variant = if (destructive) "destructive" else "outline", small = true)
 }
 
 // --- /users/ ----------------------------------------------------------------
@@ -322,7 +250,7 @@ fun UsersScreen(app: AppServices, onClose: () -> Unit) {
                     inviteRole = if (inviteRole == "user" && isOwner) "manager" else "user"
                 }
                 Spacer(Modifier.width(10.dp))
-                PillButton("Create invite", onClick = {
+                RenzoButton("Create invite", onClick = {
                     scope.launch {
                         try {
                             val inv = app.repo.createInvite(inviteRole, inviteEmail, inviteName)
@@ -401,7 +329,7 @@ fun ServerSettingsScreen(app: AppServices, onClose: () -> Unit) {
         }
     }
 
-    SettingsPage("Settings", "Server-wide configuration — owner only.", onClose) {
+    SettingsPage("Settings", "Server-wide configuration — owner only.", onClose, maxWidth = 896.dp) {
         Section(
             "Email (SMTP)",
             "Used to send invite links and password-reset emails. Leave the host empty to disable email.",
@@ -419,7 +347,7 @@ fun ServerSettingsScreen(app: AppServices, onClose: () -> Unit) {
                 Modifier.fillMaxWidth(), password = true,
             )
             AdminField(from, { from = it }, "From address, e.g. Renzo <no-reply@example.com>", Modifier.fillMaxWidth())
-            PillButton("Save email settings", onClick = {
+            RenzoButton("Save email settings", onClick = {
                 scope.launch {
                     try {
                         app.repo.saveSmtp(host.trim(), port.toIntOrNull() ?: 587, secure, user.trim(), pass, from.trim())
@@ -433,7 +361,7 @@ fun ServerSettingsScreen(app: AppServices, onClose: () -> Unit) {
 
         Section("Send a test email", "Confirms the settings above actually deliver.") {
             AdminField(testTo, { testTo = it }, "you@example.com", Modifier.fillMaxWidth())
-            PillButton("Send test", onClick = {
+            RenzoButton("Send test", variant = "outline", onClick = {
                 scope.launch {
                     try { app.repo.testSmtp(testTo.trim()); msg = "Test email sent" } catch (e: Exception) { msg = e.message }
                 }

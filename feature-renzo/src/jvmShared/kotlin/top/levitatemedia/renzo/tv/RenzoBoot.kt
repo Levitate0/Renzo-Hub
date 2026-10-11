@@ -220,134 +220,177 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
     }
 
     val contentHPad = if (app.isTv) 48.dp else 16.dp
-    Box(Modifier.fillMaxSize().then(if (screen is Screen.Tabs) Modifier else insetPad)) {
-    when (screen) {
-        is Screen.Tabs -> {
-            Column(
+
+    // Shiori's chrome rule (ShioriEntry.kt): on a wide window — desktop at the
+    // web's lg break, and every TV — the command bar stays above EVERY route
+    // except the full-screen one (Shiori's reader, Renzo's player), exactly
+    // like the web's CommandBar. Below lg only the tab pages carry it; pushed
+    // pages bring their own back affordance.
+    val wideChrome = app.isTv || renzoScreenWidthDp() >= 1024
+    val chromed = screen is Screen.Tabs || (wideChrome && screen !is Screen.Player)
+
+    // A tab picked from a pushed page leaves that page for the tab, like
+    // Shiori's popBackStack("home") — the bar never stacks a tab on a title.
+    val goTab: (Tab) -> Unit = { t ->
+        if (nav.stack.size > 1) { nav.stack.clear(); nav.stack.add(Screen.Tabs) }
+        nav.tab.value = t
+    }
+
+    val page: @Composable () -> Unit = {
+        when (screen) {
+            is Screen.Tabs -> Box(
                 Modifier
                     .fillMaxSize()
-                    // TV: no system bars to avoid — consume the insets so the
-                    // bar can truly span the panel. Phones: only the TOP inset
-                    // here, so the bar clears the status bar but still fills
-                    // the full width edge to edge.
+                    // Page content: insets/overscan live here, not on the
+                    // bar, plus a gap so nothing crowds the bar's edge.
                     .then(
                         if (app.isTv) {
-                            Modifier.consumeWindowInsets(WindowInsets.safeDrawing)
+                            Modifier.padding(
+                                start = contentHPad, end = contentHPad, bottom = 27.dp,
+                            )
                         } else {
-                            Modifier.windowInsetsPadding(
-                                WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
+                            Modifier
+                                .windowInsetsPadding(
+                                    WindowInsets.safeDrawing.only(
+                                        WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+                                    ),
+                                )
+                                .padding(horizontal = contentHPad)
+                        },
+                    )
+                    .padding(top = 12.dp),
+            ) {
+                when (nav.tab.value) {
+                    Tab.Discover -> HomeScreen(app, openCard)
+                    Tab.Library -> LibraryScreen(app, openCard)
+                    Tab.Updates -> UpdatesScreen(app, openCard)
+                    Tab.History -> HistoryScreen(app, openCard)
+                    Tab.Downloads -> DownloadsScreen(app, openCard)
+                    Tab.Search -> SearchScreen(
+                        app,
+                        openCard,
+                        onExit = { nav.tab.value = Tab.Discover },
+                    )
+                }
+            }
+            is Screen.Title -> TitleScreen(
+                app = app,
+                titleId = screen.id,
+                onPlay = { detail, ep -> nav.push(Screen.Player(detail.id, ep, detail.displayTitle)) },
+                // Season/franchise hops REPLACE the current title instead of
+                // stacking, so one Back leaves the series entirely rather than
+                // walking back through every season you looked at.
+                onOpenTitle = { nav.replaceTop(Screen.Title(it)) },
+                onBack = { nav.back() },
+                onSessionLost = onSessionLost,
+            )
+            is Screen.Player -> RenzoPlayerRoute(
+                app = app,
+                titleId = screen.titleId,
+                ep = screen.ep,
+                titleName = screen.titleName,
+                onExit = { nav.back() },
+                onSwitchEpisode = { newEp: Int -> nav.replaceTop(Screen.Player(screen.titleId, newEp, screen.titleName)) },
+                onSwitchTitle = { newId: Int, newEp: Int, name: String -> nav.replaceTop(Screen.Player(newId, newEp, name)) },
+                // Web series link: pop back to the series page when it is the entry
+                // behind the player, else open it in the player's place.
+                onOpenTitle = { id: Int ->
+                    val below = nav.stack.getOrNull(nav.stack.size - 2)
+                    if (below is Screen.Title && below.id == id) nav.back() else nav.replaceTop(Screen.Title(id))
+                },
+            )
+            is Screen.Appearance -> AppearanceScreen(app, onClose = { nav.back() })
+            is Screen.Users -> UsersScreen(app, onClose = { nav.back() })
+            is Screen.ServerSettings -> ServerSettingsScreen(app, onClose = { nav.back() })
+            is Screen.Account -> AccountScreen(
+                app = app,
+                onLogout = doLogout,
+                onChangeServer = doChangeServer,
+                section = screen.section,
+            )
+        }
+    }
+
+    androidx.compose.runtime.CompositionLocalProvider(
+        top.levitatemedia.renzo.tv.ui.kit.LocalIsTv provides app.isTv,
+    ) {
+    if (!chromed) {
+        Box(Modifier.fillMaxSize().then(insetPad)) { page() }
+    } else {
+        Column(
+            Modifier
+                .fillMaxSize()
+                // TV: no system bars to avoid — consume the insets so the
+                // bar can truly span the panel. Phones: only the TOP inset
+                // here, so the bar clears the status bar but still fills
+                // the full width edge to edge.
+                .then(
+                    if (app.isTv) {
+                        Modifier.consumeWindowInsets(WindowInsets.safeDrawing)
+                    } else {
+                        Modifier.windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
+                        )
+                    },
+                ),
+        ) {
+            TopBar(
+                app = app,
+                // Shiori's bar insets its content 6dp; TV keeps the overscan
+                // inset so the brand and avatar stay on the panel.
+                horizontalPadding = if (app.isTv) contentHPad else 6.dp,
+                // Pushed pages light no pill — the web's /title/ and settings
+                // routes match no tab either.
+                active = if (screen is Screen.Tabs) nav.tab.value else null,
+                onTab = goTab,
+                onAccount = { accountMenuOpen = true },
+                onMenu = { drawerOpen = true },
+                onSearch = { q ->
+                    if (q.isBlank()) {
+                        // Erasing the box leaves search (web: active=false
+                        // returns the browse rows) — but only from Search,
+                        // never hijacking whatever other tab is open.
+                        app.searchQuery.value = ""
+                        if (screen is Screen.Tabs && nav.tab.value == Tab.Search) nav.tab.value = Tab.Discover
+                    } else {
+                        app.searchQuery.value = q
+                        goTab(Tab.Search)
+                    }
+                },
+                user = app.user.value,
+                updatesBadge = app.updatesCount.value,
+                downloadsBadge = app.activeJobs.value,
+            )
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .then(
+                        when {
+                            screen is Screen.Tabs -> Modifier
+                            // Pushed pages pad themselves; on TV they still
+                            // need the overscan margin the bar doesn't give.
+                            app.isTv -> Modifier.padding(start = contentHPad, end = contentHPad, bottom = 27.dp)
+                            else -> Modifier.windowInsetsPadding(
+                                WindowInsets.safeDrawing.only(
+                                    WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+                                ),
                             )
                         },
                     ),
-            ) {
-                TopBar(
-                    app = app,
-                    // Shiori's bar insets its content 6dp; TV keeps the overscan
-                    // inset so the brand and avatar stay on the panel.
-                    horizontalPadding = if (app.isTv) contentHPad else 6.dp,
-                    active = nav.tab.value,
-                    onTab = { nav.tab.value = it },
-                    onAccount = { accountMenuOpen = true },
-                    onMenu = { drawerOpen = true },
-                    onSearch = { q ->
-                        if (q.isBlank()) {
-                            // Erasing the box leaves search (web: active=false
-                            // returns the browse rows) — but only from Search,
-                            // never hijacking whatever other tab is open.
-                            app.searchQuery.value = ""
-                            if (nav.tab.value == Tab.Search) nav.tab.value = Tab.Discover
-                        } else {
-                            app.searchQuery.value = q
-                            nav.tab.value = Tab.Search
-                        }
-                    },
-                    user = app.user.value,
-                    updatesBadge = app.updatesCount.value,
-                    downloadsBadge = app.activeJobs.value,
-                )
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        // Page content: insets/overscan live here, not on the
-                        // bar, plus a gap so nothing crowds the bar's edge.
-                        .then(
-                            if (app.isTv) {
-                                Modifier.padding(
-                                    start = contentHPad, end = contentHPad, bottom = 27.dp,
-                                )
-                            } else {
-                                Modifier
-                                    .windowInsetsPadding(
-                                        WindowInsets.safeDrawing.only(
-                                            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
-                                        ),
-                                    )
-                                    .padding(horizontal = contentHPad)
-                            },
-                        )
-                        .padding(top = 12.dp),
-                ) {
-                    when (nav.tab.value) {
-                        Tab.Discover -> HomeScreen(app, openCard)
-                        Tab.Library -> LibraryScreen(app, openCard)
-                        Tab.Updates -> UpdatesScreen(app, openCard)
-                        Tab.History -> HistoryScreen(app, openCard)
-                        Tab.Downloads -> DownloadsScreen(app, openCard)
-                        Tab.Search -> SearchScreen(
-                            app,
-                            openCard,
-                            onExit = { nav.tab.value = Tab.Discover },
-                        )
-                    }
-                }
-            }
+            ) { page() }
         }
-        is Screen.Title -> TitleScreen(
-            app = app,
-            titleId = screen.id,
-            onPlay = { detail, ep -> nav.push(Screen.Player(detail.id, ep, detail.displayTitle)) },
-            // Season/franchise hops REPLACE the current title instead of
-            // stacking, so one Back leaves the series entirely rather than
-            // walking back through every season you looked at.
-            onOpenTitle = { nav.replaceTop(Screen.Title(it)) },
-            onBack = { nav.back() },
-            onSessionLost = onSessionLost,
-        )
-        is Screen.Player -> RenzoPlayerRoute(
-            app = app,
-            titleId = screen.titleId,
-            ep = screen.ep,
-            titleName = screen.titleName,
-            onExit = { nav.back() },
-            onSwitchEpisode = { newEp: Int -> nav.replaceTop(Screen.Player(screen.titleId, newEp, screen.titleName)) },
-            onSwitchTitle = { newId: Int, newEp: Int, name: String -> nav.replaceTop(Screen.Player(newId, newEp, name)) },
-            // Web series link: pop back to the series page when it is the entry
-            // behind the player, else open it in the player's place.
-            onOpenTitle = { id: Int ->
-                val below = nav.stack.getOrNull(nav.stack.size - 2)
-                if (below is Screen.Title && below.id == id) nav.back() else nav.replaceTop(Screen.Title(id))
-            },
-        )
-        is Screen.Appearance -> AppearanceScreen(app, onClose = { nav.back() })
-        is Screen.Users -> UsersScreen(app, onClose = { nav.back() })
-        is Screen.ServerSettings -> ServerSettingsScreen(app, onClose = { nav.back() })
-        is Screen.Account -> AccountScreen(
-            app = app,
-            onLogout = doLogout,
-            onChangeServer = doChangeServer,
-            section = screen.section,
-        )
     }
     }
 
-    // Hamburger drawer — overlays whatever screen is up (only openable from
-    // the Tabs topbar). Rendered last so it sits above everything.
+    // Hamburger drawer — overlays whatever screen is up (openable from the
+    // top bar, wherever it is shown). Rendered last so it sits above everything.
     if (drawerOpen) {
         top.levitatemedia.renzo.tv.ui.components.TvFocusTrap(onDismiss = { drawerOpen = false }) {
             NavDrawer(
                 active = nav.tab.value,
                 username = app.user.value?.username,
-                onTab = { nav.tab.value = it },
+                onTab = goTab,
                 onAccount = { nav.push(Screen.Account()) },
                 onClose = { drawerOpen = false },
                 updatesBadge = app.updatesCount.value,
