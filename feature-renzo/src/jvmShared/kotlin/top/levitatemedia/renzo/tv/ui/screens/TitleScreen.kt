@@ -6,6 +6,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import top.levitatemedia.renzo.tv.ui.kit.SelectOption
+import top.levitatemedia.renzo.tv.ui.kit.RibbonSelect
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
 import top.levitatemedia.renzo.tv.ui.components.tvClickable
@@ -138,10 +140,11 @@ import java.util.Locale
  * the owner's direction (2026-10-11) is that Renzo look exactly like Shiori:
  *
  *  - wide: a 48dp "‹ Back" strip with the title centred, the blurred-cover
- *    hero, then a centred 1280dp two-column body — a 380dp left rail (download
- *    settings; Shiori's downloads panel) and the episodes on the right, each
- *    column scrolling on its own.
- *  - narrow and TV: one scrolling column — hero, episodes, then the rail.
+ *    hero, then a centred 1280dp body that scrolls on its own.
+ *  - narrow and TV: one scrolling column.
+ *
+ * The body is the season strip, then the episode header — its chips and the
+ * folder / release-group selects — then the episode grid.
  *
  * Owner direction 2026-10-11 ("keep renzo's original episode display"): the
  * episodes are Renzo's own 16:9 thumbnail tiles under Shiori's header chips,
@@ -273,11 +276,10 @@ fun TitleScreen(
                     )
                 }
 
-                // Renzo's ep-grid: minmax(240px, 1fr) tiles with 16dp gaps, in
-                // whatever the episode column is given (the right column when
-                // wide, the full width otherwise), less its 16dp side padding.
+                // Renzo's ep-grid: minmax(240px, 1fr) tiles with 16dp gaps across
+                // the body (centred at 1280 when wide), less its 16dp padding.
                 val screenW = renzoScreenWidthDp()
-                val epColumnW = if (wide) minOf(screenW - 16, 1280) - 16 - 380 - 16 else screenW
+                val epColumnW = if (wide) minOf(screenW - 16, 1280) - 16 else screenW
                 val epCols = ((epColumnW - 32 + 16) / (240 + 16)).coerceAtLeast(1)
 
                 val episodes: LazyListScope.() -> Unit = {
@@ -300,6 +302,7 @@ fun TitleScreen(
                                         }
                                     }
                                 },
+                                settings = { DownloadSettingsInline(app, d, downloadsDenied) },
                                 onDownloadSeason = {
                                     scope.launch {
                                         try {
@@ -358,31 +361,16 @@ fun TitleScreen(
                 if (wide) {
                     Column(Modifier.fillMaxSize()) {
                         hero()
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        LazyColumn(
                             modifier = Modifier
                                 .weight(1f)
                                 .widthIn(max = 1280.dp)
                                 .fillMaxWidth()
                                 .align(Alignment.CenterHorizontally)
-                                .padding(horizontal = 8.dp, vertical = 8.dp),
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(24.dp),
-                                modifier = Modifier
-                                    .width(380.dp)
-                                    .fillMaxHeight()
-                                    .verticalScroll(rememberScrollState()),
-                            ) {
-                                DownloadSettingsSection(app, d, downloadsDenied)
-                                Spacer(Modifier.height(16.dp))
-                            }
-                            LazyColumn(
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                                contentPadding = PaddingValues(bottom = 24.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp),
-                            ) { episodes() }
-                        }
+                                .padding(horizontal = 8.dp),
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) { episodes() }
                     }
                 } else {
                     LazyColumn(
@@ -392,10 +380,6 @@ fun TitleScreen(
                     ) {
                         item(key = "hero") { hero() }
                         episodes()
-                        item(key = "dl-settings") {
-                            Spacer(Modifier.height(16.dp))
-                            DownloadSettingsSection(app, d, downloadsDenied)
-                        }
                     }
                 }
 
@@ -802,6 +786,8 @@ private fun EpisodesHeader(
     downloadsDenied: Boolean,
     onMarkSeason: (Int) -> Unit,
     onSaveSeason: () -> Unit,
+    /** The series' download settings, laid inline after the chips. */
+    settings: @Composable () -> Unit,
     onDownloadSeason: () -> Unit,
 ) {
     val total = d.episodeList.size
@@ -862,6 +848,7 @@ private fun EpisodesHeader(
                     onClick = { onMarkSeason(if (fullyWatched) 0 else aired) },
                 )
             }
+            settings()
         }
     }
 }
@@ -1157,10 +1144,15 @@ private fun SeasonCard(ref: SeasonRef, current: Boolean, upNext: Boolean, onOpen
     }
 }
 
-/** Where downloads land and which release group they come from. */
+/**
+ * Where this series' episodes land (library folder) and which release group
+ * they come from — two compact selects on the episode header's chip row. They
+ * were a left-rail section, which squeezed the episode grid (owner,
+ * 2026-10-11). Web twin: download-settings.tsx.
+ */
 @Composable
-private fun DownloadSettingsSection(app: AppServices, d: TitleDetail, downloadsDenied: Boolean) {
-    if (downloadsDenied) return
+private fun DownloadSettingsInline(app: AppServices, d: TitleDetail, downloadsDenied: Boolean) {
+    if (downloadsDenied || d.type == "movie") return
     val scope = rememberCoroutineScope()
     var folder by remember(d.id) { mutableStateOf(d.folder ?: d.folders.firstOrNull() ?: "Library") }
     var folders by remember(d.id) { mutableStateOf(d.folders.ifEmpty { listOf(folder) }) }
@@ -1172,32 +1164,31 @@ private fun DownloadSettingsSection(app: AppServices, d: TitleDetail, downloadsD
         try { providers = app.repo.providers(d.id).map { it.group } } catch (_: Exception) {}
     }
 
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        RailHeading("Downloads")
-        FieldLabel("Library folder")
-        RenzoSelect(
-            options = folders.map { it to it },
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Folder", fontSize = 11.sp, color = RenzoColors.MutedForeground)
+        RibbonSelect(
+            options = (folders + folder).distinct().map { SelectOption(it, it) },
             value = folder,
             onChange = { next ->
                 folder = next
                 scope.launch { try { folder = app.repo.setFolder(d.id, next).folder } catch (_: Exception) {} }
             },
+            triggerWidth = 140.dp,
         )
-        Spacer(Modifier.height(4.dp))
-        FieldLabel("Release group")
-        // "" is the web's "Auto (best)".
-        RenzoSelect(
-            options = listOf("" to "Auto (best)") + providers.map { it to it },
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Release group", fontSize = 11.sp, color = RenzoColors.MutedForeground)
+        // "" is the web's "Auto (best)"; used for every episode and season.
+        RibbonSelect(
+            options = listOf(SelectOption("", "Auto (best)")) +
+                (providers + listOfNotNull(provider)).distinct().map { SelectOption(it, it) },
             value = provider ?: "",
             onChange = { next ->
                 provider = next.ifEmpty { null }
                 scope.launch { try { provider = app.repo.setProvider(d.id, next).provider } catch (_: Exception) {} }
             },
+            triggerWidth = 150.dp,
         )
-        Hint("Used for every episode and season of this series.")
     }
 }
 
