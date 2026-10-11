@@ -766,10 +766,10 @@ private fun FavoritesDialog(
                     )
                 }
                 topLevel.forEach { list ->
-                    FavoriteListRow(list.id, list.name, seriesId in list.seriesIds, 0, vm)
+                    FavoriteListRow(list.id, list.name, seriesId in list.seriesIds, list.seriesIds.size, 0, vm)
                     state.favoriteLists.filter { it.parentId == list.id }.sortedBy { it.sortOrder }
                         .forEach { child ->
-                            FavoriteListRow(child.id, child.name, seriesId in child.seriesIds, 1, vm)
+                            FavoriteListRow(child.id, child.name, seriesId in child.seriesIds, child.seriesIds.size, 1, vm)
                         }
                 }
                 HorizontalDivider(color = Border40, modifier = Modifier.padding(vertical = 8.dp))
@@ -796,14 +796,47 @@ private fun FavoritesDialog(
     )
 }
 
+/**
+ * One list in the picker: tick to add/remove this series, plus the web's
+ * delete action (favorite-button.tsx ListRow). Delete asks first, inline —
+ * "Delete “name” and its sub-lists? Series stay in your library." — the web's
+ * window.confirm wording.
+ */
 @Composable
 private fun FavoriteListRow(
     listId: String,
     name: String,
     checked: Boolean,
+    count: Int,
     depth: Int,
     vm: SeriesDetailViewModel,
 ) {
+    var confirming by remember(listId) { mutableStateOf(false) }
+    if (confirming) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = (depth * 22).dp)
+                .clip(MaterialTheme.shapes.extraSmall)
+                .background(RenzoColors.Destructive.copy(alpha = 0.08f))
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+        ) {
+            Text(
+                "Delete “$name”${if (depth == 0) " and its sub-lists" else ""}? Series stay in your library.",
+                style = MaterialTheme.typography.bodySmall,
+                color = RenzoColors.Foreground,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlineDialogButton(text = "Cancel") { confirming = false }
+                DestructiveDialogButton(text = "Delete") {
+                    confirming = false
+                    vm.deleteFavoriteList(listId)
+                }
+            }
+        }
+        return
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -812,7 +845,7 @@ private fun FavoriteListRow(
             .padding(start = (depth * 22).dp)
             .clip(MaterialTheme.shapes.extraSmall)
             .clickable { vm.toggleFavoriteList(listId, checked) }
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
     ) {
         Box(
             contentAlignment = Alignment.Center,
@@ -832,6 +865,26 @@ private fun FavoriteListRow(
             }
         }
         Text(name, style = MaterialTheme.typography.bodyMedium, color = RenzoColors.Foreground)
+        Text(
+            "$count",
+            fontSize = 11.sp,
+            color = Muted.copy(alpha = 0.6f),
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(32.dp)
+                .clip(MaterialTheme.shapes.extraSmall)
+                .clickable { confirming = true },
+        ) {
+            Icon(
+                Icons.Filled.Delete,
+                contentDescription = "Delete list",
+                tint = RenzoColors.Destructive,
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 

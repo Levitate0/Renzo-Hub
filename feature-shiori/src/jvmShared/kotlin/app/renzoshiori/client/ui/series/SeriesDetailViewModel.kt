@@ -1103,6 +1103,14 @@ class SeriesDetailViewModel(
         loadFavorites()
     }
 
+    /** favorite-button.tsx handleDelete: the list, its sub-lists and memberships. */
+    fun deleteFavoriteList(listId: String) = viewModelScope.launch {
+        val d = detail() ?: return@launch
+        runCatching { d.deleteFavoriteList(listId) }
+            .onFailure { toast("Failed to delete list", destructive = true) }
+        loadFavorites()
+    }
+
     fun setTracking(enabled: Boolean) = viewModelScope.launch {
         val d = detail() ?: return@launch
         _state.update { it.copy(trackerBusy = true) }

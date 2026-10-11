@@ -93,6 +93,10 @@ interface SeriesDetailApi {
     @POST("api/favorites")
     suspend fun createFavoriteList(@Body body: CreateFavoriteListDto): FavoriteListDto
 
+    /** Deletes a list, its sub-lists and their memberships (series stay in the library). */
+    @DELETE("api/favorites/{id}")
+    suspend fun deleteFavoriteList(@Path("id") listId: String): Response<ResponseBody>
+
     @POST("api/favorites/{id}/items")
     suspend fun addFavoriteItem(
         @Path("id") listId: String,
