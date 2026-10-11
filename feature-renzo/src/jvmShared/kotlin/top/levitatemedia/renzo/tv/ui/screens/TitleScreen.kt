@@ -230,14 +230,15 @@ fun TitleScreen(
                 }
 
                 // 2. SEASON CHAIN ------------------------------------------
-                if (d.seasons.size > 1) {
+                val chain = orderedSeasons(d)
+                if (chain.size > 1) {
                     item(key = "seasons") {
                         TitleBodyBox {
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                                 contentPadding = PaddingValues(end = 24.dp),
                             ) {
-                                items(d.seasons, key = { it.id }) { ref ->
+                                items(chain, key = { it.id }) { ref ->
                                     SeasonCard(
                                         ref = ref,
                                         current = ref.id == d.id,
@@ -762,6 +763,17 @@ private fun SeasonCard(ref: SeasonRef, current: Boolean, onOpen: () -> Unit) {
             modifier = Modifier.padding(top = 6.dp),
         )
     }
+}
+
+/** Web orderedSeasons (season-utils.ts): this title plus its chain, seasons first, then extras. */
+internal fun orderedSeasons(d: TitleDetail): List<SeasonRef> {
+    val current = SeasonRef(
+        id = d.id, num = d.seasonNum, part = d.seasonPart, kind = d.seasonKind,
+        format = d.format, title = d.displayTitle, poster = d.poster, year = d.year,
+    )
+    return (listOf(current) + d.seasons.filter { it.id != d.id }).sortedWith(
+        compareBy<SeasonRef>({ it.num ?: 0 }, { if (it.kind == "extra") 1 else 0 }, { it.part ?: 0 }, { it.year ?: 0 }, { it.id }),
+    )
 }
 
 /** Web seasonChip + the row's suffixes: "S1 · 2013 (this)", "OVA · 2023". */

@@ -110,18 +110,6 @@ private fun seasonWord(d: TitleDetail): String = when {
     else -> "Season ${d.seasonNum ?: 1}" + (d.seasonPart?.takeIf { it > 1 }?.let { " Part $it" } ?: "")
 }
 
-/** Web orderedSeasons: this title plus its chain, seasons first, then extras. */
-internal fun orderedSeasons(d: TitleDetail): List<SeasonRef> {
-    val current = SeasonRef(
-        id = d.id, num = d.seasonNum, part = d.seasonPart, kind = d.seasonKind,
-        format = d.format, title = d.displayTitle, poster = d.poster, year = d.year,
-    )
-    return (listOf(current) + d.seasons.filter { it.id != d.id }).sortedWith(
-        compareBy<SeasonRef>({ it.num ?: 0 }, { if (it.kind == "extra") 1 else 0 }, { it.part ?: 0 }, { it.year ?: 0 }, { it.id }),
-    )
-}
-
-
 @Composable
 internal fun PlayerInfo(m: InfoModel, a: InfoActions, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
