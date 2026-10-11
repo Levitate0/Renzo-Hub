@@ -60,9 +60,6 @@ import top.levitatemedia.renzo.tv.api.ResumePoint
 import top.levitatemedia.renzo.tv.api.SeasonRef
 import top.levitatemedia.renzo.tv.api.TitleDetail
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /*
  * Everything below the stage, laid out like Crunchyroll's watch page: series
@@ -124,12 +121,6 @@ internal fun orderedSeasons(d: TitleDetail): List<SeasonRef> {
     )
 }
 
-private fun releasedLabel(aired: String?, todayIso: String): String? {
-    val iso = aired?.take(10) ?: return null
-    val date = runCatching { LocalDate.parse(iso) }.getOrNull() ?: return null
-    val text = date.format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US))
-    return if (iso > todayIso) "Airs on $text" else "Released on $text"
-}
 
 @Composable
 internal fun PlayerInfo(m: InfoModel, a: InfoActions, modifier: Modifier = Modifier) {
@@ -153,7 +144,6 @@ internal fun PlayerInfo(m: InfoModel, a: InfoActions, modifier: Modifier = Modif
 @Composable
 private fun InfoMain(m: InfoModel, a: InfoActions, modifier: Modifier) {
     val d = m.detail
-    val meta = d.episodeList.firstOrNull { it.number == m.ep }
     Column(modifier) {
         Row {
             Column(Modifier.weight(1f)) {
@@ -191,9 +181,6 @@ private fun InfoMain(m: InfoModel, a: InfoActions, modifier: Modifier) {
                     val bits = listOfNotNull(seasonWord(d), if (m.hasSubtitles) "Subtitled" else null)
                     Text(bits.joinToString("  •  "), color = RenzoColors.MutedForeground, fontSize = 13.sp)
                     SourceBadge(m.source, m.failed)
-                }
-                releasedLabel(meta?.aired, m.todayIso)?.let {
-                    Text(it, color = RenzoColors.MutedForeground, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
                 }
             }
             // Crunchyroll keeps the bookmark beside the title, the share link under it.
@@ -619,7 +606,7 @@ private fun EpisodeRow(ep: EpisodeInfo, m: InfoModel, modifier: Modifier, onClic
                     playing -> "Now playing"
                     unaired -> "Soon"
                     watched -> "Watched"
-                    else -> releasedLabel(ep.aired, m.todayIso) ?: ""
+                    else -> d.duration?.takeIf { it > 0 }?.let { "${it}m" } ?: "Subtitled"
                 },
                 color = if (playing) RenzoColors.Primary else RenzoColors.MutedForeground,
                 fontSize = 12.sp,

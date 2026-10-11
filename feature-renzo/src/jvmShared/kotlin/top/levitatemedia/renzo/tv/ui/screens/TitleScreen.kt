@@ -1041,6 +1041,9 @@ private fun EpMenuItem(label: String, onClick: () -> Unit) {
  */
 internal fun isUnaired(ep: EpisodeInfo, d: TitleDetail, todayIso: String): Boolean {
     if (ep.hasFile) return false
+    // The server sends `aired` as a boolean (web: `ep.aired === false`); the
+    // lenient decoder hands it over as the string "false".
+    if (ep.aired == "false") return true
     val st = ep.status?.lowercase(Locale.US)
     if (st != null && (st.contains("soon") || st.contains("unaired") || st.contains("upcoming") || st.contains("future"))) {
         return true
