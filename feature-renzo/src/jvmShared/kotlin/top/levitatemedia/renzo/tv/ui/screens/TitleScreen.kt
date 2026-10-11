@@ -1,84 +1,144 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-
 package top.levitatemedia.renzo.tv.ui.screens
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Autorenew
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.LibraryAdd
+import androidx.compose.material.icons.filled.LibraryAddCheck
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Text
-import androidx.compose.runtime.collectAsState
 import coil3.compose.AsyncImage
-import top.levitatemedia.renzo.hub.core.offline.DownloadBus
-import top.levitatemedia.renzo.tv.offline.enqueueEpisodes
-import top.levitatemedia.renzo.tv.offline.episodeKey
 import kotlinx.coroutines.launch
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import top.levitatemedia.renzo.tv.api.Tracking
 import top.levitatemedia.renzo.tv.AppServices
 import top.levitatemedia.renzo.tv.api.ApiError
 import top.levitatemedia.renzo.tv.api.EpisodeInfo
 import top.levitatemedia.renzo.tv.api.JobItem
 import top.levitatemedia.renzo.tv.api.SeasonRef
 import top.levitatemedia.renzo.tv.api.TitleDetail
+import top.levitatemedia.renzo.tv.api.Tracking
+import top.levitatemedia.renzo.hub.core.offline.DownloadBus
+import top.levitatemedia.renzo.tv.offline.enqueueEpisodes
+import top.levitatemedia.renzo.tv.offline.episodeKey
+import top.levitatemedia.renzo.tv.renzoScreenWidthDp
 import top.levitatemedia.renzo.tv.ui.components.ErrorBox
 import top.levitatemedia.renzo.tv.ui.components.LoadingBox
-import top.levitatemedia.renzo.tv.ui.components.PillButton
-import top.levitatemedia.renzo.tv.ui.components.SectionHeading
-import top.levitatemedia.renzo.tv.ui.components.focusRing
-import top.levitatemedia.renzo.tv.ui.components.tvClickable
+import top.levitatemedia.renzo.tv.ui.kit.Amber500
+import top.levitatemedia.renzo.tv.ui.kit.Blue400
+import top.levitatemedia.renzo.tv.ui.kit.Blue500
+import top.levitatemedia.renzo.tv.ui.kit.Border40
+import top.levitatemedia.renzo.tv.ui.kit.Border60
+import top.levitatemedia.renzo.tv.ui.kit.Emerald400
+import top.levitatemedia.renzo.tv.ui.kit.Emerald500
+import top.levitatemedia.renzo.tv.ui.kit.FieldLabel
+import top.levitatemedia.renzo.tv.ui.kit.ForegroundFaint06
+import top.levitatemedia.renzo.tv.ui.kit.ForegroundFaint10
+import top.levitatemedia.renzo.tv.ui.kit.Green400
+import top.levitatemedia.renzo.tv.ui.kit.Green500
+import top.levitatemedia.renzo.tv.ui.kit.HairLine
+import top.levitatemedia.renzo.tv.ui.kit.HeroActionButton
+import top.levitatemedia.renzo.tv.ui.kit.Hint
+import top.levitatemedia.renzo.tv.ui.kit.Pink500
+import top.levitatemedia.renzo.tv.ui.kit.PillShape
+import top.levitatemedia.renzo.tv.ui.kit.RenzoButton
+import top.levitatemedia.renzo.tv.ui.kit.RenzoChip
+import top.levitatemedia.renzo.tv.ui.kit.RenzoDialog
+import top.levitatemedia.renzo.tv.ui.kit.RenzoSelect
+import top.levitatemedia.renzo.tv.ui.kit.RenzoTextField
+import top.levitatemedia.renzo.tv.ui.kit.SquareIconButton
+import top.levitatemedia.renzo.tv.ui.kit.StatusDot
+import top.levitatemedia.renzo.tv.ui.kit.Yellow400
+import top.levitatemedia.renzo.tv.ui.kit.Yellow500
+import top.levitatemedia.renzo.tv.ui.kit.kitClickable
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
+import androidx.compose.ui.text.input.KeyboardType
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.geometry.Offset
 
 /**
- * Title detail page — mirrors the web title page: hero banner + poster +
- * actions, season chain row, next-up banner, and the episode grid (rows of 3
- * inside one LazyColumn so the D-pad scrolls the whole page naturally).
+ * Title page, built the way Shiori's series page is (feature-shiori ui/series
+ * SeriesDetailScreen.kt + SeriesHeroSection.kt + SeriesChaptersSection.kt) —
+ * the owner's direction (2026-10-11) is that Renzo look exactly like Shiori:
+ *
+ *  - wide: a 48dp "‹ Back" strip with the title centred, the blurred-cover
+ *    hero, then a centred 1280dp two-column body — a 380dp left rail (seasons,
+ *    download settings; Shiori's sources + downloads) and the episode list on
+ *    the right (Shiori's chapter list), each column scrolling on its own.
+ *  - narrow and TV: one scrolling column in Shiori's mobile order — hero,
+ *    episodes, then the rail sections.
+ *
+ * Episodes are rows in Shiori's chapter-row form rather than thumbnail tiles.
+ * The previous banner-and-tiles page is on branch backup/pre-shiori-restyle.
  */
 @Composable
 fun TitleScreen(
@@ -87,7 +147,7 @@ fun TitleScreen(
     onPlay: (TitleDetail, Int) -> Unit,
     onOpenTitle: (Int) -> Unit,
     onSessionLost: () -> Unit,
-    /** Web title page's "‹ Back" pill — leaves the series for wherever you came from. */
+    /** Leaves the series for wherever you came from. */
     onBack: () -> Unit = {},
 ) {
     var detail by remember { mutableStateOf<TitleDetail?>(null) }
@@ -102,9 +162,9 @@ fun TitleScreen(
     // Device-download state. Bumped locally on save/remove for an instant
     // response, and by the shared downloader when a transfer actually lands.
     var offlineRevision by remember { mutableStateOf(0) }
-    // Bumped after a watched-progress write so TrackingRow re-reads: the server
-    // scrobbles to AniList/MAL on progress (api.ts:841) and can escalate the
-    // status to "completed" on the final episode (api.ts:252-263).
+    // Bumped after a watched-progress write so the tracking dialog re-reads:
+    // the server scrobbles to AniList/MAL on progress (api.ts:841) and can
+    // escalate the status to "completed" on the final episode (api.ts:252-263).
     var trackingRevision by remember { mutableStateOf(0) }
     val downloadRevision by DownloadBus.revision.collectAsState()
 
@@ -128,66 +188,53 @@ fun TitleScreen(
         }
     }
 
+    val wide = !app.isTv && renzoScreenWidthDp() >= 1024
     val d = detail
-    when {
-        error != null -> ErrorBox(error ?: "Failed to load title", onRetry = { reload++ }, autoFocus = app.isTv)
-        d == null -> LoadingBox(label = "Loading title…")
-        else -> {
-            // Web ep-grid: repeat(auto-fill, minmax(240px, 1fr)) with 18px
-            // column gaps, inside a centred body column. The web caps the body
-            // at 1180px; the Hub stretches to 1600 (user direction 2026-08-21:
-            // use more of the screen) — ~6 across on a full desktop window,
-            // down to 1 on a phone.
-            val bodyWidthDp = minOf(top.levitatemedia.renzo.tv.renzoScreenWidthDp() - 56, 1600)
-            val epCols = ((bodyWidthDp + 18) / 258).coerceAtLeast(1)
-            val chunks = remember(d, epCols) { d.episodeList.chunked(epCols) }
-            val todayIso = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
-            var libBusy by remember { mutableStateOf(false) }
-            var progressBusy by remember { mutableStateOf(false) }
-            // Live per-episode download state (web overlays the ["jobs"] poll).
-            var jobs by remember { mutableStateOf<List<JobItem>>(emptyList()) }
-            LaunchedEffect(d.id) {
-                while (true) {
-                    jobs = try { app.repo.jobs().filter { it.titleId == d.id } } catch (_: Exception) { jobs }
-                    kotlinx.coroutines.delay(4000)
-                }
-            }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 28.dp, end = 28.dp, top = 20.dp, bottom = 44.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-            ) {
-                // 0. BACK ---------------------------------------------------
-                item(key = "back") {
-                    var backFocused by remember { mutableStateOf(false) }
-                    Row(
-                        Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .focusRing(backFocused, 999.dp)
-                            .background(RenzoColors.Secondary, RoundedCornerShape(999.dp))
-                            .border(1.dp, RenzoColors.Border, RoundedCornerShape(999.dp))
-                            .tvClickable(onFocused = { backFocused = it }, onClick = onBack)
-                            .padding(horizontal = 16.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("‹", color = RenzoColors.Foreground, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Back", color = RenzoColors.Foreground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    Column(Modifier.fillMaxSize().background(RenzoColors.Background)) {
+        TitleTopStrip(wide = wide, title = d?.displayTitle ?: "", onBack = onBack)
+        when {
+            error != null -> ErrorBox(error ?: "Failed to load title", onRetry = { reload++ }, autoFocus = app.isTv)
+            d == null -> LoadingBox(label = "Loading title details…")
+            else -> {
+                val todayIso = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
+                var progressBusy by remember { mutableStateOf(false) }
+                var trackOpen by remember { mutableStateOf(false) }
+                // Live per-episode download state (web overlays the ["jobs"] poll).
+                var jobs by remember { mutableStateOf<List<JobItem>>(emptyList()) }
+                LaunchedEffect(d.id) {
+                    while (true) {
+                        jobs = try { app.repo.jobs().filter { it.titleId == d.id } } catch (_: Exception) { jobs }
+                        kotlinx.coroutines.delay(4000)
+                    }
+                }
+                val downloadsDenied = app.user.value?.downloadsDenied == true
+
+                fun setProgress(n: Int) {
+                    if (progressBusy) return
+                    progressBusy = true
+                    scope.launch {
+                        try {
+                            watchedThrough = app.repo.setProgress(d.id, n).watchedThrough
+                            trackingRevision++
+                        } catch (e: ApiError) {
+                            if (e.status == 401) onSessionLost()
+                        } catch (_: Exception) {
+                        } finally { progressBusy = false }
                     }
                 }
 
-                // 1. HERO ---------------------------------------------------
-                item(key = "hero") {
+                val hero: @Composable () -> Unit = {
                     TitleHero(
-                        app = app,
                         d = d,
+                        heroWide = wide,
                         inLibrary = inLibrary,
                         lists = lists,
-                        downloadsDenied = app.user.value?.downloadsDenied == true,
                         watchedThrough = watchedThrough,
-                        trackingRevision = trackingRevision,
+                        downloadsDenied = downloadsDenied,
+                        app = app,
                         onPlay = { ep -> onPlay(d, ep) },
+                        onTrack = { trackOpen = true },
                         onToggleList = { listName ->
                             scope.launch {
                                 try {
@@ -199,166 +246,68 @@ fun TitleScreen(
                                 } catch (_: Exception) {}
                             }
                         },
-                        onDownloadSeason = {
-                            scope.launch {
-                                try { app.repo.downloadSeason(d.id) } catch (_: Exception) {}
-                            }
-                        },
                         onToggleLibrary = {
-                            if (!libBusy) {
-                                libBusy = true
-                                scope.launch {
-                                    try {
-                                        if (inLibrary) {
-                                            app.repo.removeFromLibrary(d.id)
-                                            inLibrary = false
-                                        } else {
-                                            app.repo.addToLibrary(d.id)
-                                            inLibrary = true
-                                        }
-                                    } catch (e: ApiError) {
-                                        if (e.status == 401) onSessionLost()
-                                    } catch (_: Exception) {
-                                        // keep prior state — the UI stays truthful
-                                    } finally {
-                                        libBusy = false
+                            scope.launch {
+                                try {
+                                    if (inLibrary) {
+                                        app.repo.removeFromLibrary(d.id); inLibrary = false
+                                    } else {
+                                        app.repo.addToLibrary(d.id); inLibrary = true
                                     }
+                                } catch (e: ApiError) {
+                                    if (e.status == 401) onSessionLost()
+                                } catch (_: Exception) {
+                                    // keep prior state — the UI stays truthful
                                 }
                             }
                         },
                     )
                 }
 
-                // 2. SEASON CHAIN ------------------------------------------
-                val chain = orderedSeasons(d)
-                if (chain.size > 1) {
-                    item(key = "seasons") {
-                        TitleBodyBox {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                contentPadding = PaddingValues(end = 24.dp),
-                            ) {
-                                items(chain, key = { it.id }) { ref ->
-                                    SeasonCard(
-                                        ref = ref,
-                                        current = ref.id == d.id,
-                                        onOpen = { if (ref.id != d.id) onOpenTitle(ref.id) },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 3. NEXT-UP banner ----------------------------------------
-                d.nextUp?.let { nu ->
-                    item(key = "nextup") {
-                        TitleBodyBox { NextUpBanner(nu, onClick = { onOpenTitle(nu.id) }) }
-                    }
-                }
-
-                // 4. EPISODES ----------------------------------------------
-                if (d.episodeList.isNotEmpty()) {
-                    item(key = "eps-heading") {
-                        TitleBodyBox {
-                            // Web season-header (episode-grid.tsx): "Season N
-                            // X of Y available" left, the season actions right.
-                            val airedCount = d.episodeList.count { !isUnaired(it, d, todayIso) }
-                            val fullyWatched = airedCount > 0 && watchedThrough >= airedCount
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    "Season ${d.seasonNum ?: 1}",
-                                    color = RenzoColors.Foreground,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight(650),
-                                )
-                                Text(
-                                    "$airedCount of ${d.episodeList.size} available",
-                                    color = RenzoColors.MutedForeground,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(start = 8.dp).weight(1f),
-                                )
-                                PillButton(
-                                    label = if (fullyWatched) "✓ Season watched" else "Mark season watched",
-                                    filled = false,
-                                    onClick = {
-                                        if (!progressBusy) {
-                                            progressBusy = true
-                                            val target = if (fullyWatched) 0 else airedCount
-                                            scope.launch {
-                                                try {
-                                                    app.repo.setProgress(titleId, target)
-                                                    trackingRevision++
-                                                    watchedThrough = target
-                                                } catch (e: ApiError) {
-                                                    if (e.status == 401) onSessionLost()
-                                                } catch (_: Exception) {
-                                                } finally {
-                                                    progressBusy = false
-                                                }
-                                            }
+                val episodes: LazyListScope.() -> Unit = {
+                    if (d.episodeList.isNotEmpty()) {
+                        item(key = "eps-header") {
+                            EpisodesHeader(
+                                d = d,
+                                todayIso = todayIso,
+                                watchedThrough = watchedThrough,
+                                isTv = app.isTv,
+                                downloadsDenied = downloadsDenied,
+                                onMarkSeason = { target -> setProgress(target) },
+                                onSaveSeason = {
+                                    app.prefs.serverUrl?.let { base ->
+                                        val nums = d.episodeList.filter { it.hasFile }.map { it.number }
+                                        if (nums.isNotEmpty()) {
+                                            enqueueEpisodes(d, nums, base)
+                                            offlineRevision++
                                         }
-                                    },
-                                )
-                                // Save season offline — local copies of every
-                                // episode the server holds. Never on TV, like
-                                // the web's offlineSupported gate.
-                                if (!app.isTv) {
-                                    Spacer(Modifier.width(8.dp))
-                                    PillButton(
-                                        label = "⤓ Save season offline",
-                                        filled = false,
-                                        onClick = {
-                                            app.prefs.serverUrl?.let { base ->
-                                                val nums = d.episodeList.filter { it.hasFile }.map { it.number }
-                                                if (nums.isNotEmpty()) {
-                                                    enqueueEpisodes(d, nums, base)
-                                                    offlineRevision++
-                                                }
-                                            }
-                                        },
-                                    )
-                                }
-                            }
+                                    }
+                                },
+                                onDownloadSeason = {
+                                    scope.launch {
+                                        try {
+                                            app.repo.downloadSeason(d.id)
+                                            toast("Season queued for download")
+                                        } catch (e: Exception) { toast(e.message ?: "Couldn't queue the season") }
+                                    }
+                                },
+                            )
                         }
-                    }
-                    items(chunks.size, key = { "eps-row-$it" }) { i ->
-                        TitleBodyBox {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            chunks[i].forEach { ep ->
-                                EpisodeTile(
+                        d.episodeList.forEach { ep ->
+                            item(key = "ep-${ep.number}") {
+                                EpisodeRow(
                                     ep = ep,
-                                    seriesTitle = d.displayTitle,
-                                    fallbackImage = ep.thumbnail ?: d.banner ?: d.poster,
+                                    durationMin = d.duration,
                                     watched = ep.number <= watchedThrough,
                                     unaired = isUnaired(ep, d, todayIso),
-                                    durationMin = d.duration,
-                                    job = jobs.firstOrNull { it.titleId == d.id && it.episode == ep.number },
-                                    downloadsDenied = app.user.value?.downloadsDenied == true,
+                                    job = jobs.firstOrNull { it.episode == ep.number },
+                                    downloadsDenied = downloadsDenied,
+                                    isTv = app.isTv,
                                     savedOffline = remember(offlineRevision, downloadRevision, d.id, ep.number) {
                                         app.offline.isOffline(episodeKey(d.id, ep.number))
                                     },
-                                    onClick = { onPlay(d, ep.number) },
-                                    onSetProgress = { n ->
-                                        if (!progressBusy) {
-                                            progressBusy = true
-                                            scope.launch {
-                                                try {
-                                                    watchedThrough = app.repo.setProgress(d.id, n).watchedThrough
-                                                    trackingRevision++
-                                                } catch (_: Exception) {
-                                                } finally { progressBusy = false }
-                                            }
-                                        }
-                                    },
+                                    onPlay = { onPlay(d, ep.number) },
+                                    onToggleWatched = { w -> setProgress(if (w) ep.number else ep.number - 1) },
                                     onDownload = { priority ->
                                         scope.launch {
                                             try { app.repo.downloadEpisode(d.id, ep.number, priority) } catch (_: Exception) {}
@@ -374,678 +323,898 @@ fun TitleScreen(
                                         app.offline.deleteItem(episodeKey(d.id, ep.number))
                                         offlineRevision++
                                     },
-                                    modifier = Modifier.weight(1f),
                                 )
                             }
-                            repeat(epCols - chunks[i].size) { Spacer(Modifier.weight(1f)) }
-                        }
                         }
                     }
+                }
 
+                if (wide) {
+                    Column(Modifier.fillMaxSize()) {
+                        hero()
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .widthIn(max = 1280.dp)
+                                .fillMaxWidth()
+                                .align(Alignment.CenterHorizontally)
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(24.dp),
+                                modifier = Modifier
+                                    .width(380.dp)
+                                    .fillMaxHeight()
+                                    .verticalScroll(rememberScrollState()),
+                            ) {
+                                SeasonsSection(d, onOpenTitle)
+                                DownloadSettingsSection(app, d, downloadsDenied)
+                                Spacer(Modifier.height(16.dp))
+                            }
+                            LazyColumn(
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                contentPadding = PaddingValues(bottom = 24.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) { episodes() }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item(key = "hero") { hero() }
+                        episodes()
+                        item(key = "seasons") {
+                            Spacer(Modifier.height(16.dp))
+                            SeasonsSection(d, onOpenTitle)
+                        }
+                        item(key = "dl-settings") {
+                            Spacer(Modifier.height(16.dp))
+                            DownloadSettingsSection(app, d, downloadsDenied)
+                        }
+                    }
+                }
+
+                if (trackOpen) {
+                    TrackingDialog(app, d.id, revision = trackingRevision, onDismiss = { trackOpen = false })
                 }
             }
         }
     }
 }
 
-// --- hero -------------------------------------------------------------------
+// --- top strip (Shiori SeriesDetailScreen topBar) ---------------------------
 
 @Composable
+private fun TitleTopStrip(wide: Boolean, title: String, onBack: () -> Unit) {
+    if (wide) {
+        // Shiori: "‹ Back to Library" hugging the left edge, title dead centre.
+        Box(Modifier.fillMaxWidth().height(48.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 8.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .kitClickable(onClick = onBack)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            ) {
+                Icon(Icons.Filled.ChevronLeft, contentDescription = null, tint = RenzoColors.MutedForeground, modifier = Modifier.size(16.dp))
+                Text(
+                    "Back",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = RenzoColors.MutedForeground,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+            Text(
+                title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium,
+                color = RenzoColors.Foreground,
+                modifier = Modifier.align(Alignment.Center).widthIn(max = (renzoScreenWidthDp() * 0.5f).dp),
+            )
+        }
+    } else {
+        // Shiori's narrow TopAppBar: back arrow + title.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(48.dp).clip(PillShape).kitClickable(radius = 24.dp, onClick = onBack),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = RenzoColors.Foreground)
+            }
+            Text(
+                title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium,
+                color = RenzoColors.Foreground,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+    }
+}
+
+// --- hero (Shiori SeriesHeroSection) ----------------------------------------
+
+/** Shiori's hero status pill, from AniList's airing status. */
+private data class AiringPill(val label: String, val text: Color, val dot: Color, val pulse: Boolean)
+
+private fun airingPill(status: String?): AiringPill? = when (status?.uppercase(Locale.US)) {
+    "RELEASING" -> AiringPill("Ongoing", Green400, Green500, true)
+    "FINISHED" -> AiringPill("Completed", Blue400, Blue500, false)
+    "NOT_YET_RELEASED" -> AiringPill("Upcoming", Yellow400, Yellow500, false)
+    "HIATUS" -> AiringPill("On Hiatus", Yellow400, Yellow500, false)
+    "CANCELLED" -> AiringPill("Cancelled", Color(0xFFF87171), Color(0xFFEF4444), false)
+    else -> null
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 private fun TitleHero(
-    app: AppServices,
     d: TitleDetail,
+    heroWide: Boolean,
     inLibrary: Boolean,
     lists: List<String>,
-    downloadsDenied: Boolean,
     watchedThrough: Int,
-    /** Bumped by the parent after a watched-progress write; re-reads TrackingRow. */
-    trackingRevision: Int,
+    downloadsDenied: Boolean,
+    app: AppServices,
     onPlay: (Int) -> Unit,
-    onToggleLibrary: () -> Unit,
+    onTrack: () -> Unit,
     onToggleList: (String) -> Unit,
-    onDownloadSeason: () -> Unit,
+    onToggleLibrary: () -> Unit,
 ) {
+    var descriptionExpanded by rememberSaveable(d.id) { mutableStateOf(false) }
+    val desc = remember(d.id) { cleanDescription(d.description) }
     val maxAvailable = (d.availableEpisodes ?: d.episodeList.size).coerceAtLeast(1)
     val playEp = (watchedThrough + 1).coerceIn(1, maxAvailable)
-    val desc = remember(d.id) { cleanDescription(d.description) }
+    val scope = rememberCoroutineScope()
+    var auto by remember(d.id) { mutableStateOf(d.autoDownload) }
 
-    val compact = top.levitatemedia.renzo.tv.renzoScreenWidthDp() < 768
-    // Web `.title-hero-name`: clamp(26px, 4vw, 46px). It was a flat 34sp, a
-    // quarter smaller than the web at desktop widths.
-    val heroTitleSp = (top.levitatemedia.renzo.tv.renzoScreenWidthDp() * 0.04f).coerceIn(26f, 46f)
-    var descExpanded by remember { mutableStateOf(false) }
-    // Web: `min-height: min(58dvh, 560px)` (globals.css:4356). A FIXED height
-    // both cropped the banner harder than the web does and clipped the content
-    // stack as soon as the title wrapped to two lines — heightIn lets it grow
-    // the way min-height does.
-    val heroMinHeight = if (compact) 540.dp else (top.levitatemedia.renzo.tv.renzoScreenHeightDp() * 0.58f).coerceAtMost(560f).dp
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = heroMinHeight)
-            .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, RenzoColors.Border, RoundedCornerShape(16.dp))
-            // Web `.title-hero` sets no background — bare art over the page.
-            .background(RenzoColors.Background),
-    ) {
-        AsyncImage(
-            // `?:` only catches null; the web's `d.banner || d.poster` also
-            // falls through on an empty string, which the server can emit.
-            model = d.banner?.takeIf { it.isNotBlank() } ?: d.poster?.takeIf { it.isNotBlank() },
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            // Web `background-position: center 20%` — banner art puts faces
-            // near the top, so a centred crop cuts them off.
-            alignment = BiasAlignment(0f, -0.6f),
-            modifier = Modifier.matchParentSize(),
-        )
-        // ONE web element, `.title-hero-scrim`, holds both gradients, and in
-        // CSS the FIRST layer paints on top — so the horizontal goes down
-        // first here and the vertical composites over it. The middle stops
-        // matter: without them the art was washed out through the middle of
-        // the frame and dimmed on the right, where the web leaves it clear
-        // from 76% onward.
+    Box(Modifier.fillMaxWidth().clipToBounds()) {
+        // Blurred cover + fade to the page + a faint primary tint, as Shiori.
+        val art = d.poster?.takeIf { it.isNotBlank() } ?: d.banner
+        if (art != null) {
+            AsyncImage(
+                model = art,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = BiasAlignment(0f, -0.4f),
+                modifier = Modifier
+                    .matchParentSize()
+                    .blur(28.dp, BlurredEdgeTreatment.Unbounded)
+                    .alpha(0.4f),
+            )
+        }
         Box(
-            Modifier
-                .matchParentSize()
-                .background(
-                    Brush.horizontalGradient(
-                        0.00f to Color.Black.copy(alpha = 0.78f),
-                        0.46f to Color.Black.copy(alpha = 0.36f),
-                        0.76f to Color.Transparent,
-                        1.00f to Color.Transparent,
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(
+                    listOf(
+                        RenzoColors.Background.copy(alpha = 0.30f),
+                        RenzoColors.Background.copy(alpha = 0.70f),
+                        RenzoColors.Background,
                     ),
                 ),
+            ),
         )
         Box(
-            Modifier
-                .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.00f to Color.Black.copy(alpha = 0.28f),
-                        0.32f to Color.Black.copy(alpha = 0.06f),
-                        1.00f to RenzoColors.Background,
-                    ),
-                ),
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(listOf(RenzoColors.Primary.copy(alpha = 0.10f), Color.Transparent)),
+            ),
         )
-        if (compact) {
-            // Web phone hero (ground truth title.png): everything CENTER-STACKED —
-            // poster, title, metaline, description + "More details", actions.
-            Column(
+
+        val coverBox: @Composable (Dp, Dp) -> Unit = { w, h ->
+            Box(
                 Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                    .width(w)
+                    .height(h)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(RenzoColors.Card)
+                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp)),
             ) {
                 AsyncImage(
                     model = d.poster,
                     contentDescription = d.displayTitle,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .width(128.dp)
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(RenzoColors.EpThumbWell),
+                    modifier = Modifier.fillMaxSize(),
                 )
-                androidx.compose.foundation.text.selection.SelectionContainer {
-                Text(
-                    d.displayTitle,
-                    color = RenzoColors.Foreground,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 28.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
-                }
+            }
+        }
+
+        val heroInfo: @Composable () -> Unit = {
+            airingPill(d.airingStatus)?.let { pill ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier
+                        .clip(PillShape)
+                        .background(pill.dot.copy(alpha = 0.12f))
+                        .border(1.dp, pill.dot.copy(alpha = 0.25f), PillShape)
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
                 ) {
-                    Text(
-                        (d.format ?: d.type).uppercase(),
-                        color = RenzoColors.Primary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
-                    )
-                    val metaRest = (
-                        listOfNotNull(
-                            d.year?.toString(),
-                            (d.episodeCount ?: d.episodeList.size.takeIf { it > 0 })?.let { "$it ep" },
-                        ) + d.genres.take(3)
-                        ).joinToString("  ·  ")
-                    if (metaRest.isNotEmpty()) {
-                        Text(
-                            "·  $metaRest",
-                            color = RenzoColors.MutedForeground,
-                            fontSize = 13.sp,
-                            maxLines = 2,
-                            textAlign = TextAlign.Center,
-                            overflow = TextOverflow.Ellipsis,
+                    if (pill.pulse) {
+                        val transition = rememberInfiniteTransition(label = "status-pulse")
+                        val pulse by transition.animateFloat(
+                            initialValue = 1f,
+                            targetValue = 0.35f,
+                            animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+                            label = "status-pulse-alpha",
                         )
+                        StatusDot(pill.dot.copy(alpha = pulse))
+                    } else {
+                        StatusDot(pill.dot)
                     }
+                    Text(pill.label.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = pill.text)
                 }
-                if (!desc.isNullOrBlank()) {
-                    androidx.compose.foundation.text.selection.SelectionContainer {
-                    Text(
-                        desc,
-                        color = RenzoColors.Foreground.copy(alpha = 0.9f),
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                        maxLines = if (descExpanded) Int.MAX_VALUE else 3,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                    }
-                    var moreFocused by remember { mutableStateOf(false) }
-                    Text(
-                        if (descExpanded) "Less" else "More details",
-                        color = RenzoColors.Primary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .padding(top = 6.dp)
-                            .focusRing(moreFocused, 6.dp)
-                            .tvClickable(onFocused = { moreFocused = it }, onClick = { descExpanded = !descExpanded })
-                            .padding(horizontal = 4.dp),
-                    )
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 14.dp),
-                ) {
-                    PillButton(label = "▶  Play E$playEp", onClick = { onPlay(playEp) })
-                    // Web detail-actions icon pills: ★ watchlist · ♥ favorites ·
-                    // ⬇ season download (hidden for download-denied users).
-                    val inW = lists.contains("watchlist")
-                    val inF = lists.contains("favorites")
-                    IconPill(glyph = if (inW) "★" else "☆", on = inW) { onToggleList("watchlist") }
-                    IconPill(glyph = if (inF) "♥" else "♡", on = inF) { onToggleList("favorites") }
-                    if (!downloadsDenied) {
-                        IconPill(glyph = "⬇", on = false, onClick = onDownloadSeason)
-                    }
-                }
-                // Web `.detail-controls`: Auto pill + folder + provider selects.
-                DetailControls(app, d, downloadsDenied, Modifier.padding(top = 12.dp))
-                // Web `<TrackingRow>`: AniList/MAL status + score for this title.
-                TrackingRow(app, d.id, Modifier.padding(top = 10.dp), revision = trackingRevision)
             }
-            return@Box
-        }
-        // Web `.title-hero-inner`: width min(1180px, 100%), centred, with
-        // 96/32/30 padding — not a full-bleed row with uniform 24.
-        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-        Row(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .widthIn(max = 1180.dp)
-                .fillMaxWidth()
-                .padding(start = 32.dp, end = 32.dp, top = 96.dp, bottom = 30.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            AsyncImage(
-                model = d.poster,
-                contentDescription = d.displayTitle,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    // Web `.title-hero-poster`: 158px wide with a deep drop
-                    // shadow (0 12px 40px rgba(0,0,0,.55)) over a --secondary
-                    // well. It was 120 and sitting on the near-black episode
-                    // thumbnail well, which made it read as a small detached
-                    // tile instead of the card overlapping the banner.
-                    .shadow(20.dp, RoundedCornerShape(12.dp))
-                    .width(158.dp)
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(RenzoColors.Secondary),
-            )
-            Spacer(Modifier.width(26.dp))
-            // Web caps the text column at 740px; without it the description
-            // ran the full width of a wide window.
-            Column(Modifier.weight(1f).widthIn(max = 740.dp)) {
-                androidx.compose.foundation.text.selection.SelectionContainer {
+
+            androidx.compose.foundation.text.selection.SelectionContainer {
                 Text(
                     d.displayTitle,
+                    fontSize = if (heroWide) 34.sp else 26.sp,
+                    lineHeight = if (heroWide) 40.sp else 30.sp,
+                    fontWeight = FontWeight.Bold,
                     color = RenzoColors.Foreground,
-                    // Web `clamp(26px, 4vw, 46px)` with line-height 1.05.
-                    fontSize = heroTitleSp.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    lineHeight = (heroTitleSp * 1.05f).sp,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                    style = LocalTextStyle.current.copy(
-                        shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 2f), 20f),
-                    ),
                 )
+            }
+
+            // Shiori's "by author" line: the romaji title, when it differs.
+            if (d.romaji.isNotBlank() && d.romaji != d.displayTitle) {
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(d.romaji, style = MaterialTheme.typography.bodySmall, color = RenzoColors.MutedForeground)
                 }
-                // Metaline: TYPE · year · N ep · first 3 genres
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(top = 6.dp),
-                ) {
-                    Text(
-                        // Web shows SERIES / MOVIE (hero.tsx:101-105). This was
-                        // printing the raw AniList format, so it read "TV",
-                        // "TV_SHORT" or "ONA".
-                        if (d.type == "movie") "MOVIE" else "SERIES",
-                        color = RenzoColors.Primary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.4.sp,
-                    )
-                    val metaRest = (
-                        listOfNotNull(
-                            d.year?.toString(),
-                            (d.episodeCount ?: d.episodeList.size.takeIf { it > 0 })?.let { "$it ep" },
-                        ) + d.genres.take(3)
-                        ).joinToString(" · ")
-                    if (metaRest.isNotEmpty()) {
+            }
+
+            // Inline meta row.
+            val meta = listOfNotNull(
+                if (d.type == "movie") "Movie" else seasonWordFor(d),
+                d.year?.toString(),
+                (d.episodeCount ?: d.episodeList.size.takeIf { it > 0 })?.let { "$it episode${if (it == 1) "" else "s"}" },
+                d.duration?.takeIf { it > 0 }?.let { "${it}m" },
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                meta.forEachIndexed { i, part ->
+                    if (i > 0) Text("·", style = MaterialTheme.typography.bodySmall, color = RenzoColors.MutedForeground.copy(alpha = 0.4f))
+                    Text(part, style = MaterialTheme.typography.bodySmall, color = RenzoColors.MutedForeground)
+                }
+            }
+
+            if (d.genres.isNotEmpty() || d.isAdult) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (d.isAdult) {
                         Text(
-                            "· $metaRest",
+                            "18+",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFF87171),
+                            modifier = Modifier
+                                .clip(PillShape)
+                                .background(Color(0xFFEF4444).copy(alpha = 0.12f))
+                                .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.35f), PillShape)
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
+                    d.genres.forEach { g ->
+                        Text(
+                            g,
+                            fontSize = 11.sp,
+                            color = RenzoColors.Foreground.copy(alpha = 0.8f),
+                            modifier = Modifier
+                                .clip(PillShape)
+                                .background(ForegroundFaint06)
+                                .border(1.dp, Border40, PillShape)
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
+
+            if (!desc.isNullOrBlank()) {
+                Column(modifier = if (heroWide) Modifier.widthIn(max = 640.dp) else Modifier) {
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(
+                            desc,
+                            style = MaterialTheme.typography.bodySmall,
                             color = RenzoColors.MutedForeground,
-                            fontSize = 13.sp,
-                            maxLines = 1,
+                            maxLines = if (descriptionExpanded) Int.MAX_VALUE else 3,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                }
-                if (!desc.isNullOrBlank()) {
-                    androidx.compose.foundation.text.selection.SelectionContainer {
-                    Text(
-                        desc,
-                        color = RenzoColors.Foreground.copy(alpha = 0.9f),
-                        fontSize = 14.sp,
-                        // Web `.desc` is 14px/1.55.
-                        lineHeight = 21.7.sp,
-                        maxLines = if (descExpanded) Int.MAX_VALUE else 3,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    }
-                    // The compact layout already had this; the wide one clamped
-                    // to 3 lines with no way to read the rest, leaving
-                    // descExpanded dead code on desktop. Web gates it on the
-                    // same >200 characters (hero.tsx:141).
-                    if (desc.length > 200) {
-                        var moreFocusedWide by remember { mutableStateOf(false) }
+                    if (desc.length > 240) {
                         Text(
-                            if (descExpanded) "Less" else "More details",
+                            if (descriptionExpanded) "Show less" else "Read more",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
                             color = RenzoColors.Primary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
-                                .padding(top = 6.dp)
-                                .focusRing(moreFocusedWide, 6.dp)
-                                .tvClickable(
-                                    onFocused = { moreFocusedWide = it },
-                                    onClick = { descExpanded = !descExpanded },
-                                )
-                                .padding(horizontal = 4.dp),
+                                .padding(top = 4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .kitClickable(radius = 4.dp) { descriptionExpanded = !descriptionExpanded },
                         )
                     }
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 14.dp),
-                ) {
-                    PillButton(
-                        label = "▶  Play E$playEp",
-                        onClick = { onPlay(playEp) },
-                    )
-                    val inW = lists.contains("watchlist")
-                    val inF = lists.contains("favorites")
-                    IconPill(glyph = if (inW) "★" else "☆", on = inW) { onToggleList("watchlist") }
-                    IconPill(glyph = if (inF) "♥" else "♡", on = inF) { onToggleList("favorites") }
-                    if (!downloadsDenied) {
-                        IconPill(glyph = "⬇", on = false, onClick = onDownloadSeason)
-                    }
-                    PillButton(
-                        label = if (inLibrary) "In library ✓" else "Add to library",
-                        filled = false,
-                        onClick = onToggleLibrary,
+            }
+
+            // Action toolbar.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                val label = if (watchedThrough > 0 && playEp > 1) "Continue E$playEp" else "Play E$playEp"
+                HeroActionButton(
+                    icon = Icons.Filled.PlayArrow,
+                    contentDescription = label,
+                    label = if (heroWide) label else null,
+                    primary = true,
+                    onClick = { onPlay(playEp) },
+                )
+                val inW = lists.contains("watchlist")
+                HeroActionButton(
+                    icon = if (inW) Icons.Filled.Star else Icons.Filled.StarBorder,
+                    contentDescription = if (inW) "On your watchlist" else "Add to watchlist",
+                    label = if (!heroWide) null else if (inW) "On watchlist" else "Watchlist",
+                    tint = if (inW) RenzoColors.Primary else RenzoColors.Foreground,
+                    borderColor = if (inW) RenzoColors.Primary.copy(alpha = 0.5f) else Border60,
+                    onClick = { onToggleList("watchlist") },
+                )
+                val inF = lists.contains("favorites")
+                HeroActionButton(
+                    icon = if (inF) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    contentDescription = if (inF) "In your favourites" else "Add to favourites",
+                    label = if (!heroWide) null else if (inF) "Favourited" else "Favourite",
+                    tint = if (inF) Pink500 else RenzoColors.Foreground,
+                    borderColor = if (inF) Pink500.copy(alpha = 0.6f) else Border60,
+                    background = if (inF) Pink500.copy(alpha = 0.15f) else Color.Transparent,
+                    onClick = { onToggleList("favorites") },
+                )
+                HeroActionButton(
+                    icon = if (inLibrary) Icons.Filled.LibraryAddCheck else Icons.Filled.LibraryAdd,
+                    contentDescription = if (inLibrary) "In your library — remove" else "Add to library",
+                    label = if (!heroWide) null else if (inLibrary) "In library" else "Add to library",
+                    tint = if (inLibrary) RenzoColors.Primary else RenzoColors.Foreground,
+                    borderColor = if (inLibrary) RenzoColors.Primary.copy(alpha = 0.5f) else Border60,
+                    onClick = onToggleLibrary,
+                )
+                HeroActionButton(
+                    icon = Icons.Filled.Sensors,
+                    contentDescription = "Track this title",
+                    label = if (heroWide) "Track" else null,
+                    onClick = onTrack,
+                )
+                // A saved per-title setting, so it reads as an on/off control
+                // with visible state — Shiori's Hide Decimals / Prioritize Free.
+                if (d.type != "movie" && !downloadsDenied) {
+                    HeroActionButton(
+                        icon = Icons.Filled.Autorenew,
+                        contentDescription = if (auto) "Auto-download on" else "Auto-download off",
+                        label = if (!heroWide) null else if (auto) "Auto-download on" else "Auto-download",
+                        tint = if (auto) RenzoColors.Primary else RenzoColors.Foreground,
+                        borderColor = if (auto) RenzoColors.Primary.copy(alpha = 0.5f) else Border60,
+                        onClick = {
+                            val next = !auto
+                            auto = next
+                            scope.launch {
+                                try { auto = app.repo.setAuto(d.id, next).autoDownload } catch (_: Exception) { auto = !next }
+                            }
+                        },
                     )
                 }
-                DetailControls(app, d, downloadsDenied, Modifier.padding(top = 12.dp))
-                TrackingRow(app, d.id, Modifier.padding(top = 10.dp), revision = trackingRevision)
             }
         }
+
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            if (heroWide) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(32.dp),
+                    modifier = Modifier
+                        .widthIn(max = 1280.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 40.dp),
+                ) {
+                    coverBox(210.dp, 315.dp)
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) { heroInfo() }
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { coverBox(150.dp, 225.dp) }
+                    heroInfo()
+                }
+            }
         }
     }
 }
 
-// --- season chain -----------------------------------------------------------
+/** "Season 2" / "Season 2 Part 2" / "OVA" — the meta row's first entry. */
+private fun seasonWordFor(d: TitleDetail): String =
+    if (d.seasonKind == "extra") {
+        when (d.format?.uppercase(Locale.US)) { "MOVIE" -> "Movie"; "OVA" -> "OVA"; else -> "Special" }
+    } else {
+        "Season ${d.seasonNum ?: 1}" + (d.seasonPart?.takeIf { it > 1 }?.let { " Part $it" } ?: "")
+    }
 
+// --- episodes (Shiori ChaptersSectionHeader + ChapterRow) -------------------
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SeasonCard(ref: SeasonRef, current: Boolean, onOpen: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Column(
-        Modifier
-            .width(100.dp)
-            .scale(if (focused) 1.05f else 1f)
-            .tvClickable(onFocused = { focused = it }, onClick = onOpen),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(RenzoColors.Card)
-                .border(
-                    if (current) 2.dp else 1.dp,
-                    if (current) RenzoColors.Primary else RenzoColors.Border,
-                    RoundedCornerShape(10.dp),
-                )
-                .focusRing(focused, 10.dp),
+private fun EpisodesHeader(
+    d: TitleDetail,
+    todayIso: String,
+    watchedThrough: Int,
+    isTv: Boolean,
+    downloadsDenied: Boolean,
+    onMarkSeason: (Int) -> Unit,
+    onSaveSeason: () -> Unit,
+    onDownloadSeason: () -> Unit,
+) {
+    val total = d.episodeList.size
+    val aired = d.episodeList.count { !isUnaired(it, d, todayIso) }
+    val onServer = d.episodeList.count { it.hasFile }
+    val upcoming = total - aired
+    val fullyWatched = aired > 0 && watchedThrough >= aired
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            AsyncImage(
-                model = ref.poster,
-                contentDescription = ref.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
+            Text(
+                "$total episode${if (total == 1) "" else "s"}",
+                style = MaterialTheme.typography.titleMedium,
+                color = RenzoColors.Foreground,
+                modifier = Modifier.weight(1f),
             )
+            Row {
+                Text("$onServer downloaded", fontSize = 12.sp, color = RenzoColors.MutedForeground)
+                if (upcoming > 0) {
+                    Text(" · ", fontSize = 12.sp, color = RenzoColors.MutedForeground)
+                    Text("$upcoming upcoming", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Amber500)
+                }
+            }
         }
-        Text(
-            seasonLabel(ref, current),
-            color = if (current) RenzoColors.Foreground else RenzoColors.MutedForeground,
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-    }
-}
-
-/** Web orderedSeasons (season-utils.ts): this title plus its chain, seasons first, then extras. */
-internal fun orderedSeasons(d: TitleDetail): List<SeasonRef> {
-    val current = SeasonRef(
-        id = d.id, num = d.seasonNum, part = d.seasonPart, kind = d.seasonKind,
-        format = d.format, title = d.displayTitle, poster = d.poster, year = d.year,
-    )
-    return (listOf(current) + d.seasons.filter { it.id != d.id }).sortedWith(
-        compareBy<SeasonRef>({ it.num ?: 0 }, { if (it.kind == "extra") 1 else 0 }, { it.part ?: 0 }, { it.year ?: 0 }, { it.id }),
-    )
-}
-
-/** Web seasonChip + the row's suffixes: "S1 · 2013 (this)", "OVA · 2023". */
-internal fun seasonLabel(ref: SeasonRef, current: Boolean = false): String {
-    val chip = when {
-        ref.kind == "movie" -> "Movie"
-        ref.kind == "extra" -> when (ref.format?.uppercase()) {
-            "MOVIE" -> "Movie"
-            "OVA" -> "OVA"
-            "SPECIAL" -> "Special"
-            else -> "Special"
+        HairLine()
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            if (!downloadsDenied && d.type != "movie" && onServer < aired) {
+                RenzoChip(
+                    label = "Download season",
+                    icon = Icons.Filled.Download,
+                    count = aired - onServer,
+                    accent = RenzoColors.Primary,
+                    onClick = onDownloadSeason,
+                )
+            }
+            // Device copies of what the server holds — never on TV, like the
+            // web's offlineSupported gate.
+            if (!isTv && onServer > 0) {
+                RenzoChip(
+                    label = "Save season offline",
+                    icon = Icons.Filled.CloudDownload,
+                    count = onServer,
+                    accent = Emerald400,
+                    onClick = onSaveSeason,
+                )
+            }
+            if (aired > 0) {
+                RenzoChip(
+                    label = if (fullyWatched) "Season watched" else "Mark season watched",
+                    icon = Icons.Filled.DoneAll,
+                    active = fullyWatched,
+                    onClick = { onMarkSeason(if (fullyWatched) 0 else aired) },
+                )
+            }
         }
-        else -> "S${ref.num ?: 1}" + (ref.part?.takeIf { it > 1 }?.let { " Pt$it" } ?: "")
-    }
-    return chip +
-        (ref.year?.let { " · $it" } ?: "") +
-        (if (current) " (this)" else "")
-}
-
-// --- next-up banner ---------------------------------------------------------
-
-@Composable
-private fun NextUpBanner(nextUp: SeasonRef, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(RenzoColors.Card, RoundedCornerShape(12.dp))
-            .border(1.dp, if (focused) RenzoColors.Primary else RenzoColors.Border, RoundedCornerShape(12.dp))
-            .focusRing(focused, 12.dp)
-            .tvClickable(onFocused = { focused = it }, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            "NEXT",
-            color = RenzoColors.Primary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.5.sp,
-        )
-        Text(
-            nextUp.title?.takeIf { it.isNotBlank() } ?: seasonLabel(nextUp),
-            color = RenzoColors.Foreground,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 10.dp).weight(1f),
-        )
-        Text("›", color = RenzoColors.MutedForeground, fontSize = 18.sp)
-    }
-}
-
-// --- episode tiles ----------------------------------------------------------
-
-/** Web ep-card: 16:9 thumb, badge bottom-right, watched strip, title + date. */
-/**
- * Web .title-body, widened: everything below the hero sits in a CENTRED
- * column — the web caps it at 1180px, the Hub at 1600dp (user direction
- * 2026-08-21: fill more of the screen). Without a cap, episode tiles
- * stretched into three giants across the whole desktop window.
- */
-@Composable
-private fun TitleBodyBox(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.widthIn(max = 1600.dp).fillMaxWidth(), content = content)
     }
 }
 
 @Composable
-private fun EpisodeTile(
+private fun EpisodeRow(
     ep: EpisodeInfo,
-    /** The web's .ep-series overline — the series name above every card. */
-    seriesTitle: String,
-    fallbackImage: String?,
+    durationMin: Int?,
     watched: Boolean,
     unaired: Boolean,
-    /** Series runtime in minutes — the web's fallback badge ("24m"). */
-    durationMin: Int?,
-    /** Live job state for this episode from the jobs poll, if any. */
     job: JobItem?,
     downloadsDenied: Boolean,
+    isTv: Boolean,
     /** Already saved to THIS DEVICE — distinct from the server holding a file. */
     savedOffline: Boolean,
-    onClick: () -> Unit,
-    onSetProgress: (Int) -> Unit,
+    onPlay: () -> Unit,
+    onToggleWatched: (Boolean) -> Unit,
     onDownload: (Boolean) -> Unit,
     onSaveOffline: () -> Unit,
     onRemoveOffline: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    var menuOpen by remember(ep.number) { mutableStateOf(false) }
-    var focused by remember { mutableStateOf(false) }
-    Column(
-        modifier
-            .alpha(if (unaired) 0.5f else 1f)
-            .scale(if (focused) 1.02f else 1f)
-            .let {
-                if (unaired) it
-                else it.tvClickable(onFocused = { f -> focused = f }, onClick = onClick)
-            },
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(RenzoColors.EpThumbWell)
-                .focusRing(focused, 10.dp),
-        ) {
-            AsyncImage(
-                model = fallbackImage,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
-            )
-            // Play overlay while focused (web: hover shows a centred ▶).
-            if (focused && !unaired) {
-                Box(
-                    Modifier.matchParentSize().background(Color(0x47060B0F)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(if (watched) "↺" else "▶", color = Color.White, fontSize = 34.sp)
+    val busy = job != null && job.active
+    val pct = ((job?.progress ?: 0.0) * 100).toInt()
+    val stacked = !isTv && renzoScreenWidthDp() < 640
+
+    val leading: @Composable RowScope.() -> Unit = {
+        when {
+            ep.hasFile -> Icon(Icons.Filled.CheckCircle, contentDescription = "Downloaded", tint = Emerald500, modifier = Modifier.size(16.dp))
+            unaired -> Icon(Icons.Filled.Schedule, contentDescription = "Not yet aired", tint = Amber500, modifier = Modifier.size(16.dp))
+            busy -> Icon(Icons.Filled.Download, contentDescription = "Downloading", tint = RenzoColors.Primary, modifier = Modifier.size(16.dp))
+            else -> Icon(Icons.Outlined.PlayCircle, contentDescription = "Streams on demand", tint = RenzoColors.MutedForeground, modifier = Modifier.size(16.dp))
+        }
+        Column(Modifier.weight(1f).then(if (watched) Modifier.alpha(0.5f) else Modifier)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "E${ep.number}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = RenzoColors.Foreground,
+                )
+                val name = ep.epTitle?.takeIf { it.isNotBlank() }
+                if (name != null) {
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = RenzoColors.MutedForeground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 8.dp).weight(1f, fill = false),
+                    )
+                }
+                if (busy) {
+                    Text(
+                        if (pct > 0) "$pct%" else job!!.status,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = RenzoColors.Primary,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(RenzoColors.Primary.copy(alpha = 0.15f))
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                    )
                 }
             }
-            // Badge ladder, in the web's exact order:
-            // Soon → Watched → ✓ Saved → "<status> NN%" → "<duration>m".
-            val busy = job != null && job.active
-            val pct = ((job?.progress ?: 0.0) * 100).toInt()
-            val badge: Pair<String, Color>? = when {
-                unaired -> "Soon" to RenzoColors.Foreground
-                watched -> "Watched" to RenzoColors.Foreground
-                ep.hasFile -> "✓ Saved" to RenzoColors.DownloadedGreen
-                busy -> (job!!.status + if (pct > 0) " $pct%" else "") to RenzoColors.Foreground
-                durationMin != null && durationMin > 0 -> "${durationMin}m" to RenzoColors.Foreground
-                else -> null
-            }
-            if (badge != null) {
-                Box(
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(RenzoColors.OverlayBlack, RoundedCornerShape(999.dp))
-                        .padding(horizontal = 7.dp, vertical = 3.dp),
-                ) {
-                    Text(badge.first, color = badge.second, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.padding(top = 2.dp)) {
+                val dur = durationMin?.takeIf { it > 0 }?.let { " · ${it}m" } ?: ""
+                when {
+                    unaired -> Text("Not yet aired", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Amber500)
+                    ep.hasFile -> Text("On your server · Subtitled$dur", fontSize = 11.sp, color = RenzoColors.MutedForeground, maxLines = 1)
+                    busy -> Text("Downloading · ${job!!.status}", fontSize = 11.sp, color = RenzoColors.MutedForeground, maxLines = 1)
+                    else -> Text("Streams on demand · Subtitled$dur", fontSize = 11.sp, color = RenzoColors.MutedForeground, maxLines = 1)
                 }
-            }
-            if (watched) {
-                Box(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(RenzoColors.Primary),
-                )
-            } else if (job != null && job.active) {
-                // Live download progress, overlaid from the jobs poll.
-                Box(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth(job.progress.toFloat().coerceIn(0f, 1f))
-                        .height(3.dp)
-                        .background(RenzoColors.Primary),
-                )
+                if (watched) Text(" · Watched", fontSize = 11.sp, color = RenzoColors.MutedForeground.copy(alpha = 0.7f), maxLines = 1)
             }
         }
-        // Web .ep-series: uppercase muted overline with the series name.
-        Text(
-            seriesTitle.uppercase(),
-            color = RenzoColors.MutedForeground,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.3.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 9.dp),
-        )
-        // Web .ep-title: "E{n} – {title}", falling back to "Episode n".
-        Text(
-            "E${ep.number} – " + (ep.epTitle?.takeIf { it.isNotBlank() } ?: "Episode ${ep.number}"),
-            color = RenzoColors.Foreground,
-            fontSize = 14.sp,
-            fontWeight = FontWeight(650),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 3.dp),
-        )
-        // Web `.ep-foot`: "Subtitled" left, ⋮ kebab right.
-        Row(
-            Modifier.fillMaxWidth().padding(top = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    }
+
+    val actions: @Composable RowScope.() -> Unit = {
+        if (!unaired) {
+            // Device copy (Shiori: Save offline / phone icon once saved).
+            if (savedOffline) {
+                SquareIconButton(
+                    icon = Icons.Filled.PhoneAndroid,
+                    contentDescription = "Saved on this device — remove",
+                    tint = Emerald500,
+                    borderColor = Color.Transparent,
+                    background = Color.Transparent,
+                    onClick = onRemoveOffline,
+                )
+            } else if (ep.hasFile && !isTv) {
+                SquareIconButton(
+                    icon = Icons.Filled.CloudDownload,
+                    contentDescription = "Save to this device",
+                    borderColor = Color.Transparent,
+                    background = Color.Transparent,
+                    onClick = onSaveOffline,
+                )
+            }
+            SquareIconButton(
+                icon = if (watched) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                contentDescription = if (watched) "Mark unwatched" else "Mark watched",
+                tint = if (watched) Emerald500 else RenzoColors.MutedForeground.copy(alpha = 0.5f),
+                borderColor = Color.Transparent,
+                background = Color.Transparent,
+                onClick = { onToggleWatched(!watched) },
+            )
+            // Server-side fetch (NOT a device copy — that is the icon above).
+            if (!ep.hasFile && !downloadsDenied && !busy) {
+                val smLabel = !isTv && renzoScreenWidthDp() >= 640
+                if (smLabel) {
+                    RenzoButton(text = "Download", icon = Icons.Filled.Download, variant = "outline", small = true, onClick = { onDownload(false) })
+                } else {
+                    SquareIconButton(icon = Icons.Filled.Download, contentDescription = "Download", onClick = { onDownload(false) })
+                }
+            }
+        }
+    }
+
+    val rowModifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp)
+        .clip(MaterialTheme.shapes.small)
+        .background(RenzoColors.Card.copy(alpha = 0.5f))
+        .border(1.dp, Border40, MaterialTheme.shapes.small)
+        .then(if (unaired) Modifier.alpha(0.6f) else Modifier.kitClickable(onClick = onPlay))
+        .padding(horizontal = 12.dp, vertical = 10.dp)
+
+    if (stacked) {
+        Column(rowModifier) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) { leading() }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            ) { actions() }
+        }
+    } else {
+        Row(rowModifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            leading()
+            actions()
+        }
+    }
+}
+
+// --- left rail (Shiori SeriesSourcesSection / SeriesDownloadsPanel) ---------
+
+/** Shiori's rail section heading: titleMedium + a muted count pill. */
+@Composable
+private fun RailHeading(title: String, count: Int? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = RenzoColors.Foreground)
+        if (count != null) {
             Text(
-                "Subtitled",
+                "$count",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
                 color = RenzoColors.MutedForeground,
-                fontSize = 12.5.sp,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.clip(PillShape).background(ForegroundFaint10).padding(horizontal = 6.dp, vertical = 2.dp),
             )
-            if (!unaired) {
-                var kebabFocused by remember { mutableStateOf(false) }
-                Box(
-                    Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .focusRing(kebabFocused, 8.dp)
-                        .background(
-                            if (kebabFocused) RenzoColors.Secondary else Color.Transparent,
-                            RoundedCornerShape(8.dp),
-                        )
-                        .tvClickable(onFocused = { kebabFocused = it }, onClick = { menuOpen = !menuOpen }),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("⋮", color = RenzoColors.MutedForeground, fontSize = 18.sp)
-                }
+        }
+    }
+}
+
+/** The franchise: this title and its seasons/movies/OVAs, one row each. */
+@Composable
+private fun SeasonsSection(d: TitleDetail, onOpenTitle: (Int) -> Unit) {
+    val chain = remember(d) { orderedSeasons(d) }
+    if (chain.size < 2) return
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RailHeading("Seasons", chain.size)
+        chain.forEach { ref ->
+            val current = ref.id == d.id
+            SeasonRow(ref, current = current, upNext = d.nextUp?.id == ref.id, onClick = { if (!current) onOpenTitle(ref.id) })
+        }
+    }
+}
+
+@Composable
+private fun SeasonRow(ref: SeasonRef, current: Boolean, upNext: Boolean, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(if (current) RenzoColors.Primary.copy(alpha = 0.10f) else RenzoColors.Card.copy(alpha = 0.5f))
+            .border(1.dp, if (current) RenzoColors.Primary.copy(alpha = 0.5f) else Border40, MaterialTheme.shapes.small)
+            .kitClickable(onClick = onClick)
+            .padding(8.dp),
+    ) {
+        AsyncImage(
+            model = ref.poster,
+            contentDescription = ref.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.width(36.dp).height(54.dp).clip(RoundedCornerShape(6.dp)).background(RenzoColors.Muted),
+        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                seasonLabel(ref),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = if (current) RenzoColors.Primary else RenzoColors.Foreground,
+                maxLines = 1,
+            )
+            ref.title?.let {
+                Text(it, fontSize = 11.sp, color = RenzoColors.MutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        // Web `.ep-menu` (160px popover) — inline here so the D-pad can walk it.
-        if (menuOpen && !unaired) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(RenzoColors.Secondary, RoundedCornerShape(10.dp))
-                    .border(1.dp, RenzoColors.Border, RoundedCornerShape(10.dp))
-                    .padding(4.dp),
-            ) {
-                EpMenuItem(if (watched) "Mark unwatched" else "Mark watched") {
-                    menuOpen = false
-                    onSetProgress(if (watched) ep.number - 1 else ep.number)
-                }
-                if (!ep.hasFile && !downloadsDenied) {
-                    // Server-side: ask the server to fetch the episode. NOT a
-                    // copy on this device — that is "Save to device" below, and
-                    // conflating the two is exactly the confusion to avoid.
-                    EpMenuItem("Download") { menuOpen = false; onDownload(false) }
-                    EpMenuItem("Download now") { menuOpen = false; onDownload(true) }
-                }
-                // Device-side: only offerable once the server actually has the
-                // file to hand over.
-                if (ep.hasFile) {
-                    if (savedOffline) {
-                        EpMenuItem("Remove from device") { menuOpen = false; onRemoveOffline() }
-                    } else {
-                        EpMenuItem("Save to device") { menuOpen = false; onSaveOffline() }
+        when {
+            current -> Text("Viewing", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = RenzoColors.Primary)
+            upNext -> Text(
+                "Up next",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = RenzoColors.Primary,
+                modifier = Modifier.clip(PillShape).background(RenzoColors.Primary.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+    }
+}
+
+/** Where downloads land and which release group they come from. */
+@Composable
+private fun DownloadSettingsSection(app: AppServices, d: TitleDetail, downloadsDenied: Boolean) {
+    if (downloadsDenied) return
+    val scope = rememberCoroutineScope()
+    var folder by remember(d.id) { mutableStateOf(d.folder ?: d.folders.firstOrNull() ?: "Library") }
+    var folders by remember(d.id) { mutableStateOf(d.folders.ifEmpty { listOf(folder) }) }
+    var provider by remember(d.id) { mutableStateOf(d.provider) }
+    var providers by remember(d.id) { mutableStateOf<List<String>>(emptyList()) }
+
+    LaunchedEffect(d.id) {
+        try { folders = app.repo.folders().map { it.name }.ifEmpty { listOf("Library") } } catch (_: Exception) {}
+        try { providers = app.repo.providers(d.id).map { it.group } } catch (_: Exception) {}
+    }
+
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RailHeading("Downloads")
+        FieldLabel("Library folder")
+        RenzoSelect(
+            options = folders.map { it to it },
+            value = folder,
+            onChange = { next ->
+                folder = next
+                scope.launch { try { folder = app.repo.setFolder(d.id, next).folder } catch (_: Exception) {} }
+            },
+        )
+        Spacer(Modifier.height(4.dp))
+        FieldLabel("Release group")
+        // "" is the web's "Auto (best)".
+        RenzoSelect(
+            options = listOf("" to "Auto (best)") + providers.map { it to it },
+            value = provider ?: "",
+            onChange = { next ->
+                provider = next.ifEmpty { null }
+                scope.launch { try { provider = app.repo.setProvider(d.id, next).provider } catch (_: Exception) {} }
+            },
+        )
+        Hint("Used for every episode and season of this series.")
+    }
+}
+
+// --- tracking (Shiori: the hero's Track button opens a dialog) --------------
+
+/** Web `toast(...)` from sonner. */
+private fun toast(msg: String) = top.levitatemedia.renzo.tv.renzoToast(msg)
+
+/**
+ * Status vocabulary, transliterated from `tracking-row.tsx:15-23` — the
+ * server's lowercase TRACK_STATUSES. AniList's uppercase enum never crosses the
+ * wire (the server silently drops it with a 200).
+ *
+ * Deliberately NOT shared with AccountScreen's TRACK_OPTIONS: the web keeps two
+ * lists in two different orders.
+ */
+private val TRACK_STATUS_OPTIONS = listOf(
+    "" to "— Not tracked —",
+    "watching" to "Watching",
+    "completed" to "Completed",
+    "planning" to "Plan to watch",
+    "paused" to "Paused",
+    "dropped" to "Dropped",
+    "rewatching" to "Rewatching",
+)
+
+@Composable
+private fun TrackingDialog(app: AppServices, titleId: Int, revision: Int, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var t by remember(titleId) { mutableStateOf<Tracking?>(null) }
+    var loaded by remember(titleId) { mutableStateOf(false) }
+    var status by remember(titleId) { mutableStateOf("") }
+    var progress by remember(titleId) { mutableStateOf("") }
+    var score by remember(titleId) { mutableStateOf("") }
+    var saving by remember(titleId) { mutableStateOf(false) }
+
+    LaunchedEffect(titleId, revision) {
+        t = try { app.repo.tracking(titleId) } catch (_: Exception) { null }
+        loaded = true
+    }
+    LaunchedEffect(t) {
+        val e = t?.entry
+        status = e?.status ?: ""
+        progress = (e?.progress ?: 0).toString()
+        score = e?.score?.takeIf { it > 0 }?.let { formatScore(it) } ?: ""
+    }
+
+    val tr = t
+    RenzoDialog(
+        onDismiss = onDismiss,
+        title = "Track",
+        description = if (tr?.connected == true) "Syncs to " + tr.providers.joinToString(" + ") + "." else null,
+        maxWidth = 480.dp,
+    ) {
+        when {
+            !loaded -> Text("Loading…", style = MaterialTheme.typography.bodyMedium, color = RenzoColors.MutedForeground)
+            tr == null || !tr.connected -> {
+                Text(
+                    "Connect AniList or MyAnimeList under Account → Required credentials to track this title.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = RenzoColors.MutedForeground,
+                )
+                Spacer(Modifier.height(16.dp))
+                RenzoButton(text = "Close", variant = "outline", onClick = onDismiss)
+            }
+            else -> {
+                FieldLabel("Status")
+                RenzoSelect(options = TRACK_STATUS_OPTIONS, value = status, onChange = { status = it })
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        // The tracker's own episode count, not the local library's.
+                        FieldLabel("Progress" + (tr.entry?.total?.let { " (of $it)" } ?: ""))
+                        RenzoTextField(
+                            value = progress,
+                            onValueChange = { progress = it.filter { c -> c.isDigit() } },
+                            placeholder = "0",
+                            keyboardType = KeyboardType.Number,
+                        )
                     }
+                    Column(Modifier.weight(1f)) {
+                        FieldLabel("Score")
+                        RenzoTextField(
+                            value = score,
+                            onValueChange = { score = it.filter { c -> c.isDigit() || c == '.' } },
+                            placeholder = "/10",
+                            keyboardType = KeyboardType.Number,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                // An explicit commit, like the web's Sync button: cycling a
+                // select must not push every intermediate status to the user's
+                // real AniList/MAL account.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RenzoButton(
+                        text = if (saving) "Syncing…" else "Sync",
+                        busy = saving,
+                        onClick = {
+                            saving = true
+                            scope.launch {
+                                try {
+                                    t = app.repo.setTracking(
+                                        titleId,
+                                        status = status.takeIf { it.isNotEmpty() },
+                                        progress = progress.toIntOrNull() ?: 0,
+                                        score = score.takeIf { it.isNotEmpty() }?.toDoubleOrNull(),
+                                    )
+                                    toast("Tracking synced")
+                                    onDismiss()
+                                } catch (e: Exception) {
+                                    toast(e.message ?: "Tracking sync failed")
+                                } finally {
+                                    saving = false
+                                }
+                            }
+                        },
+                    )
+                    RenzoButton(text = "Cancel", variant = "outline", onClick = onDismiss)
                 }
             }
         }
     }
 }
 
-/** One row of the web's per-episode ⋮ menu (13sp, hover/focus = muted fill). */
-@Composable
-private fun EpMenuItem(label: String, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .focusRing(focused, 6.dp)
-            .background(if (focused) RenzoColors.Muted else Color.Transparent, RoundedCornerShape(6.dp))
-            .tvClickable(onFocused = { focused = it }, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-    ) {
-        Text(label, color = RenzoColors.Foreground, fontSize = 13.sp)
-    }
-}
+/** Trims a whole-number score to "8" rather than "8.0" (web sends String(e.score)). */
+private fun formatScore(v: Double): String =
+    if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString()
+
+// --- shared helpers ---------------------------------------------------------
 
 /**
  * An episode is unaired when it has no file AND any signal says future:
@@ -1066,8 +1235,6 @@ internal fun isUnaired(ep: EpisodeInfo, d: TitleDetail, todayIso: String): Boole
     return false
 }
 
-// --- helpers ----------------------------------------------------------------
-
 /** AniList descriptions carry light HTML — strip tags, decode common entities. */
 internal fun cleanDescription(html: String?): String? = html
     ?.replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), " ")
@@ -1082,265 +1249,27 @@ internal fun cleanDescription(html: String?): String? = html
     ?.replace(Regex("\\s{2,}"), " ")
     ?.trim()
 
-
-/** Web `.icon-pill`: 42dp circle, bg secondary, 1dp border; `on` = primary. */
-@Composable
-private fun IconPill(glyph: String, on: Boolean, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        Modifier
-            .size(42.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .focusRing(focused, 999.dp)
-            .background(
-                if (on) RenzoColors.Primary.copy(alpha = 0.12f) else RenzoColors.Secondary,
-                RoundedCornerShape(999.dp),
-            )
-            .border(
-                1.dp,
-                if (on) RenzoColors.Primary else RenzoColors.Border,
-                RoundedCornerShape(999.dp),
-            )
-            .tvClickable(onFocused = { focused = it }, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            glyph,
-            color = if (on) RenzoColors.Primary else RenzoColors.Foreground,
-            fontSize = 17.sp,
-        )
-    }
+/** Web orderedSeasons (season-utils.ts): this title plus its chain, seasons first, then extras. */
+internal fun orderedSeasons(d: TitleDetail): List<SeasonRef> {
+    val current = SeasonRef(
+        id = d.id, num = d.seasonNum, part = d.seasonPart, kind = d.seasonKind,
+        format = d.format, title = d.displayTitle, poster = d.poster, year = d.year,
+    )
+    return (listOf(current) + d.seasons.filter { it.id != d.id }).sortedWith(
+        compareBy<SeasonRef>({ it.num ?: 0 }, { if (it.kind == "extra") 1 else 0 }, { it.part ?: 0 }, { it.year ?: 0 }, { it.id }),
+    )
 }
 
-// --- hero detail-controls (web hero.tsx: Auto pill + Folder + Provider) -----
-
-/**
- * `.detail-controls` — the ghost "Auto: on/off" pill (series only, hidden for
- * download-denied users), the 📁 folder picker and the release-group picker.
- * Selects become tap-to-cycle chips: a dropdown is a poor fit for a remote,
- * and every option set here is short.
- */
-@Composable
-private fun DetailControls(
-    app: AppServices,
-    d: TitleDetail,
-    downloadsDenied: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val scope = rememberCoroutineScope()
-    var auto by remember(d.id) { mutableStateOf(d.autoDownload) }
-    var folder by remember(d.id) { mutableStateOf(d.folder ?: d.folders.firstOrNull() ?: "Library") }
-    var folders by remember(d.id) { mutableStateOf(d.folders.ifEmpty { listOf(folder) }) }
-    var provider by remember(d.id) { mutableStateOf(d.provider) }
-    var providers by remember(d.id) { mutableStateOf<List<String>>(emptyList()) }
-
-    LaunchedEffect(d.id) {
-        try { folders = app.repo.folders().map { it.name }.ifEmpty { listOf("Library") } } catch (_: Exception) {}
-        try { providers = app.repo.providers(d.id).map { it.group } } catch (_: Exception) {}
-    }
-
-    FlowRow(
-        modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (d.type != "movie" && !downloadsDenied) {
-            GhostChip(label = if (auto) "Auto: on" else "Auto: off", on = auto) {
-                val next = !auto
-                auto = next
-                scope.launch {
-                    try { auto = app.repo.setAuto(d.id, next).autoDownload } catch (_: Exception) { auto = !next }
-                }
-            }
+/** Web seasonChip + year: "S1 · 2013", "OVA · 2023". */
+internal fun seasonLabel(ref: SeasonRef): String {
+    val chip = when {
+        ref.kind == "movie" -> "Movie"
+        ref.kind == "extra" -> when (ref.format?.uppercase(Locale.US)) {
+            "MOVIE" -> "Movie"
+            "OVA" -> "OVA"
+            else -> "Special"
         }
-        GhostChip(label = "📁  $folder", on = false) {
-            if (folders.size > 1) {
-                val next = folders[(folders.indexOf(folder).coerceAtLeast(0) + 1) % folders.size]
-                folder = next
-                scope.launch {
-                    try { folder = app.repo.setFolder(d.id, next).folder } catch (_: Exception) {}
-                }
-            }
-        }
-        // "Auto (best)" is the web's empty-provider label.
-        GhostChip(label = provider ?: "Auto (best)", on = provider != null) {
-            if (providers.isNotEmpty()) {
-                val order: List<String?> = listOf<String?>(null) + providers
-                val next = order[(order.indexOf(provider) + 1).mod(order.size)]
-                provider = next
-                scope.launch {
-                    try { provider = app.repo.setProvider(d.id, next ?: "").provider } catch (_: Exception) {}
-                }
-            }
-        }
+        else -> "Season ${ref.num ?: 1}" + (ref.part?.takeIf { it > 1 }?.let { " Part $it" } ?: "")
     }
-}
-
-/** Web `toast(...)` from sonner (DownloadsScreen.kt:78 uses the same one-liner). */
-private fun toast(msg: String) = top.levitatemedia.renzo.tv.renzoToast(msg)
-
-/**
- * Status vocabulary, transliterated from `tracking-row.tsx:15-23`.
- *
- * These are the server's lowercase TRACK_STATUSES (`tracker.ts:254`). Hub used
- * to send AniList's uppercase enum ("CURRENT"/"REPEATING"), which only exists
- * server-side inside the TO_ANILIST map and never crosses the wire — the guard
- * at `api.ts:1131` dropped it and still answered 200, so every write no-opped.
- *
- * Deliberately NOT shared with AccountScreen's TRACK_OPTIONS: the web keeps two
- * lists in two different orders (`defaults-pane.tsx:25` puts Plan-to-watch
- * before Completed, this one after), and the transliteration rule is 1:1 with
- * each source file rather than tidier than it.
- */
-private val TRACK_STATUS_OPTIONS = listOf(
-    "" to "— Not tracked —",
-    "watching" to "Watching",
-    "completed" to "Completed",
-    "planning" to "Plan to watch",
-    "paused" to "Paused",
-    "dropped" to "Dropped",
-    "rewatching" to "Rewatching",
-)
-
-/** Web `<TrackingRow>`: "Track [status] [progress]/[total] [score]/10 [Sync]". */
-@Composable
-private fun TrackingRow(
-    app: AppServices,
-    titleId: Int,
-    modifier: Modifier = Modifier,
-    revision: Int = 0,
-) {
-    val scope = rememberCoroutineScope()
-    var t by remember(titleId) { mutableStateOf<Tracking?>(null) }
-    var status by remember(titleId) { mutableStateOf("") }
-    var progress by remember(titleId) { mutableStateOf("") }
-    var score by remember(titleId) { mutableStateOf("") }
-    var saving by remember(titleId) { mutableStateOf(false) }
-
-    // `revision` re-reads after a watched-progress change: the server scrobbles
-    // and can escalate the status to "completed" on the final episode
-    // (api.ts:841, api.ts:252-263), so the row would otherwise show a status the
-    // server has already moved on from. Web does this with a react-query
-    // invalidate (detail-view.tsx:178).
-    LaunchedEffect(titleId, revision) {
-        t = try { app.repo.tracking(titleId) } catch (_: Exception) { null }
-    }
-    val tr = t ?: return
-
-    // Seed the editable fields from the response, preferring AniList
-    // (tracking-row.tsx:44-50).
-    LaunchedEffect(tr) {
-        val e = tr.entry
-        status = e?.status ?: ""
-        progress = (e?.progress ?: 0).toString()
-        score = e?.score?.takeIf { it > 0 }?.let { formatScore(it) } ?: ""
-    }
-
-    Row(
-        modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text("Track", color = RenzoColors.MutedForeground, fontSize = 13.sp)
-        if (!tr.connected) {
-            Text(
-                "Connect AniList or MAL in Settings to track",
-                color = RenzoColors.MutedForeground,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            return@Row
-        }
-        SelectBox(
-            value = status,
-            options = TRACK_STATUS_OPTIONS,
-            onSelect = { status = it },
-            modifier = Modifier.width(150.dp),
-        )
-        WebInput(
-            value = progress,
-            onChange = { progress = it.filter { c -> c.isDigit() } },
-            placeholder = "0",
-            modifier = Modifier.width(64.dp),
-            numeric = true,
-        )
-        // The tracker's own episode count, not the local library's
-        // (tracker.ts:288/:308) — the row describes the list entry.
-        tr.entry?.total?.let {
-            Text("/ $it", color = RenzoColors.MutedForeground, fontSize = 13.sp)
-        }
-        WebInput(
-            value = score,
-            onChange = { score = it.filter { c -> c.isDigit() || c == '.' } },
-            placeholder = "/10",
-            modifier = Modifier.width(64.dp),
-            numeric = true,
-        )
-        // An explicit commit, like the web's Sync button. The old chip wrote on
-        // every tap, so cycling from "Not tracked" to "Rewatching" pushed six
-        // separate statuses to the user's real AniList/MAL account.
-        GhostChip(label = if (saving) "Syncing…" else "Sync", on = false) {
-            if (!saving) {
-                saving = true
-                scope.launch {
-                    try {
-                        t = app.repo.setTracking(
-                            titleId,
-                            status = status.takeIf { it.isNotEmpty() },
-                            progress = progress.toIntOrNull() ?: 0,
-                            score = score.takeIf { it.isNotEmpty() }?.toDoubleOrNull(),
-                        )
-                        toast("Tracking synced")
-                    } catch (e: Exception) {
-                        toast(e.message ?: "Tracking sync failed")
-                    } finally {
-                        saving = false
-                    }
-                }
-            }
-        }
-        Text(
-            "Syncs to " + tr.providers.joinToString(" + "),
-            color = RenzoColors.MutedForeground,
-            fontSize = 12.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-/** Trims a whole-number score to "8" rather than "8.0" (web sends String(e.score)). */
-private fun formatScore(v: Double): String =
-    if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString()
-
-/** Web `.tp-ghost`: rounded-full 1dp bordered chip; `on` = primary text/border. */
-@Composable
-private fun GhostChip(label: String, on: Boolean, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .focusRing(focused, 999.dp)
-            .background(
-                if (on) RenzoColors.Primary.copy(alpha = 0.12f) else RenzoColors.Secondary,
-                RoundedCornerShape(999.dp),
-            )
-            .border(
-                1.dp,
-                if (on) RenzoColors.Primary else RenzoColors.Border,
-                RoundedCornerShape(999.dp),
-            )
-            .tvClickable(onFocused = { focused = it }, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) {
-        Text(
-            label,
-            color = if (on) RenzoColors.Primary else RenzoColors.Foreground,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    return chip + (ref.year?.let { " · $it" } ?: "")
 }
