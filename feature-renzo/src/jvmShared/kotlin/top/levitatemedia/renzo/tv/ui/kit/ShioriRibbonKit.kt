@@ -582,30 +582,52 @@ internal fun Modifier.tvFocusTarget(
     .tvClickable(onFocused = onFocused, enabled = enabled, onClick = onClick)
 
 /**
- * Renzo's 18+ ladder as one ribbon control, in the spot and colours of
- * Shiori's 18+ chip: muted "18+ Hidden" when off, amber once a level is
- * allowed. The ladder has four steps where Shiori has two, so it is a select.
+ * Shiori's 18+ chip (feature-shiori LibraryScreen ribbon), copied — keep in
+ * step: muted "18+ Hidden" when adult titles are hidden, an amber "18+ Shown"
+ * once they are on. [onChange] gets the new stored level ("none" / "hentai").
  */
 @Composable
-fun ContentLevelSelect(level: String, onChange: (String) -> Unit) {
+fun AdultToggle(level: String, onChange: (String) -> Unit) {
     val amber = Color(0xFFF59E0B)
-    val shown = level != "none"
-    Box(
-        Modifier
+    val hidden = level == top.levitatemedia.renzo.tv.api.ContentLevel.HIDDEN
+    val isTv = LocalIsTv.current
+    val focus = rememberFocusState()
+    val toggle = {
+        onChange(
+            if (hidden) top.levitatemedia.renzo.tv.api.ContentLevel.SHOWN
+            else top.levitatemedia.renzo.tv.api.ContentLevel.HIDDEN,
+        )
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(if (isTv) 40.dp else 32.dp)
             .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, if (shown) amber.copy(alpha = 0.5f) else RenzoColors.Border, RoundedCornerShape(8.dp))
-            .background(if (shown) amber.copy(alpha = 0.12f) else RenzoColors.Card),
+            .border(1.dp, if (hidden) RenzoColors.Border else amber.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .background(if (hidden) RenzoColors.Card else amber.copy(alpha = 0.12f))
+            .then(
+                if (isTv) {
+                    Modifier
+                        .focusRing(focus.focused, 8.dp)
+                        .tvClickable(onFocused = focus::set, onClick = toggle)
+                } else {
+                    Modifier.clickable(onClick = toggle)
+                },
+            )
+            .padding(horizontal = 10.dp),
     ) {
-        RibbonSelect(
-            options = listOf(
-                SelectOption("none", "18+ Hidden", icon = Icons.Filled.VisibilityOff),
-                SelectOption("ecchi", "18+ up to Ecchi", icon = Icons.Filled.Visibility),
-                SelectOption("erotica", "18+ up to Erotica", icon = Icons.Filled.Visibility),
-                SelectOption("hentai", "18+ up to Hentai", icon = Icons.Filled.Visibility),
-            ),
-            value = level,
-            onChange = onChange,
-            maxTriggerWidth = 160.dp,
+        Icon(
+            if (hidden) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+            contentDescription = null,
+            tint = if (hidden) RenzoColors.MutedForeground else amber,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            if (hidden) "18+ Hidden" else "18+ Shown",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (hidden) RenzoColors.Foreground else amber,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 6.dp),
         )
     }
 }

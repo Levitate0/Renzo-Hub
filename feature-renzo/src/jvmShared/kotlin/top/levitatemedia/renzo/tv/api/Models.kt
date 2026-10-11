@@ -423,12 +423,15 @@ data class Tracking(
     }
 }
 
-/** Cumulative adult-content ladder, mirroring the web client. */
+/**
+ * The 18+ filter — Shiori's single switch (owner, 2026-10-11: the old
+ * ecchi < erotica < hentai ladder is gone; erotica already includes
+ * pornographic titles). "none" = Hidden: any adult tag (ecchi, erotica,
+ * hentai) hides the title. Anything else = Shown. Web twin: content-filter.tsx.
+ */
 object ContentLevel {
-    private val rank = mapOf("none" to 0, "ecchi" to 1, "erotica" to 2, "hentai" to 3)
-    fun allows(level: String, tags: List<String>): Boolean {
-        if (tags.isEmpty()) return true
-        val max = tags.maxOf { rank[it] ?: 0 }
-        return max <= (rank[level] ?: 1)
-    }
+    const val HIDDEN = "none"
+    /** Stored for Shown: the old ladder's top step, so an older build agrees. */
+    const val SHOWN = "hentai"
+    fun allows(level: String, tags: List<String>): Boolean = tags.isEmpty() || level != HIDDEN
 }

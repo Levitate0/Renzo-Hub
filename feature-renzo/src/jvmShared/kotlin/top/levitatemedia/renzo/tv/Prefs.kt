@@ -30,14 +30,16 @@ class Prefs {
         set(v) = p.putStringDurable("session", v)
 
     /**
-     * Adult-content ladder, device-local like the web client's localStorage
-     * (`renzo:contentLevel`): none < ecchi < erotica < hentai.
+     * The 18+ switch, device-local like the web client's localStorage
+     * (`renzo:contentLevel`): "none" = Hidden, "hentai" = Shown. A saved step
+     * from the old ladder (ecchi/erotica) means the user opted in, so it reads
+     * as Shown.
      *
      * Defaults to "none" — a fresh install shows nothing adult until the user
-     * opts in. Matches the web UI, tv-native and the Shiori half.
+     * opts in. Matches the web UI and the Shiori half.
      */
     var contentLevel: String
-        get() = p.getString("contentLevel", "none") ?: "none"
+        get() = (p.getString("contentLevel", "none") ?: "none").let { if (it == "none") it else "hentai" }
         set(v) = p.putString("contentLevel", v)
 
     /**

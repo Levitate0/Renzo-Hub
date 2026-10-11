@@ -31,7 +31,7 @@ class AppServices(
     /** Logged-in user (null until /me or login succeeds). */
     val user = mutableStateOf<PublicUser?>(null)
 
-    /** Device-local adult-content ladder (web parity: none/ecchi/erotica/hentai). */
+    /** Device-local 18+ switch: "none" = Hidden, "hentai" = Shown (web parity). */
     val contentLevel = mutableStateOf(prefs.contentLevel)
 
     /** Topbar search box → Search results screen (web parity). */

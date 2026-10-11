@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -324,8 +325,9 @@ private fun MenuItems(
     // --- personalization ---------------------------------------------------
     SheetItem("Appearance", Icons.Filled.Palette) { onOpenSection("appearance"); onClose() }
     SheetItem(
-        "Show up to: " + contentLevel.replaceFirstChar { it.uppercase() },
-        Icons.Filled.Visibility,
+        // Shiori's user-menu row: "Adult (18+): Hidden / Shown".
+        "Adult (18+): " + if (contentLevel == "none") "Hidden" else "Shown",
+        if (contentLevel == "none") Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
         onClick = onCycleContentLevel,
     )
     SheetDivider()

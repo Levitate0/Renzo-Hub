@@ -415,8 +415,13 @@ private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost:
                 }
             },
             onCycleContentLevel = {
-                val order = listOf("none", "ecchi", "erotica", "hentai")
-                app.setContentLevel(order[(order.indexOf(app.contentLevel.value) + 1) % order.size])
+                app.setContentLevel(
+                    if (app.contentLevel.value == top.levitatemedia.renzo.tv.api.ContentLevel.HIDDEN) {
+                        top.levitatemedia.renzo.tv.api.ContentLevel.SHOWN
+                    } else {
+                        top.levitatemedia.renzo.tv.api.ContentLevel.HIDDEN
+                    },
+                )
             },
             onLogout = doLogout,
             onChangeServer = doChangeServer,

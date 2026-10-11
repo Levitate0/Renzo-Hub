@@ -36,7 +36,7 @@ import top.levitatemedia.renzo.tv.ui.components.MediaGrid
 import top.levitatemedia.renzo.tv.ui.components.MediaRow
 import top.levitatemedia.renzo.tv.ui.components.isHidden
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
-import top.levitatemedia.renzo.tv.ui.kit.ContentLevelSelect
+import top.levitatemedia.renzo.tv.ui.kit.AdultToggle
 import top.levitatemedia.renzo.tv.ui.kit.SpotlightHero
 import top.levitatemedia.renzo.tv.ui.kit.SpotlightItem
 
@@ -211,7 +211,7 @@ private fun ContentRibbon(app: AppServices) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
     ) {
-        ContentLevelSelect(app.contentLevel.value) { app.setContentLevel(it) }
+        AdultToggle(app.contentLevel.value) { app.setContentLevel(it) }
     }
 }
 

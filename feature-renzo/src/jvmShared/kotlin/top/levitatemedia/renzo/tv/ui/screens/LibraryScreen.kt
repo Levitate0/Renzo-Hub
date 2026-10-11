@@ -46,7 +46,7 @@ import top.levitatemedia.renzo.tv.ui.components.HiddenByFilterNote
 import top.levitatemedia.renzo.tv.ui.components.isHidden
 import top.levitatemedia.renzo.tv.ui.kit.CARD_SIZES
 import top.levitatemedia.renzo.tv.ui.kit.CardSizePref
-import top.levitatemedia.renzo.tv.ui.kit.ContentLevelSelect
+import top.levitatemedia.renzo.tv.ui.kit.AdultToggle
 import top.levitatemedia.renzo.tv.ui.kit.FieldLabel
 import top.levitatemedia.renzo.tv.ui.kit.LocalIsTv
 import top.levitatemedia.renzo.tv.ui.kit.RenzoButton
@@ -263,7 +263,7 @@ private fun LibraryRibbon(
             onChange = onList,
             triggerWidth = if (sm) 160.dp else 128.dp,
         )
-        ContentLevelSelect(contentLevel, onContentLevel)
+        AdultToggle(contentLevel, onContentLevel)
 
         // Right cluster, pushed right on a wide window (the web's ml-auto).
         if (wide) Spacer(Modifier.weight(1f))

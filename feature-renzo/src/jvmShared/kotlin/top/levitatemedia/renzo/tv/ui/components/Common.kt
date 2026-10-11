@@ -344,23 +344,15 @@ fun contentCatsOf(item: CardItem): List<String> {
 fun isHidden(item: CardItem, level: String): Boolean =
     !ContentLevel.allows(level, contentCatsOf(item))
 
-/** The lowest level that shows every item in [items] (web levelToShow). */
-fun levelToShow(items: List<CardItem>): String {
-    val rank = mapOf("ecchi" to 1, "erotica" to 2, "hentai" to 3)
-    val max = items.flatMap { contentCatsOf(it) }.maxOfOrNull { rank[it] ?: 0 } ?: 0
-    return listOf("none", "ecchi", "erotica", "hentai")[max]
-}
-
 /**
- * "2 titles hidden by the 18+ filter · Show up to Ecchi" above the Library and
- * Search grids — raises the level just far enough to show them (owner,
- * 2026-10-11: a saved series that vanished without a word looked like a bug).
- * Web twin: media-grid.tsx HiddenNote.
+ * "2 titles hidden by the 18+ filter · Show 18+" above the Library and Search
+ * grids — one click turns adult titles on (owner, 2026-10-11: a saved series
+ * that vanished without a word looked like a bug). Web twin: media-grid.tsx
+ * HiddenNote.
  */
 @Composable
 fun HiddenByFilterNote(app: AppServices, hidden: List<CardItem>, modifier: Modifier = Modifier) {
     if (hidden.isEmpty()) return
-    val next = levelToShow(hidden)
     Row(modifier.padding(vertical = 6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Text(
             "${hidden.size} title${if (hidden.size == 1) "" else "s"} hidden by the 18+ filter · ",
@@ -368,96 +360,21 @@ fun HiddenByFilterNote(app: AppServices, hidden: List<CardItem>, modifier: Modif
             fontSize = 12.sp,
         )
         Text(
-            when (next) { "ecchi" -> "Show up to Ecchi"; "erotica" -> "Show up to Erotica"; else -> "Show all" },
+            "Show 18+",
             color = RenzoColors.Primary,
             fontSize = 12.sp,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
             modifier = Modifier
                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                .kitClickable(radius = 4.dp) { app.setContentLevel(next) },
+                .kitClickable(radius = 4.dp) { app.setContentLevel(ContentLevel.SHOWN) },
         )
     }
 }
 
-private val CONTENT_LADDER = listOf(
-    "none" to "Off",
-    "ecchi" to "Ecchi",
-    "erotica" to "Erotica",
-    "hentai" to "Hentai",
-)
-
-/**
- * The 18+ ladder (content-filter.tsx ContentChips), drawn in Shiori's 18+ chip
- * style: 32dp tall, 8dp corners, a muted card when adult content is hidden and
- * an AMBER wash once it is allowed — the same signal Shiori's "18+ Shown" chip
- * gives, so the two halves of the Hub say "adult content is on" the same way.
- *
- * Kept as four levels rather than collapsed into Shiori's single toggle: the
- * anime side genuinely filters by degree (Ecchi < Erotica < Hentai), and a
- * toggle would throw that setting away.
- */
-@OptIn(ExperimentalLayoutApi::class)
+/** The 18+ switch above Search results (web page.tsx ContentRibbon). */
 @Composable
 fun ContentChips(app: AppServices, modifier: Modifier = Modifier) {
-    val amber = androidx.compose.ui.graphics.Color(0xFFF59E0B)
-    val allowed = app.contentLevel.value != "none"
-    FlowRow(
-        modifier.fillMaxWidth().padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.align(Alignment.CenterVertically).padding(end = 2.dp),
-        ) {
-            androidx.compose.material3.Icon(
-                if (allowed) Icons.Filled.Visibility
-                else Icons.Filled.VisibilityOff,
-                contentDescription = null,
-                tint = if (allowed) amber else RenzoColors.MutedForeground,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                "18+ up to",
-                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                color = if (allowed) amber else RenzoColors.MutedForeground,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 6.dp),
-            )
-        }
-        CONTENT_LADDER.forEach { (id, label) ->
-            val active = app.contentLevel.value == id
-            var focused by remember { mutableStateOf(false) }
-            val shape = RoundedCornerShape(8.dp)
-            // Active "Off" = Shiori's hidden chip; an active level above it =
-            // Shiori's shown (amber) chip; inactive levels stay quiet.
-            val (bg, edge, fg) = when {
-                active && id == "none" -> Triple(RenzoColors.Card, RenzoColors.Border, RenzoColors.Foreground)
-                active -> Triple(amber.copy(alpha = 0.12f), amber.copy(alpha = 0.5f), amber)
-                else -> Triple(
-                    androidx.compose.ui.graphics.Color.Transparent,
-                    RenzoColors.Border.copy(alpha = 0.6f),
-                    if (focused) RenzoColors.Foreground else RenzoColors.MutedForeground,
-                )
-            }
-            Box(
-                Modifier
-                    .height(32.dp)
-                    .clip(shape)
-                    .focusRing(focused, 8.dp)
-                    .background(bg, shape)
-                    .border(1.dp, if (focused && !active) RenzoColors.Primary else edge, shape)
-                    .tvClickable(onFocused = { focused = it }, onClick = { app.setContentLevel(id) })
-                    .padding(horizontal = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label,
-                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                    color = fg,
-                    maxLines = 1,
-                )
-            }
-        }
+    Row(modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        top.levitatemedia.renzo.tv.ui.kit.AdultToggle(app.contentLevel.value) { app.setContentLevel(it) }
     }
 }
