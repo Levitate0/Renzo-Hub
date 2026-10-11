@@ -433,6 +433,13 @@ fun ReaderScreen(
                         onPosition = vm::onPosition,
                         onImageLoaded = vm::onImageLoaded,
                         onNearEnd = vm::maybeAppendNext,
+                        lookaheadScreens = {
+                            if (vm.nextNeedsStream(state.segments.lastOrNull()?.chapterNumber)) {
+                                CONTINUOUS_PREFETCH_SCREENS_STREAM
+                            } else {
+                                CONTINUOUS_PREFETCH_SCREENS
+                            }
+                        },
                         onNearStart = vm::maybePrependPrev,
                         onRetryAppend = vm::retryAppend,
                         onToggleChrome = { chromeVisible = !chromeVisible },
@@ -451,6 +458,7 @@ fun ReaderScreen(
                         onPosition = vm::onPosition,
                         onImageLoaded = vm::onImageLoaded,
                         onPrefetchNext = { vm.neighborChapter(1)?.number?.let(vm::prefetchChapter) },
+                        prefetchPages = if (vm.nextNeedsStream(state.chapterNumber)) PAGED_PREFETCH_PAGES_STREAM else PAGED_PREFETCH_PAGES,
                         onToggleChrome = { chromeVisible = !chromeVisible },
                         onNextChapter = { vm.goToChapter(1) },
                         onPrevChapter = { vm.goToChapter(-1) },
@@ -747,6 +755,12 @@ private const val FOCUS_RETRY_FRAMES = 12
 
 private const val CONTINUOUS_PREFETCH_SCREENS = 1.5f
 private const val PAGED_PREFETCH_PAGES = 2
+// A next chapter that has to be streamed live from the source is the slow path
+// (page list from the source site, sometimes through a Cloudflare solver), so
+// it starts loading further ahead. Downloaded / on-device chapters open in
+// well under the short distance and keep it.
+private const val CONTINUOUS_PREFETCH_SCREENS_STREAM = 4f
+private const val PAGED_PREFETCH_PAGES_STREAM = 6
 
 private const val KIND_PAGE = 0
 private const val KIND_DIVIDER = 1
@@ -764,6 +778,8 @@ private fun ContinuousReader(
     onPosition: (Int, Int) -> Unit,
     onImageLoaded: (Int, Int) -> Unit,
     onNearEnd: (Int) -> Unit,
+    /** How many screens before the end of what's loaded to pull the next chapter. */
+    lookaheadScreens: () -> Float,
     onNearStart: () -> Unit,
     onRetryAppend: () -> Unit,
     onToggleChrome: () -> Unit,
@@ -883,12 +899,16 @@ private fun ContinuousReader(
             // final page is on screen, allow for the end block beneath it —
             // it is deliberately one viewport tall.
             val viewport = info.viewportEndOffset
+            val ahead = lookaheadScreens()
+            // Items past the last visible one are unmeasured, so a long
+            // lookahead also counts them as at least a screen each.
+            val unseen = strip.size - 1 - (last?.index ?: 0)
             val near = when {
                 last == null || viewport <= 0 -> false
                 last.index == strip.size - 1 ->
-                    (last.offset + last.size) - viewport < viewport * CONTINUOUS_PREFETCH_SCREENS
-                last.index == strip.size - 2 ->
-                    (last.offset + last.size) < viewport * CONTINUOUS_PREFETCH_SCREENS
+                    (last.offset + last.size) - viewport < viewport * ahead
+                unseen.toFloat() < ahead ->
+                    (last.offset + last.size) - viewport + viewport * unseen < viewport * ahead
                 else -> false
             }
             // Segment of the last page above the boundary — "what chapter does
@@ -1222,6 +1242,8 @@ private fun PagedReader(
     onPosition: (Int, Int) -> Unit,
     onImageLoaded: (Int, Int) -> Unit,
     onPrefetchNext: () -> Unit,
+    /** Pages before the end at which the next chapter starts resolving. */
+    prefetchPages: Int,
     onToggleChrome: () -> Unit,
     onNextChapter: () -> Unit,
     onPrevChapter: () -> Unit,
@@ -1247,11 +1269,11 @@ private fun PagedReader(
             if (slot < contentSlots) {
                 val page = if (doubled) (slot * 2 + 1).coerceAtMost(pageCount - 1) else slot
                 onPosition(0, page)
-                // Two pages from the end, start resolving the next chapter so
-                // the turn is instant instead of a spinner. Same distance as
-                // the continuous reader, and equally nothing is fetched for a
-                // reader who stops before then.
-                if (pageCount - 1 - page <= PAGED_PREFETCH_PAGES) onPrefetchNext()
+                // Near the end, start resolving the next chapter so the turn
+                // is instant instead of a spinner: two pages out for a
+                // downloaded one, six for one that must be streamed. Nothing
+                // is fetched for a reader who stops before then.
+                if (pageCount - 1 - page <= prefetchPages) onPrefetchNext()
             }
         }
     }

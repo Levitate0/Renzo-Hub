@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.math.floor
 
@@ -145,6 +146,9 @@ data class ReaderUiState(
 fun trimNumber(n: Double): String =
     if (n == floor(n) && !n.isInfinite()) n.toLong().toString() else n.toString()
 
+/** How old the reader's chapter list may get before a segment build re-reads it. */
+private const val CHAPTER_STATE_TTL_MS = 15_000L
+
 /**
  * Loads a chapter's pages from the best available source (offline bytes →
  * downloaded server file → live stream), tracks the current page, reports
@@ -194,6 +198,16 @@ class ReaderViewModel(
      * `freshStreamRef` (page.tsx:325-330, 549-552).
      */
     private var freshStreamFor: Double? = null
+
+    /**
+     * When the chapter list (and with it each chapter's downloaded/streamed
+     * state) was last read from the server. The list used to be read once per
+     * open, so a chapter that finished downloading mid-session kept streaming
+     * from the source, and one whose file was removed kept failing. Every
+     * segment build re-reads it once it is older than [CHAPTER_STATE_TTL_MS].
+     */
+    private var chaptersFetchedAt = 0L
+    private val chapterListLock = kotlinx.coroutines.sync.Mutex()
     private val loadedDims = ArrayList<Pair<Int, Int>>()
 
     init {
@@ -280,6 +294,7 @@ class ReaderViewModel(
                     val api = app.network.currentApi()
                     val list = runCatching { api?.readerChapters(seriesId) }.getOrNull()
                     if (list != null) {
+                        chaptersFetchedAt = System.currentTimeMillis()
                         _state.update {
                             it.copy(
                                 chapters = list.chapters,
@@ -352,7 +367,50 @@ class ReaderViewModel(
     }
 
     /** Resolve a chapter's pages: saved-on-device → downloaded on the server → live stream. */
-    private suspend fun buildSegment(chapter: ReaderChapterDto): SegResult {
+    /**
+     * [stale] as the server sees it now: re-reads the chapter list when ours is
+     * older than [CHAPTER_STATE_TTL_MS], so each chapter is read from wherever
+     * is fastest at the moment it is opened — the downloaded file if it has one
+     * by now, a live stream if it doesn't (any more).
+     */
+    private suspend fun freshChapter(stale: ReaderChapterDto): ReaderChapterDto {
+        if (previewMihonId != null) return stale
+        if (System.currentTimeMillis() - chaptersFetchedAt > CHAPTER_STATE_TTL_MS) {
+            chapterListLock.withLock {
+                if (System.currentTimeMillis() - chaptersFetchedAt <= CHAPTER_STATE_TTL_MS) return@withLock
+                val api = app.network.currentApi() ?: return@withLock
+                runCatching { api.readerChapters(seriesId) }.getOrNull()?.let { list ->
+                    chaptersFetchedAt = System.currentTimeMillis()
+                    _state.update { it.copy(chapters = list.chapters) }
+                }
+            }
+        }
+        return _state.value.chapters.firstOrNull { it.number == stale.number } ?: stale
+    }
+
+    /**
+     * True when the chapter after [afterNumber] will have to be streamed live
+     * from the source (not on this device, not downloaded on the server) — the
+     * slow path, so the reader starts loading it further ahead.
+     */
+    fun nextNeedsStream(afterNumber: Double?): Boolean {
+        if (previewMihonId != null) return true
+        val chapters = _state.value.chapters
+        // Asked on every scroll frame: answer from the last computation while
+        // the chapter list is the same instance (the offline lookup decodes
+        // the download manifest).
+        nextStreamMemo?.let { (list, after, answer) -> if (list === chapters && after == afterNumber) return answer }
+        val i = chapters.indexOfFirst { it.number == afterNumber }
+        val next = chapters.getOrNull(i + 1)?.takeIf { i >= 0 }
+        val answer = next != null && !next.locked && next.filename == null &&
+            app.offline.listChapters(seriesId).none { it.chapterKey == chapterKey(seriesId, next.number) }
+        nextStreamMemo = Triple(chapters, afterNumber, answer)
+        return answer
+    }
+    private var nextStreamMemo: Triple<List<ReaderChapterDto>, Double?, Boolean>? = null
+
+    private suspend fun buildSegment(staleChapter: ReaderChapterDto): SegResult {
+        var chapter = staleChapter
         val number = chapter.number
         val name = chapter.name.ifBlank { "Chapter ${trimNumber(number)}" }
 
@@ -411,14 +469,17 @@ class ReaderViewModel(
         if (api == null || base == null)
             return SegResult.Failed("This chapter isn't saved offline and the server is unreachable.")
 
+        chapter = freshChapter(chapter)
         if (chapter.locked) return SegResult.Locked(chapter.url)
 
         val filename = chapter.filename
-        if (filename != null) {
-            val attempt = runCatching { api.chapterInfo(seriesId, encodeFilename(filename)) }
-            val info = attempt.getOrNull()
-            if (info == null) return SegResult.Failed(describeFailure(attempt.exceptionOrNull()))
-            if (info.pageCount == 0) return SegResult.Failed("The server reported no pages for this chapter.")
+        // A downloaded file that can't be opened (removed, or the archive is
+        // unreadable) falls through to streaming the chapter rather than
+        // stranding the reader on an error — the server clears the stale
+        // filename on its side (missing-chapter self-heal).
+        val info = filename?.let { runCatching { api.chapterInfo(seriesId, encodeFilename(it)) }.getOrNull() }
+            ?.takeIf { it.pageCount > 0 }
+        if (filename != null && info != null) {
             val dims = (0 until info.pageCount).map { i ->
                 info.pages.firstOrNull { it.index == i }?.let { p ->
                     val w = p.width ?: 0
