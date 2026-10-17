@@ -85,3 +85,52 @@ data class SetCadenceResponseDto(
     val releaseCadenceDays: Int? = null,
     val isUserSet: Boolean = false,
 )
+
+/**
+ * GET /api/system/health (SystemHealthController, owner only) — mirrors
+ * RenzoFrontend types.ts SystemHealth. Drives the Engine panel.
+ */
+@Serializable
+data class SystemHealthDto(
+    val engine: EngineHealthDto? = null,
+    val downloads: DownloadQueueHealthDto = DownloadQueueHealthDto(),
+    val background: BackgroundQueueHealthDto = BackgroundQueueHealthDto(),
+)
+
+@Serializable
+data class EngineHealthDto(
+    val running: Boolean = false,
+    val responding: Boolean = false,
+    val busyWorkers: Int? = null,
+    val workers: Int? = null,
+    val lastCompletedSecondsAgo: Long? = null,
+    val heapUsedMb: Long? = null,
+    val heapMaxMb: Long? = null,
+    val browserHelpers: Int = 0,
+    val browserHelperLimit: Int = 0,
+    val zombieHelpers: Int = 0,
+    val startedAt: String? = null,
+    val restartsSinceAppStart: Int = 0,
+    val lastRestartAt: String? = null,
+    val lastRestartReason: String? = null,
+)
+
+@Serializable
+data class DownloadQueueHealthDto(
+    val slotsInUse: Int = 0,
+    val maxSlots: Int = 0,
+    val perSource: Int = 0,
+    val waitingDue: Int = 0,
+    val waitingLater: Int = 0,
+    val running: Int = 0,
+    val failed: Int = 0,
+    val retries: Int = 0,
+    val retryEveryMinutes: Int = 0,
+    val autoDownloadNewChapters: Boolean = true,
+)
+
+@Serializable
+data class BackgroundQueueHealthDto(
+    val slotsInUse: Int = 0,
+    val maxSlots: Int = 0,
+)

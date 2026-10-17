@@ -139,6 +139,15 @@ fun StatusScreen(onOpenSeries: (String) -> Unit = {}) {
     LaunchedEffect(Unit) {
         level = runCatching { api?.me()?.level }.getOrNull() ?: UserLevel.USER
     }
+    // Engine panel (owner only) — web: useSystemHealth, refetchInterval 10 s.
+    var health by remember { mutableStateOf<app.renzoshiori.client.data.model.SystemHealthDto?>(null) }
+    LaunchedEffect(canOwner) {
+        if (!canOwner) return@LaunchedEffect
+        while (true) {
+            runCatching { api?.systemHealth() }.getOrNull()?.let { health = it }
+            kotlinx.coroutines.delay(10_000)
+        }
+    }
     LaunchedEffect(effectiveViewAll, reloadKey) {
         series = null
         providers = null
@@ -209,6 +218,15 @@ fun StatusScreen(onOpenSeries: (String) -> Unit = {}) {
                     }
                 }
                 Spacer(Modifier.height(24.dp))
+            }
+
+            // ── Engine + download queue (owner only) — web: <EnginePanel/> ──
+            val h = health
+            if (canOwner && h != null) {
+                item(key = "engine") {
+                    EnginePanel(h, statusWide)
+                    Spacer(Modifier.height(24.dp))
+                }
             }
 
             // ── Summary tiles — web: `grid gap-3 lg:grid-cols-4`; a wide window

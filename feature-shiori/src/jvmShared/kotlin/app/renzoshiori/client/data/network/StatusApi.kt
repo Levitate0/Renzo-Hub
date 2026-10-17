@@ -6,6 +6,7 @@ import app.renzoshiori.client.data.model.SeriesHealthDto
 import app.renzoshiori.client.data.model.SetCadenceRequestDto
 import app.renzoshiori.client.data.model.SetCadenceResponseDto
 import app.renzoshiori.client.data.model.StatusSummaryDto
+import app.renzoshiori.client.data.model.SystemHealthDto
 import app.renzoshiori.client.data.model.UserDto
 import okhttp3.ResponseBody
 import retrofit2.http.Body
@@ -41,6 +42,10 @@ interface StatusApi {
         @Path("id") seriesId: String,
         @Body body: SetCadenceRequestDto,
     ): SetCadenceResponseDto
+
+    /** Owner only — the Engine panel (web: statusService.getSystemHealth). */
+    @GET("api/system/health")
+    suspend fun systemHealth(): SystemHealthDto
 
     /** Drives the canAdmin / canOwner gates the web reads from useAuth(). */
     @GET("api/auth/me")
