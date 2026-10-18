@@ -238,6 +238,10 @@ private fun SignedInNavHost(
         route.startsWith("reader/") ||
         route.startsWith("preview/")
 
+    // Live downloads for the command bar's panel. Held here, above the routes,
+    // so the connection survives a trip into the chromeless reader.
+    val liveDownloads = app.renzoshiori.client.ui.components.rememberLiveDownloads()
+
     androidx.compose.foundation.layout.Column(
         modifier = androidx.compose.ui.Modifier.fillMaxSize(),
     ) {
@@ -259,6 +263,8 @@ private fun SignedInNavHost(
                 libraryVm = libraryVm,
                 onAccountAction = handleAccountAction,
                 showSearch = route == "home",
+                liveDownloads = liveDownloads?.value?.values,
+                onOpenSeries = { id -> nav.navigate("series/$id") },
             )
         }
         androidx.compose.foundation.layout.Box(
@@ -392,18 +398,6 @@ private fun SignedInNavHost(
             )
         }
     }
-        // Activity Dock (web activity-dock.tsx): floats bottom-right over
-        // every route, suppressed on the Queue page itself — the page is the
-        // source of truth there — and on the chromeless reader/preview
-        // routes, whose own bottom progress bar it would otherwise cover.
-        app.renzoshiori.client.ui.components.ActivityDock(
-            suppressed = chromeless || (route == "home" && section == Section.Queue.name),
-            onOpenQueue = {
-                section = Section.Queue.name
-                if (route != "home") nav.popBackStack("home", inclusive = false)
-            },
-            modifier = androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomEnd),
-        )
         }
     }
 

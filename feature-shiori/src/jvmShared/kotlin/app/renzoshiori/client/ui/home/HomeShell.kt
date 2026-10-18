@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -1086,9 +1087,14 @@ private fun SectionPillsRow(
         val textOnly = LocalIsTv.current
         Section.entries.forEach { s ->
             val active = s == current
+            // A squeezed row scrolls; keep the current section's pill in view
+            // rather than past the edge (web: section-pills.tsx).
+            val inView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+            LaunchedEffect(active) { if (active) runCatching { inView.bringIntoView() } }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
+                    .bringIntoViewRequester(inView)
                     .clip(RoundedCornerShape(50))
                     .background(if (active) RenzoColors.Primary else Color.Transparent)
                     // fill = null: the active pill paints its own primary
@@ -1153,6 +1159,12 @@ fun ShioriCommandBar(
     onAccountAction: (AccountAction) -> Unit,
     /** The search field + Online pill only mean something on the home sections. */
     showSearch: Boolean,
+    /**
+     * The live download list behind the counters' panel (desktop only; null
+     * on TV, where the counters keep opening the Queue).
+     */
+    liveDownloads: Collection<app.renzoshiori.client.data.network.ActiveDownload>? = null,
+    onOpenSeries: (String) -> Unit = {},
 ) {
     val app = ShioriRuntime.app
     var menuOpen by remember { mutableStateOf(false) }
@@ -1243,7 +1255,12 @@ fun ShioriCommandBar(
                             onToggle = { libraryVm.setOfflineMode(!libraryState.offlineMode) },
                         )
                     }
-                    DownloadStatusBar(metrics) { onSelectSection(Section.Queue) }
+                    DownloadStatusBar(
+                        metrics = metrics,
+                        liveDownloads = liveDownloads,
+                        onOpenSeries = onOpenSeries,
+                        onOpenQueue = { onSelectSection(Section.Queue) },
+                    )
                     Box {
                         UserAvatar(
                             user = user,
@@ -1427,21 +1444,70 @@ private fun DesktopSearchField(
 
 /**
  * download-status.tsx `variant="bar"`: the at-a-glance active/queued/failed
- * counters, one click from the queue.
+ * counters. On desktop they open the live downloads panel (the download icon
+ * ringed with the running downloads' progress); on TV, with no live list,
+ * they go straight to the queue.
  */
 @Composable
-private fun DownloadStatusBar(metrics: DownloadsMetricsDto, onOpenQueue: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .dpadClickable(radius = 8.dp, onClick = onOpenQueue)
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-    ) {
-        StatChip(Icons.Filled.Download, metrics.downloads.toString(), RenzoColors.Blue)
-        StatChip(Icons.Filled.Schedule, metrics.queued.toString(), RenzoColors.Yellow)
-        StatChip(Icons.Filled.Warning, metrics.failed.toString(), RenzoColors.Red)
+private fun DownloadStatusBar(
+    metrics: DownloadsMetricsDto,
+    liveDownloads: Collection<app.renzoshiori.client.data.network.ActiveDownload>?,
+    onOpenSeries: (String) -> Unit,
+    onOpenQueue: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (open) RenzoColors.Secondary.copy(alpha = 0.6f) else Color.Transparent)
+                .dpadClickable(radius = 8.dp) {
+                    if (liveDownloads == null) onOpenQueue() else open = true
+                }
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+        ) {
+            if (liveDownloads == null) {
+                StatChip(Icons.Filled.Download, metrics.downloads.toString(), RenzoColors.Blue)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    app.renzoshiori.client.ui.components.DownloadGlyph(
+                        progress = app.renzoshiori.client.ui.components.overallProgress(liveDownloads),
+                        tint = RenzoColors.Blue,
+                    )
+                    Text(
+                        metrics.downloads.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = RenzoColors.Blue,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                }
+            }
+            StatChip(Icons.Filled.Schedule, metrics.queued.toString(), RenzoColors.Yellow)
+            StatChip(Icons.Filled.Warning, metrics.failed.toString(), RenzoColors.Red)
+        }
+        if (liveDownloads != null) {
+            androidx.compose.material3.DropdownMenu(
+                expanded = open,
+                onDismissRequest = { open = false },
+                offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp),
+                modifier = Modifier.background(RenzoColors.Popover),
+            ) {
+                app.renzoshiori.client.ui.components.DownloadsPanelContent(
+                    downloads = liveDownloads,
+                    metrics = metrics,
+                    onOpenSeries = { id ->
+                        open = false
+                        onOpenSeries(id)
+                    },
+                    onOpenQueue = {
+                        open = false
+                        onOpenQueue()
+                    },
+                )
+            }
+        }
     }
 }
 

@@ -5,7 +5,7 @@ critic and a synthesis pass). Every claim was re-derived from files on disk.
 Parity here is **bidirectional** — a `hub-to-web` row matters as much as a
 `web-to-hub` one. Direction says which surface already has the behaviour.
 
-76 real gaps, 7 differences judged deliberate.
+76 real gaps, 8 differences judged deliberate.
 
 > Ranked by user impact, then by effort. `DONE` rows were closed on 2026-08-21;
 > everything else is open.
@@ -562,3 +562,7 @@ Re-raising these wastes a future session's time. They are correct as they are.
 ### Web has no code-request/poll client and Hub has no browser — the requester/approver split itself
 - **area:** Devices / session management and the TV-approve half (Renzo anime web ↔ Hub anime half)
 - **why it is correct:** No change. Do not add tvLookup/approve/deny to core's TvPairingClient (it is deliberately unauthenticated and must never hold an approver session), and do not add /code or /poll wrappers to renzo/frontend/src/lib/api.ts. Likewise leave LoginScreen.kt:85's leanback default alone — a phone user can type a password, and the password form is one press away on TV anyway (LoginScreen.kt:90 `onUsePassword = { pairing = false }`). Recorded only so a future parity sweep does not read these absences as drift. This does NOT excuse gap 2: the approver flow is the authenticated half and belongs in the Hub's Repo/ApiClient alongside every other cookie-authed call.
+
+### Live downloads panel is desktop-only on Hub; the web shows it on phones too
+- **area:** Command-bar download status (Shiori web download-status.tsx ↔ Hub DownloadsPanel.kt / HomeShell.kt DownloadStatusBar)
+- **why it is correct:** No change. User direction 2026-08-17: Hub phones and TV never show live download progress and never open the ProgressHub SignalR connection (rememberLiveDownloads returns null off desktop). So the web's `variant="icon"` phone button has no Hub twin, and on TV the counters keep going straight to the Queue. The panel itself replaced the floating Activity Dock on 2026-10-17 on both surfaces; do not bring a floating dock back on either.

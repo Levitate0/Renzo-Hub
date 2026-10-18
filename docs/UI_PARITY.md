@@ -37,6 +37,7 @@ Two absolute rules added after the 2026-08-01 review:
 | `home/HomeShell.kt` top bar | `components/comp/layout/command-bar.tsx` (<lg branch) | ✅ hamburger/logo/wordmark/expanding search/pill/avatar (avatar image when set) |
 | `home/HomeShell.kt` drawer | `components/comp/layout/section-pills.tsx` `SectionList` + drawer footer | ✅ all 7 sections incl. native-only Downloads, accent bar, Queue dot+badge, footer = offline pill + download status + GitHub/Discord/Website |
 | `home/HomeShell.kt` account panel | `components/comp/layout/user-menu.tsx` | ✅ slides in from the RIGHT; role badge, OPDS copy (full external URL), every item live, Import Series picker modal, adult toggle |
+| `components/DownloadsPanel.kt` + `home/HomeShell.kt` `DownloadStatusBar` | `components/comp/layout/download-status.tsx` | ✅ desktop: the counters open the live downloads panel (icon ringed with the running downloads' progress, rows open their series, View full queue). Replaced the floating Activity Dock 2026-10-17. TV: counters → Queue. Phone: no live panel (deliberate, see PARITY-GAPS) |
 | `library/LibraryScreen.kt` | `app/library/page.tsx` + `components/comp/series/list-series/*` | 🔄 full port in progress |
 | `browse/BrowseScreen.kt` | `app/cloud-latest/page.tsx` | 🔄 full port in progress (spotlight hero, source picker, add-to-library) |
 | `downloads/DownloadsScreen.kt` | `app/downloads/page.tsx` | 🔄 new screen in progress |

@@ -44,6 +44,7 @@ data class ProgressCardDto(
     val chapterNumber: Double? = null,
     val chapterName: String = "",
     val thumbnailUrl: String? = null,
+    val seriesId: String? = null,
 )
 
 /** SignalR "Progress" payload (backend ProgressState, camelCase, numeric enums). */
@@ -58,24 +59,33 @@ data class ProgressStateDto(
     val errorMessage: String? = null,
 )
 
-/** One visible entry of the activity dock. */
+/** One live entry of the downloads panel. */
 data class ActiveDownload(
     val id: String,
     val title: String,
     val chapterName: String,
     val thumbnailUrl: String?,
     val percentage: Int,
+    val provider: String = "",
+    val seriesId: String? = null,
+    /** Still starting (no page fetched yet) rather than downloading. */
+    val starting: Boolean = false,
 )
 
 /**
  * A minimal SignalR client for the backend's ProgressHub — the same stream the
- * web's ActivityDock consumes (activity-dock.tsx / useDownloadProgress). The
+ * web's downloads panel consumes (download-status.tsx / useDownloadProgress). The
  * JSON hub protocol over a raw OkHttp WebSocket is small enough to speak
  * directly: connect to `/progress?access_token=…` (skip-negotiate, WebSockets
  * transport), send the `{"protocol":"json","version":1}` handshake, then read
  * 0x1E-delimited records; type 1 invocations of target "Progress" carry the
  * ProgressState. A `{"type":6}` ping goes out every 15s so the server's
  * client-timeout never trips.
+ *
+ * On every (re)connect the server first sends "ActiveDownloads", the full list
+ * of what is downloading right now, and it replaces this client's list: a
+ * download that ended while the socket was down used to stay "in progress"
+ * here until the app restarted.
  */
 class ProgressHubClient(
     private val serverUrl: String,
@@ -154,10 +164,38 @@ class ProgressHubClient(
     private fun handleRecord(record: String) {
         val obj = json.parseToJsonElement(record).jsonObject
         if (obj["type"]?.jsonPrimitive?.intOrNull != 1) return
-        if (obj["target"]?.jsonPrimitive?.content != "Progress") return
         val arg = obj["arguments"]?.jsonArray?.firstOrNull() ?: return
-        onProgress(json.decodeFromJsonElement(ProgressStateDto.serializer(), arg))
+        // SignalR matches method names case-insensitively; so does this.
+        when (obj["target"]?.jsonPrimitive?.content?.lowercase()) {
+            "progress" -> onProgress(json.decodeFromJsonElement(ProgressStateDto.serializer(), arg))
+            "activedownloads" -> onSnapshot(
+                arg.jsonArray.mapNotNull {
+                    runCatching { json.decodeFromJsonElement(ProgressStateDto.serializer(), it) }.getOrNull()
+                },
+            )
+        }
     }
+
+    /** The server's list of what is downloading now — replaces ours. */
+    private fun onSnapshot(states: List<ProgressStateDto>) {
+        _downloads.value = states
+            .filter {
+                it.jobType == JOB_TYPE_DOWNLOAD && it.download != null &&
+                    it.progressStatus != STATUS_COMPLETED && it.progressStatus != STATUS_FAILED
+            }
+            .associate { it.id to it.toActive(it.download!!) }
+    }
+
+    private fun ProgressStateDto.toActive(card: ProgressCardDto) = ActiveDownload(
+        id = id,
+        title = card.title,
+        chapterName = card.chapterName,
+        thumbnailUrl = card.thumbnailUrl,
+        percentage = percentage.let { if (it.isFinite()) it else 0.0 }.coerceIn(0.0, 100.0).toInt(),
+        provider = card.provider,
+        seriesId = card.seriesId,
+        starting = progressStatus == STATUS_STARTED,
+    )
 
     /** Mirror of the web's useDownloadProgress reducer. */
     private fun onProgress(p: ProgressStateDto) {
@@ -178,6 +216,9 @@ class ProgressHubClient(
                 thumbnailUrl = existing?.thumbnailUrl ?: card?.thumbnailUrl,
                 percentage = p.percentage.let { if (it.isFinite()) it else 0.0 }
                     .coerceIn(0.0, 100.0).toInt(),
+                provider = existing?.provider ?: card?.provider.orEmpty(),
+                seriesId = existing?.seriesId ?: card?.seriesId,
+                starting = p.progressStatus == STATUS_STARTED,
             ))
         }
     }
@@ -186,6 +227,7 @@ class ProgressHubClient(
         /** SignalR record separator. */
         const val RS = "\u001e"
         const val JOB_TYPE_DOWNLOAD = 6
+        const val STATUS_STARTED = 0
         const val STATUS_COMPLETED = 2
         const val STATUS_FAILED = 3
     }
