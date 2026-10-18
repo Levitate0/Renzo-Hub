@@ -90,6 +90,8 @@ import top.levitatemedia.renzo.hub.core.HubPlatform
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import app.renzoshiori.client.ui.util.screenHeightDp
@@ -787,7 +789,17 @@ internal class BreakStopFling(
     /** A break this close to the middle when a flick starts is the one the reader is parked on. */
     private val slopPx: Float,
 ) : FlingBehavior {
+    /** The strip is being turned by a mouse wheel; kept current by [watchScrollInput]. */
+    internal var wheel = false
+
     override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+        // Compose ends every mouse-wheel scroll with a fling at the wheel's speed
+        // whenever the fling behaviour is a custom one; only its own default is
+        // exempt (ScrollingLogic.onScrollStopped). Through this wrapper every turn
+        // of the wheel coasted on past where the wheel left it, and further the
+        // faster it turned, so wheel scrolling sped up on its own (1.5.10). A
+        // wheel scroll ends where the wheel stops, as it does with the default.
+        if (wheel) return 0f
         if (initialVelocity <= 0f) return with(base) { performFling(initialVelocity) }
         val outer = this
         // Parked on a break (a previous flick stopped there): the flick away
@@ -830,6 +842,32 @@ internal class BreakStopFling(
             .filter { it.contentType == KIND_DIVIDER }
             .map { it.key to (it.offset + it.size / 2f) }
 }
+
+/**
+ * Tells a [BreakStopFling] whether the strip is being turned by a mouse wheel.
+ * It only watches, consuming nothing, and in the Initial pass, so it sees each
+ * notch before the list takes it.
+ */
+internal fun Modifier.watchScrollInput(fling: FlingBehavior): Modifier =
+    if (fling !is BreakStopFling) this
+    else pointerInput(fling) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                when (event.type) {
+                    PointerEventType.Scroll -> fling.wheel = true
+                    // A finger or a mouse dragging the strip. A plain click
+                    // doesn't count: tapping for the menu just after a wheel
+                    // turn must not let that turn end in a fling.
+                    PointerEventType.Move -> if (event.changes.any { it.pressed }) fling.wheel = false
+                    PointerEventType.Press, PointerEventType.Release,
+                    PointerEventType.Enter, PointerEventType.Exit -> Unit
+                    // Trackpad pans, which Compose does fling after.
+                    else -> fling.wheel = false
+                }
+            }
+        }
+    }
 
 @Composable
 private fun ContinuousReader(
@@ -1098,7 +1136,7 @@ private fun ContinuousReader(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement =
                 if (mode == ResolvedMode.VERTICAL) Arrangement.spacedBy(settings.gapPx.dp) else Arrangement.Top,
-            modifier = Modifier.fillMaxHeight().width(contentWidth),
+            modifier = Modifier.fillMaxHeight().width(contentWidth).watchScrollInput(flingBehavior),
         ) {
             items(
                 count = strip.size,
