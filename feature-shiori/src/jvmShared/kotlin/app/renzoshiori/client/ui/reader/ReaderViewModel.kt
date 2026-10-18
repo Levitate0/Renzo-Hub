@@ -341,12 +341,7 @@ class ReaderViewModel(
                             openingLabel = null,
                         )
                     }
-                    if (_state.value.arrivedLabel != null) {
-                        launch {
-                            delay(2000)
-                            _state.update { it.copy(arrivedLabel = null) }
-                        }
-                    }
+                    _state.value.arrivedLabel?.let(::flashArrived)
                 }
                 is SegResult.Locked -> {
                     _state.update {
@@ -756,9 +751,34 @@ class ReaderViewModel(
     fun onPosition(segIndex: Int, page0: Int) {
         val s = _state.value
         val seg = s.segments.getOrNull(segIndex) ?: return
+        val from = s.activeSegment
         if (s.activeSegIndex != segIndex || s.currentPage != page0)
             _state.update { it.copy(activeSegIndex = segIndex, currentPage = page0) }
+        // The strip scrolled from one chapter into another: the same pill a
+        // chapter switch shows, so a new chapter announces itself even to
+        // someone moving too fast to read the break (web: the same, keyed on
+        // the chapter rather than an index for the same reason — a prepend
+        // shifts every index without the reader moving).
+        if (from != null && from.key != seg.key) {
+            flashArrived(seg.name.ifBlank { "Chapter ${trimNumber(seg.chapterNumber)}" })
+        }
         reportProgress(seg, page0)
+    }
+
+    private var arrivedJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Shows the chapter-name pill for two seconds. One timer whoever raised it
+     * — a chapter opening or the strip scrolling into the next one — so a newer
+     * pill is never cut short by an older one's timer.
+     */
+    private fun flashArrived(label: String) {
+        arrivedJob?.cancel()
+        _state.update { it.copy(arrivedLabel = label) }
+        arrivedJob = viewModelScope.launch {
+            delay(2000)
+            _state.update { it.copy(arrivedLabel = null) }
+        }
     }
 
     private fun reportProgress(seg: ReaderSegment, page0: Int) {

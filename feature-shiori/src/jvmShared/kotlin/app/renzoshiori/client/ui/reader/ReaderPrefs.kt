@@ -161,6 +161,8 @@ data class ReaderSettings(
     val infiniteScroll: Boolean = true,
     /** Show a "finished / up next" screen between chapters (paged: its own page). */
     val chapterTransition: Boolean = true,
+    /** Continuous: a flick stops at a chapter break instead of carrying on into the next chapter. */
+    val pauseAtBreaks: Boolean = true,
     val autoMarkRead: Boolean = true,
     /** Clear the streamed-page cache when leaving the reader. */
     val autoClearCache: Boolean = true,
@@ -197,6 +199,7 @@ class ReaderPrefs {
             tapAdvancePct = prefs.getInt(KEY_TAP_ADVANCE, d.tapAdvancePct),
             infiniteScroll = prefs.getBoolean(KEY_INFINITE_SCROLL, d.infiniteScroll),
             chapterTransition = prefs.getBoolean(KEY_CHAPTER_TRANSITION, d.chapterTransition),
+            pauseAtBreaks = prefs.getBoolean(KEY_PAUSE_AT_BREAKS, d.pauseAtBreaks),
             autoMarkRead = prefs.getBoolean(KEY_AUTO_MARK_READ, d.autoMarkRead),
             autoClearCache = prefs.getBoolean(KEY_AUTO_CLEAR_CACHE, d.autoClearCache),
             // One pref per action: anything never written falls back to its
@@ -220,6 +223,7 @@ class ReaderPrefs {
         prefs.putInt(KEY_TAP_ADVANCE, s.tapAdvancePct)
         prefs.putBoolean(KEY_INFINITE_SCROLL, s.infiniteScroll)
         prefs.putBoolean(KEY_CHAPTER_TRANSITION, s.chapterTransition)
+        prefs.putBoolean(KEY_PAUSE_AT_BREAKS, s.pauseAtBreaks)
         prefs.putBoolean(KEY_AUTO_MARK_READ, s.autoMarkRead)
         prefs.putBoolean(KEY_AUTO_CLEAR_CACHE, s.autoClearCache)
         HotkeyAction.entries.forEach { a ->
@@ -259,6 +263,7 @@ class ReaderPrefs {
         private const val KEY_TAP_ADVANCE = "tapAdvancePct"
         private const val KEY_INFINITE_SCROLL = "infiniteScroll"
         private const val KEY_CHAPTER_TRANSITION = "chapterTransition"
+        private const val KEY_PAUSE_AT_BREAKS = "pauseAtBreaks"
         private const val KEY_AUTO_MARK_READ = "autoMarkRead"
         private const val KEY_AUTO_CLEAR_CACHE = "autoClearCache"
         private const val HOTKEY_PREFIX = "hotkey_"

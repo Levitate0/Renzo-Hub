@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,12 +15,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,12 +34,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.util.screenWidthDp
 
 /** "FINISHED" / "UP NEXT" eyebrow — web: text-[11px] uppercase tracking-[0.15em] text-white/35. */
 @Composable
@@ -65,11 +74,127 @@ private fun SecondaryButton(text: String, onClick: () -> Unit, content: (@Compos
 }
 
 /**
+ * A chapter break in the continuous strip — between two chapters, and (with
+ * its buttons, through [content]) at the end of the strip. Web twin:
+ * ChapterBreak in app/reader/page.tsx.
+ *
+ * Made to be noticed mid-scroll. It used to be a few lines of dim 11sp text,
+ * easy to scroll straight past and end up deep in the next chapter without
+ * ever knowing one had ended:
+ * - its own dark surface with the theme accent along both edges, so it stands
+ *   out against any artwork and on every reader background, white included;
+ * - the whole width of the screen (the caller breaks it out of the strip);
+ * - the next chapter's name in large type.
+ *
+ * Height is the caller's: a break between chapters rests at 60% of the screen,
+ * the end of the strip fills it.
+ */
+@Composable
+fun ChapterBreak(
+    finishedLabel: String,
+    nextLabel: String?,
+    modifier: Modifier = Modifier,
+    /** No next chapter at all: say so where "Up next" would be. */
+    caughtUp: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit = {},
+) {
+    val accent = RenzoColors.Primary
+    // web: sm: (640px) steps both chapter names up a size
+    val wide = screenWidthDp() >= 640.dp
+    Column(
+        modifier = modifier
+            // The tint over a solid base, never instead of one: on the white
+            // reader background a translucent edge let the page show through.
+            .background(BreakSurface)
+            .background(
+                Brush.verticalGradient(
+                    0f to accent.copy(alpha = 0.16f),
+                    0.28f to Color.Transparent,
+                    0.72f to Color.Transparent,
+                    1f to accent.copy(alpha = 0.16f),
+                ),
+            )
+            .drawBehind {
+                val edge = 2.dp.toPx()
+                val line = accent.copy(alpha = 0.7f)
+                drawRect(line, size = Size(size.width, edge))
+                drawRect(line, topLeft = Offset(0f, size.height - edge), size = Size(size.width, edge))
+            }
+            .padding(horizontal = 24.dp, vertical = 56.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // web: lucide CheckCircle2, an outlined circle — not the filled disc
+        Icon(Icons.Outlined.CheckCircleOutline, contentDescription = null, tint = accent, modifier = Modifier.size(32.dp))
+        Spacer(Modifier.height(12.dp))
+        BreakEyebrow("Finished")
+        Text(
+            finishedLabel,
+            fontSize = if (wide) 18.sp else 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = ReaderPalette.Text80,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp).widthIn(max = 448.dp),
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(vertical = 24.dp).widthIn(max = 256.dp).fillMaxWidth(),
+        ) {
+            Box(Modifier.weight(1f).height(1.dp).background(ReaderPalette.Hairline15))
+            if (nextLabel != null) {
+                Icon(
+                    Icons.Filled.KeyboardDoubleArrowDown,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.padding(horizontal = 12.dp).size(20.dp),
+                )
+            } else {
+                Spacer(Modifier.width(12.dp))
+            }
+            Box(Modifier.weight(1f).height(1.dp).background(ReaderPalette.Hairline15))
+        }
+        if (nextLabel != null) {
+            BreakEyebrow("Up next")
+            Text(
+                nextLabel,
+                fontSize = if (wide) 30.sp else 24.sp,
+                lineHeight = if (wide) 37.sp else 30.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp).widthIn(max = 512.dp),
+            )
+        } else if (caughtUp) {
+            Text("You're all caught up.", fontSize = 14.sp, color = ReaderPalette.Text50)
+        }
+        content()
+    }
+}
+
+/** The break's own surface — web: #09090b (zinc-950). */
+private val BreakSurface = Color(0xFF09090B)
+
+/** "FINISHED" / "UP NEXT" on a break — web: text-xs font-semibold uppercase tracking-[0.2em] text-white/50. */
+@Composable
+private fun BreakEyebrow(text: String) {
+    Text(
+        text.uppercase(),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 2.4.sp,
+        color = ReaderPalette.Text50,
+        textAlign = TextAlign.Center,
+    )
+}
+
+/**
  * Footer of a continuous chapter. With infinite scroll on, the next chapter is
  * appended before this is reached, so it mostly surfaces at the end of a series
- * or when appending failed. It fills the screen deliberately: a late-shrinking
- * last-page image needs guaranteed scroll distance below it for the page
- * tracker to register the final page and mark the chapter read.
+ * or when appending failed. The caller makes it fill the screen deliberately: a
+ * late-shrinking last-page image needs guaranteed scroll distance below it for
+ * the page tracker to register the final page and mark the chapter read. Same
+ * block as a break, so when the next chapter lands and a break takes its
+ * place, it reads as the same thing.
  */
 @Composable
 fun EndOfChapter(
@@ -87,33 +212,13 @@ fun EndOfChapter(
     appending: Boolean = false,
     onRetryAppend: () -> Unit = {},
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+    ChapterBreak(
+        finishedLabel = chapterLabel,
+        nextLabel = if (hasNext) nextLabel else null,
+        caughtUp = !hasNext,
+        modifier = modifier,
     ) {
-        Eyebrow("Finished")
-        Text(
-            chapterLabel,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = ReaderPalette.Text80,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        if (hasNext && nextLabel != null) {
-            Spacer(Modifier.height(16.dp))
-            Eyebrow("Up next")
-            Text(
-                nextLabel,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = RenzoColors.Primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(32.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (hasPrev) {
                 SecondaryButton("Previous", onPrev) {
@@ -133,7 +238,7 @@ fun EndOfChapter(
             when {
                 appending -> Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 12.dp),
+                    modifier = Modifier.padding(top = 16.dp),
                 ) {
                     CircularProgressIndicator(
                         color = ReaderPalette.Text70,
@@ -141,17 +246,17 @@ fun EndOfChapter(
                         modifier = Modifier.size(12.dp),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Loading the next chapter…", fontSize = 12.sp, color = ReaderPalette.Text35)
+                    Text("Loading the next chapter…", fontSize = 12.sp, color = ReaderPalette.Text40)
                 }
 
                 appendError != null -> Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(top = 12.dp),
+                    modifier = Modifier.padding(top = 16.dp),
                 ) {
                     Text(
                         appendError,
                         fontSize = 12.sp,
-                        color = ReaderPalette.Text35,
+                        color = ReaderPalette.Text40,
                         textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(8.dp))
@@ -161,8 +266,8 @@ fun EndOfChapter(
                 else -> Text(
                     if (infinite) "keep scrolling to continue" else "or tap the right side",
                     fontSize = 12.sp,
-                    color = ReaderPalette.Text35,
-                    modifier = Modifier.padding(top = 12.dp),
+                    color = ReaderPalette.Text40,
+                    modifier = Modifier.padding(top = 16.dp),
                 )
             }
         }
@@ -353,38 +458,37 @@ fun LockedChapterScreen(
     }
 }
 
-/** The "Finished / Up next" divider between two chapters in the continuous strip. */
+/**
+ * The break between two chapters in the continuous strip: [ChapterBreak] at
+ * its resting height, with the hint and a way out — the moment someone
+ * notices a chapter has ended is the moment they may want to stop. Web: the
+ * divider render in app/reader/page.tsx.
+ */
 @Composable
-fun ChapterDivider(finishedLabel: String, nextLabel: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Eyebrow("Finished")
+fun ChapterDivider(
+    finishedLabel: String,
+    nextLabel: String,
+    onExit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ChapterBreak(finishedLabel = finishedLabel, nextLabel = nextLabel, modifier = modifier) {
         Text(
-            finishedLabel,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = ReaderPalette.Text70,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 2.dp),
+            "keep scrolling to continue",
+            fontSize = 12.sp,
+            color = ReaderPalette.Text40,
+            modifier = Modifier.padding(top = 24.dp),
         )
-        Box(
+        // web: mt-3 rounded-full border border-white/15 px-3 py-1 text-xs text-white/60
+        Text(
+            "Back to series",
+            fontSize = 12.sp,
+            color = ReaderPalette.Text60,
             modifier = Modifier
-                .padding(vertical = 12.dp)
-                .width(64.dp)
-                .height(1.dp)
-                .background(Color(0x26FFFFFF)),
-        )
-        Eyebrow("Up next")
-        Text(
-            nextLabel,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = RenzoColors.Primary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 2.dp),
+                .padding(top = 12.dp)
+                .clip(RoundedCornerShape(50))
+                .border(1.dp, ReaderPalette.Hairline15, RoundedCornerShape(50))
+                .clickable(onClick = onExit)
+                .padding(horizontal = 12.dp, vertical = 4.dp),
         )
     }
 }

@@ -8,6 +8,9 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -768,6 +771,66 @@ private const val KIND_END = 2
 
 private data class StripItem(val segIndex: Int, val pageIndex: Int, val kind: Int)
 
+/**
+ * "Stop flicks at chapter breaks": the strip's own fling, except that a forward
+ * flick coasting over a chapter break stops with the break in the middle of
+ * the screen. Web: the momentum stop in app/reader/page.tsx's scroll tracker.
+ *
+ * The break being easy to miss was only half of how people ended up deep in
+ * the next chapter without meaning to; the other half was momentum carrying
+ * them straight through it. Only a fling is involved — a finger still on the
+ * glass drags past a break as usual, and the next flick carries on.
+ */
+internal class BreakStopFling(
+    private val base: FlingBehavior,
+    private val listState: LazyListState,
+    /** A break this close to the middle when a flick starts is the one the reader is parked on. */
+    private val slopPx: Float,
+) : FlingBehavior {
+    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+        if (initialVelocity <= 0f) return with(base) { performFling(initialVelocity) }
+        val outer = this
+        // Parked on a break (a previous flick stopped there): the flick away
+        // from it must not be stopped by the same break a second time.
+        val parked = breaksOnScreen().filter { it.second <= stopLine() + slopPx }.map { it.first }.toSet()
+        var stopped = false
+        val clamped = object : ScrollScope {
+            override fun scrollBy(pixels: Float): Float {
+                if (stopped) return 0f
+                if (pixels > 0f) {
+                    val line = stopLine()
+                    for ((key, center) in breaksOnScreen()) {
+                        if (key in parked) continue
+                        if (center > line && center - pixels <= line) {
+                            // Go only as far as the break's middle. Coming up
+                            // short of what the decay asked for is what ends
+                            // a fling.
+                            stopped = true
+                            return outer.scrollBy(center - line)
+                        }
+                    }
+                }
+                return outer.scrollBy(pixels)
+            }
+        }
+        val left = with(base) { clamped.performFling(initialVelocity) }
+        // Nothing left over after a deliberate stop: leftover velocity goes to
+        // the overscroll effect, which would stretch the strip as if it had
+        // hit the end.
+        return if (stopped) 0f else left
+    }
+
+    private fun stopLine(): Float {
+        val info = listState.layoutInfo
+        return info.viewportStartOffset + info.viewportSize.height / 2f
+    }
+
+    private fun breaksOnScreen(): List<Pair<Any, Float>> =
+        listState.layoutInfo.visibleItemsInfo
+            .filter { it.contentType == KIND_DIVIDER }
+            .map { it.key to (it.offset + it.size / 2f) }
+}
+
 @Composable
 private fun ContinuousReader(
     state: ReaderUiState,
@@ -808,7 +871,8 @@ private fun ContinuousReader(
     // cached failure).
     val loadFailed = remember { mutableStateMapOf<String, Boolean>() }
     val retryTick = remember { mutableStateMapOf<String, Int>() }
-    val placeholderHeight = screenHeightDp() * 0.7f
+    val screenHeight = screenHeightDp()
+    val placeholderHeight = screenHeight * 0.7f
 
     val strip = remember(segments) {
         buildList {
@@ -868,7 +932,15 @@ private fun ContinuousReader(
                     val count = segments.lastOrNull()?.pageCount ?: 0
                     if (last >= 0 && count > 0) onPosition(last, count - 1)
                 }
-                else -> Unit // divider: leave the tracked position alone
+                // A break under the probe is the end of the chapter above it —
+                // the web's "last page above the probe". It used to leave the
+                // position alone, which a flick that skipped a short last page
+                // (and, now, stops on the break) left at one page short of read.
+                else -> {
+                    val prev = item.segIndex - 1
+                    val count = segments.getOrNull(prev)?.pageCount ?: 0
+                    if (prev >= 0 && count > 0) onPosition(prev, count - 1)
+                }
             }
         }
     }
@@ -962,6 +1034,14 @@ private fun ContinuousReader(
         (androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width * widthFraction * scale).toInt(),
     )
     val hScroll = rememberScrollState()
+    val baseFling = ScrollableDefaults.flingBehavior()
+    val stopAtBreaks = settings.pauseAtBreaks && settings.infiniteScroll
+    // A break this close below the middle when a flick starts is the one the
+    // reader is parked on (a finger jitters before it lets go).
+    val breakSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
+    val flingBehavior = remember(baseFling, listState, stopAtBreaks, breakSlopPx) {
+        if (stopAtBreaks) BreakStopFling(baseFling, listState, breakSlopPx) else baseFling
+    }
     val panStepPx = with(LocalDensity.current) { (screenWidth * 0.35f).toPx() }
 
     // D-pad: up/down are the scroll step (the same `tapAdvancePct` a tap uses),
@@ -1014,6 +1094,7 @@ private fun ContinuousReader(
     ) {
         LazyColumn(
             state = listState,
+            flingBehavior = flingBehavior,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement =
                 if (mode == ResolvedMode.VERTICAL) Arrangement.spacedBy(settings.gapPx.dp) else Arrangement.Top,
@@ -1025,6 +1106,9 @@ private fun ContinuousReader(
                     val item = strip[index]
                     "${segments.getOrNull(item.segIndex)?.key ?: item.segIndex}:${item.kind}:${item.pageIndex}"
                 },
+                // Pages reuse page slots, breaks reuse break slots — and the
+                // flick stop reads it to find the breaks on screen.
+                contentType = { index -> strip[index].kind },
             ) { index ->
                 val item = strip[index]
                 val seg = segments.getOrNull(item.segIndex)
@@ -1195,33 +1279,40 @@ private fun ContinuousReader(
                     // into a narrow strip wraps the labels one letter per
                     // line — requiredWidth breaks out of the strip's
                     // constraint and centers them on the screen.
+                    //
+                    // A break rests at 60% of the screen: one nobody scrolls
+                    // past without noticing, but not a whole screen of nothing
+                    // at every chapter. (The web starts one at full height when
+                    // it lands under a reader parked on the end block, so that
+                    // block keeps its shape; here it simply arrives at rest.)
                     item.kind == KIND_DIVIDER && seg != null -> ChapterDivider(
                         finishedLabel = segments.getOrNull(item.segIndex - 1)?.name ?: "",
                         nextLabel = seg.name,
-                        modifier = Modifier.requiredWidth(screenWidth),
+                        onExit = onExit,
+                        modifier = Modifier.requiredWidth(screenWidth).heightIn(min = screenHeight * 0.6f),
                     )
 
                     else -> {
                         val last = segments.lastOrNull()
                         // Full-screen like the web's sentinel page: guaranteed scroll
                         // distance below the final image is what lets the tracker
-                        // register the last page and mark the chapter read.
-                        Box(modifier = Modifier.requiredWidth(screenWidth).fillParentMaxHeight()) {
-                            EndOfChapter(
-                                chapterLabel = last?.name ?: "",
-                                nextLabel = state.nextChapterName,
-                                hasNext = state.hasNext,
-                                hasPrev = state.hasPrev,
-                                infinite = settings.infiniteScroll,
-                                onNext = onNextChapter,
-                                onPrev = onPrevChapter,
-                                onExit = onExit,
-                                appendError = state.appendError,
-                                appending = state.appending,
-                                onRetryAppend = onRetryAppend,
-                                modifier = Modifier.align(Alignment.Center),
-                            )
-                        }
+                        // register the last page and mark the chapter read. A
+                        // minimum rather than an exact height, so a short
+                        // landscape screen grows the block instead of clipping it.
+                        EndOfChapter(
+                            chapterLabel = last?.name ?: "",
+                            nextLabel = state.nextChapterName,
+                            hasNext = state.hasNext,
+                            hasPrev = state.hasPrev,
+                            infinite = settings.infiniteScroll,
+                            onNext = onNextChapter,
+                            onPrev = onPrevChapter,
+                            onExit = onExit,
+                            appendError = state.appendError,
+                            appending = state.appending,
+                            onRetryAppend = onRetryAppend,
+                            modifier = Modifier.requiredWidth(screenWidth).heightIn(min = screenHeight),
+                        )
                     }
                 }
             }

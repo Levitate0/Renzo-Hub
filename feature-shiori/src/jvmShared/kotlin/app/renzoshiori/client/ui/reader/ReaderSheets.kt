@@ -92,6 +92,7 @@ internal object ReaderPalette {
     val Sheet = Color(0xFF18181B)        // bg-zinc-900
     val Field = Color(0xFF27272A)        // bg-zinc-800
     val Hairline = Color(0x1AFFFFFF)     // border-white/10
+    val Hairline15 = Color(0x26FFFFFF)   // border-white/15, bg-white/15
     val Chrome = Color(0xB3000000)       // bg-black/70
     val Text = Color(0xFFFFFFFF)
     val Text85 = Color(0xD9FFFFFF)
@@ -538,6 +539,15 @@ private fun ReaderSettingsBody(
             label = "Infinite scroll (roll into next chapter)",
             checked = settings.infiniteScroll,
             onChange = { v -> onSettingsChange { it.copy(infiniteScroll = v) } },
+        )
+    }
+    // A remote scrolls in steps, never flicks — nothing for this to stop.
+    if (continuous && settings.infiniteScroll && !isTv) {
+        SettingsToggle(
+            isTv = isTv,
+            label = "Stop flicks at chapter breaks",
+            checked = settings.pauseAtBreaks,
+            onChange = { v -> onSettingsChange { it.copy(pauseAtBreaks = v) } },
         )
     }
     SettingsToggle(
