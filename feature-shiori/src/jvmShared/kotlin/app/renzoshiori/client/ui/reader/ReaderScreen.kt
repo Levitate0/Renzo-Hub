@@ -8,9 +8,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.FlingBehavior
-import androidx.compose.foundation.gestures.ScrollScope
-import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -90,8 +88,10 @@ import top.levitatemedia.renzo.hub.core.HubPlatform
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import app.renzoshiori.client.ui.util.screenHeightDp
@@ -104,6 +104,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Velocity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
@@ -115,6 +116,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -774,62 +776,83 @@ private const val KIND_END = 2
 private data class StripItem(val segIndex: Int, val pageIndex: Int, val kind: Int)
 
 /**
- * "Stop flicks at chapter breaks": the strip's own fling, except that a forward
- * flick coasting over a chapter break stops with the break in the middle of
- * the screen. Web: the momentum stop in app/reader/page.tsx's scroll tracker.
+ * "Stop flicks at chapter breaks": a forward flick coasting over a chapter break
+ * stops with the break in the middle of the screen. Web: the momentum stop in
+ * app/reader/page.tsx's scroll tracker.
  *
  * The break being easy to miss was only half of how people ended up deep in
  * the next chapter without meaning to; the other half was momentum carrying
  * them straight through it. Only a fling is involved — a finger still on the
  * glass drags past a break as usual, and the next flick carries on.
+ *
+ * A nested-scroll connection on the strip, not a fling behaviour of its own.
+ * Compose runs a custom fling behaviour at the end of every mouse-wheel scroll
+ * (only its own default is exempt: ScrollingLogic.onScrollStopped), so with
+ * one every turn of the wheel coasted on (1.5.10), and telling the wheel from
+ * a drag by watching pointer events (1.5.11) still let flings through on
+ * Windows. With the default behaviour that call stays Compose's: a wheel
+ * never flings, and a real fling (finger, mouse drag, trackpad) reaches this
+ * connection as onPreFling and then a SideEffect scroll per frame.
  */
-internal class BreakStopFling(
-    private val base: FlingBehavior,
+internal class BreakStop(
     private val listState: LazyListState,
     /** A break this close to the middle when a flick starts is the one the reader is parked on. */
     private val slopPx: Float,
-) : FlingBehavior {
-    /** The strip is being turned by a mouse wheel; kept current by [watchScrollInput]. */
-    internal var wheel = false
+    private val scope: CoroutineScope,
+) : NestedScrollConnection {
+    /** A forward fling is coasting, and [parked] are the breaks it set off from. */
+    private var flinging = false
+    private var parked: Set<Any> = emptySet()
+    /** That fling reached a break: the strip stays put until the fling is cancelled. */
+    private var stopped = false
 
-    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
-        // Compose ends every mouse-wheel scroll with a fling at the wheel's speed
-        // whenever the fling behaviour is a custom one; only its own default is
-        // exempt (ScrollingLogic.onScrollStopped). Through this wrapper every turn
-        // of the wheel coasted on past where the wheel left it, and further the
-        // faster it turned, so wheel scrolling sped up on its own (1.5.10). A
-        // wheel scroll ends where the wheel stops, as it does with the default.
-        if (wheel) return 0f
-        if (initialVelocity <= 0f) return with(base) { performFling(initialVelocity) }
-        val outer = this
+    override suspend fun onPreFling(available: Velocity): Velocity {
+        // Nested-scroll deltas point the way the finger moved, so forward is negative.
+        flinging = available.y < 0f
+        stopped = false
         // Parked on a break (a previous flick stopped there): the flick away
         // from it must not be stopped by the same break a second time.
-        val parked = breaksOnScreen().filter { it.second <= stopLine() + slopPx }.map { it.first }.toSet()
-        var stopped = false
-        val clamped = object : ScrollScope {
-            override fun scrollBy(pixels: Float): Float {
-                if (stopped) return 0f
-                if (pixels > 0f) {
-                    val line = stopLine()
-                    for ((key, center) in breaksOnScreen()) {
-                        if (key in parked) continue
-                        if (center > line && center - pixels <= line) {
-                            // Go only as far as the break's middle. Coming up
-                            // short of what the decay asked for is what ends
-                            // a fling.
-                            stopped = true
-                            return outer.scrollBy(center - line)
-                        }
-                    }
-                }
-                return outer.scrollBy(pixels)
+        parked = if (!flinging) emptySet()
+        else breaksOnScreen().filter { it.second <= stopLine() + slopPx }.mapTo(HashSet()) { it.first }
+        return Velocity.Zero
+    }
+
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        if (source != NestedScrollSource.SideEffect) {
+            // A finger, a mouse or the wheel took over: no fling is coasting.
+            flinging = false
+            stopped = false
+            return Offset.Zero
+        }
+        if (!flinging) return Offset.Zero
+        if (stopped) return available
+        val forward = -available.y
+        if (forward <= 0f) return Offset.Zero
+        val line = stopLine()
+        for ((key, center) in breaksOnScreen()) {
+            if (key in parked) continue
+            if (center > line && center - forward <= line) {
+                stopped = true
+                // End the fling rather than let it coast on unseen: a scroll
+                // still in progress turns the next tap into a "stop" tap, and
+                // the break's own buttons wouldn't take a press.
+                scope.launch { listState.stopScroll() }
+                // The strip moves only as far as the break's middle; the rest
+                // of this frame is consumed here.
+                return Offset(0f, available.y + (center - line))
             }
         }
-        val left = with(base) { clamped.performFling(initialVelocity) }
+        return Offset.Zero
+    }
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+        val held = stopped
+        flinging = false
+        stopped = false
         // Nothing left over after a deliberate stop: leftover velocity goes to
         // the overscroll effect, which would stretch the strip as if it had
         // hit the end.
-        return if (stopped) 0f else left
+        return if (held) available else Velocity.Zero
     }
 
     private fun stopLine(): Float {
@@ -842,32 +865,6 @@ internal class BreakStopFling(
             .filter { it.contentType == KIND_DIVIDER }
             .map { it.key to (it.offset + it.size / 2f) }
 }
-
-/**
- * Tells a [BreakStopFling] whether the strip is being turned by a mouse wheel.
- * It only watches, consuming nothing, and in the Initial pass, so it sees each
- * notch before the list takes it.
- */
-internal fun Modifier.watchScrollInput(fling: FlingBehavior): Modifier =
-    if (fling !is BreakStopFling) this
-    else pointerInput(fling) {
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                when (event.type) {
-                    PointerEventType.Scroll -> fling.wheel = true
-                    // A finger or a mouse dragging the strip. A plain click
-                    // doesn't count: tapping for the menu just after a wheel
-                    // turn must not let that turn end in a fling.
-                    PointerEventType.Move -> if (event.changes.any { it.pressed }) fling.wheel = false
-                    PointerEventType.Press, PointerEventType.Release,
-                    PointerEventType.Enter, PointerEventType.Exit -> Unit
-                    // Trackpad pans, which Compose does fling after.
-                    else -> fling.wheel = false
-                }
-            }
-        }
-    }
 
 @Composable
 private fun ContinuousReader(
@@ -1072,14 +1069,11 @@ private fun ContinuousReader(
         (androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width * widthFraction * scale).toInt(),
     )
     val hScroll = rememberScrollState()
-    val baseFling = ScrollableDefaults.flingBehavior()
     val stopAtBreaks = settings.pauseAtBreaks && settings.infiniteScroll
     // A break this close below the middle when a flick starts is the one the
     // reader is parked on (a finger jitters before it lets go).
     val breakSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
-    val flingBehavior = remember(baseFling, listState, stopAtBreaks, breakSlopPx) {
-        if (stopAtBreaks) BreakStopFling(baseFling, listState, breakSlopPx) else baseFling
-    }
+    val breakStop = remember(listState, breakSlopPx, scope) { BreakStop(listState, breakSlopPx, scope) }
     val panStepPx = with(LocalDensity.current) { (screenWidth * 0.35f).toPx() }
 
     // D-pad: up/down are the scroll step (the same `tapAdvancePct` a tap uses),
@@ -1130,13 +1124,16 @@ private fun ContinuousReader(
             }
             .then(if (overflowing) Modifier.horizontalScroll(hScroll) else Modifier),
     ) {
+        // No flingBehavior of its own, on purpose: see BreakStop.
         LazyColumn(
             state = listState,
-            flingBehavior = flingBehavior,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement =
                 if (mode == ResolvedMode.VERTICAL) Arrangement.spacedBy(settings.gapPx.dp) else Arrangement.Top,
-            modifier = Modifier.fillMaxHeight().width(contentWidth).watchScrollInput(flingBehavior),
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(contentWidth)
+                .then(if (stopAtBreaks) Modifier.nestedScroll(breakStop) else Modifier),
         ) {
             items(
                 count = strip.size,
