@@ -4,10 +4,7 @@ import app.renzoshiori.client.data.auth.DesktopTokenStore
 import app.renzoshiori.client.data.auth.TokenStore
 import app.renzoshiori.client.data.network.NetworkModule
 import app.renzoshiori.client.data.offline.OfflineRepository
-import coil3.ImageLoader
 import coil3.SingletonImageLoader
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
-import okhttp3.OkHttpClient
 import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
 import top.levitatemedia.renzo.hub.core.offline.DesktopOfflineFiles
@@ -38,33 +35,13 @@ object ShioriDesktop {
 
         // Same signer contract as Android: the downloader and the shared Coil
         // loader sign with whatever credentials this half currently holds.
-        HubSession.register(HubTarget.Shiori) { builder ->
-            val token = tokenStore.accessToken
-            if (token != null) {
-                builder.header("Authorization", "Bearer $token")
-            } else {
-                tokenStore.lastUsername?.takeIf { it.isNotBlank() }
-                    ?.let { builder.header("X-Renzo-User", it) }
-            }
-        }
+        app.renzoshiori.client.data.network.registerShioriSigner(services)
         HubSession.setActive(HubTarget.Shiori)
         DownloadSources.register(HubTarget.Shiori, StaticDownloadSource)
 
         // The process-wide image loader (RenzoApp.newImageLoader's desktop
-        // twin). Signs via HubSession's ACTIVE target, not a hard-coded Shiori
-        // bearer — the same loader serves Renzo posters (fsa_session cookie)
-        // once the anime half is on screen.
-        SingletonImageLoader.setSafe { context ->
-            val authedClient = OkHttpClient.Builder()
-                .addInterceptor { chain ->
-                    val b = chain.request().newBuilder()
-                    HubSession.signActive(b)
-                    chain.proceed(b.build())
-                }
-                .build()
-            ImageLoader.Builder(context)
-                .components { add(OkHttpNetworkFetcherFactory(callFactory = { authedClient })) }
-                .build()
-        }
+        // twin): the Hub's shared one, which signs each request for the half
+        // whose server it is going to and nobody else.
+        SingletonImageLoader.setSafe { context -> top.levitatemedia.renzo.hub.core.HubImageLoader.build(context) }
     }
 }

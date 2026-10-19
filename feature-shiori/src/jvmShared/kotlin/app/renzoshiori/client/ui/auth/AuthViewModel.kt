@@ -22,6 +22,12 @@ import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
 
 sealed interface AuthStep {
+    /**
+     * A saved session is being restored. Its own step so the Connect screen
+     * does not flash up first: it used to be the initial state while the
+     * session was checked, and the screen a failed check was left on.
+     */
+    data object Restoring : AuthStep
     data object Connect : AuthStep
     data class Login(val users: List<UserDto>?, val serverUrl: String) : AuthStep
     data class SignedIn(val user: UserDto) : AuthStep
@@ -120,13 +126,23 @@ class AuthViewModel : ViewModel() {
         // restore exactly the sessions remember-me exists to keep.
         if (savedServer != null && (savedToken != null || tokenStore.refreshCookie != null)) {
             api = network.apiFor(savedServer)
+            _state.value = AuthUiState(step = AuthStep.Restoring)
             viewModelScope.launch {
                 runCatching { api!!.me() }
                     .onSuccess { _state.value = AuthUiState(step = AuthStep.SignedIn(it)) }
                     .onFailure { e ->
                         val code = (e as? retrofit2.HttpException)?.code()
                         if (code == 401 || code == 403) {
+                            // Final: the interceptor has already offered the
+                            // remember-me cookie and the server refused it (or
+                            // there was none). Anything it could not ASK about
+                            // arrives as an IOException instead, below.
                             tokenStore.clearSession()
+                            val status = runCatching { network.apiFor(savedServer).authStatus() }.getOrNull()
+                            _state.value = AuthUiState(
+                                step = AuthStep.Login(users = status?.users, serverUrl = savedServer),
+                                error = "Your session expired — please sign in again.",
+                            )
                         } else {
                             _state.value = AuthUiState(
                                 step = AuthStep.SignedIn(offlinePlaceholderUser(tokenStore.lastUsername)),

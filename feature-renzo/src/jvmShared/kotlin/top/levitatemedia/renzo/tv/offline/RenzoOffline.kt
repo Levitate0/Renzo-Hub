@@ -1,7 +1,10 @@
 package top.levitatemedia.renzo.tv.offline
 
+import okhttp3.Request
+import okhttp3.Response
 import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
+import top.levitatemedia.renzo.hub.core.RequestSigner
 import top.levitatemedia.renzo.hub.core.offline.AssetRole
 import top.levitatemedia.renzo.hub.core.offline.DownloadJob
 import top.levitatemedia.renzo.hub.core.offline.DownloadSource
@@ -129,11 +132,32 @@ class RenzoDownloadSource(private val repo: Repo) : DownloadSource {
 object RenzoOfflineWiring {
     fun install() {
         val prefs = Prefs()
+        val client = ApiClient(prefs)
 
-        HubSession.register(HubTarget.Renzo) { builder ->
-            prefs.sessionCookie?.let { builder.header("Cookie", "fsa_session=$it") }
-        }
-        DownloadSources.register(HubTarget.Renzo, RenzoDownloadSource(Repo(ApiClient(prefs))))
+        HubSession.register(
+            HubTarget.Renzo,
+            server = { prefs.serverUrl },
+            signer = object : RequestSigner {
+                override fun sign(builder: Request.Builder) {
+                    prefs.sessionCookie?.let { builder.header("Cookie", "fsa_session=$it") }
+                }
+
+                // Posters and downloads carry the session too, so they can be
+                // the response the daily rotation lands on. See
+                // ApiClient.captureSession.
+                override fun onResponse(response: Response) = client.captureSession(response)
+
+                // Nothing to renew with: the cookie IS the session. But a 401
+                // can be about a cookie that has since been replaced, by a
+                // rotation that landed on another response, and then the
+                // request is worth one more try with the current one.
+                override fun renew(rejected: Request): Boolean {
+                    val now = prefs.sessionCookie ?: return false
+                    return rejected.header("Cookie") != "fsa_session=$now"
+                }
+            },
+        )
+        DownloadSources.register(HubTarget.Renzo, RenzoDownloadSource(Repo(client)))
     }
 }
 

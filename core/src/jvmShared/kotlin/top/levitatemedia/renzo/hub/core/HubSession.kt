@@ -4,7 +4,11 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.Request
+import okhttp3.Response
 
 // HubTarget itself lives in commonMain (HubTarget.kt) — the offline models
 // reference it without touching OkHttp.
@@ -18,23 +22,50 @@ import okhttp3.Request
  * when the server runs with auth disabled). Whichever Application installed
  * its own loader would break the other half's images.
  *
- * Each feature registers its signer at startup; the shared loader asks
- * whichever half is currently on screen to sign. Only one is ever visible, so a
- * single "active" pointer is sufficient — this is deliberately NOT an attempt
- * to unify the two REST stacks, which stay separate and working.
+ * Each feature registers its signer at startup; the shared clients ask the
+ * half whose server a request is going to to sign it. This is deliberately NOT
+ * an attempt to unify the two REST stacks, which stay separate and working.
  */
 fun interface RequestSigner {
     fun sign(builder: Request.Builder)
+
+    /**
+     * Sees the response to every request this half signed, whichever client
+     * sent it.
+     *
+     * The anime half needs this. Its session cookie ROTATES once a day, and the
+     * replacement rides on whichever response happens to be first after the
+     * rotation falls due: as often a poster, a video range or a background
+     * download as an API call. Only the API client used to read it, so a
+     * replacement landing anywhere else was dropped. The app kept presenting the
+     * old cookie, which the server honours for one more day, and the next launch
+     * after that was a sign-in.
+     */
+    fun onResponse(response: Response) {}
+
+    /**
+     * Swap a credential the server just refused for a fresh one, if this half
+     * has a way to. True when [rejected] is worth sending again.
+     *
+     * Blocking, and never called on the main thread: it may make a request.
+     */
+    fun renew(rejected: Request): Boolean = false
 }
 
 object HubSession {
     @Volatile
     private var active: HubTarget? = null
 
-    private val signers = java.util.concurrent.ConcurrentHashMap<HubTarget, RequestSigner>()
+    private class Half(val server: () -> String?, val signer: RequestSigner)
 
-    fun register(target: HubTarget, signer: RequestSigner) {
-        signers[target] = signer
+    private val halves = java.util.concurrent.ConcurrentHashMap<HubTarget, Half>()
+
+    /**
+     * @param server the half's server address as the user entered it, read at
+     *   request time, so a change of server needs no re-registration.
+     */
+    fun register(target: HubTarget, server: () -> String?, signer: RequestSigner) {
+        halves[target] = Half(server, signer)
     }
 
     /** Called when a half comes to the foreground. */
@@ -44,9 +75,28 @@ object HubSession {
 
     fun activeTarget(): HubTarget? = active
 
-    /** Applies the active half's credentials, if it has registered any. */
-    fun signActive(builder: Request.Builder) {
-        active?.let { signers[it] }?.sign(builder)
+    /**
+     * The half whose server [url] is on, or null for any other host.
+     *
+     * Null is the important answer. The shared image loader used to sign every
+     * request with whichever half was on screen, so AniList's poster CDN got
+     * the Renzo session cookie and a manga source's thumbnail host got a Shiori
+     * token. Credentials go to the user's own servers and nowhere else, which
+     * the downloader and the player already enforced.
+     *
+     * Matched on host alone, like the downloader: the scheme or port in a
+     * server-built URL can differ from the one typed in. Two halves served from
+     * one host is ambiguous, and the half on screen wins, as before.
+     */
+    fun targetFor(url: HttpUrl): HubTarget? {
+        val matches = halves.entries
+            .filter { (_, half) -> hostOf(half.server())?.equals(url.host, ignoreCase = true) == true }
+            .map { it.key }
+        return when (matches.size) {
+            0 -> null
+            1 -> matches[0]
+            else -> active?.takeIf { it in matches } ?: matches[0]
+        }
     }
 
     /**
@@ -58,10 +108,42 @@ object HubSession {
      * baked one into the job payload, which expired on a long queue.
      */
     fun signFor(target: HubTarget, builder: Request.Builder) {
-        signers[target]?.sign(builder)
+        halves[target]?.signer?.sign(builder)
     }
 
-    fun hasSigner(target: HubTarget): Boolean = signers.containsKey(target)
+    /** Hand a response to the half that signed its request. See [RequestSigner.onResponse]. */
+    fun observe(target: HubTarget, response: Response) {
+        halves[target]?.signer?.let { runCatching { it.onResponse(response) } }
+    }
+
+    /** See [RequestSigner.renew]. False when the half has no way to renew. */
+    fun renew(target: HubTarget, rejected: Request): Boolean =
+        halves[target]?.signer?.let { runCatching { it.renew(rejected) }.getOrDefault(false) } ?: false
+
+    fun hasSigner(target: HubTarget): Boolean = halves.containsKey(target)
+
+    /**
+     * For clients both halves share (the image loader): sign for whichever
+     * half owns the host, let it see the response, and after a 401 renew once
+     * and retry. Requests to any other host pass through untouched.
+     */
+    val interceptor: Interceptor = Interceptor { chain ->
+        val request = chain.request()
+        val target = targetFor(request.url) ?: return@Interceptor chain.proceed(request)
+        val signed = request.newBuilder().also { signFor(target, it) }.build()
+        val response = chain.proceed(signed)
+        observe(target, response)
+        if (response.code != 401 || !renew(target, signed)) return@Interceptor response
+        response.close()
+        val again = chain.proceed(request.newBuilder().also { signFor(target, it) }.build())
+        observe(target, again)
+        again
+    }
+
+    private fun hostOf(server: String?): String? {
+        val s = server?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return (if (s.startsWith("http", ignoreCase = true)) s else "https://$s").toHttpUrlOrNull()?.host
+    }
 
     /**
      * Fires when a half's credentials are rejected, so the UI can return to its

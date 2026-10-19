@@ -355,11 +355,12 @@ class DownloadEngine(
         // and signing that unconditionally would hand a session cookie (or a
         // Bearer token) to a host that has no business seeing it. The player has
         // always scoped this by host; the downloader must match.
-        if (sameHost(absolute, baseUrl)) HubSession.signFor(target, builder)
+        val signed = sameHost(absolute, baseUrl)
+        if (signed) HubSession.signFor(target, builder)
         if (already > 0) builder.header("Range", "bytes=$already-")
 
         return try {
-            http.newCall(builder.build()).execute().use { res ->
+            execute(target, builder.build(), signed).use { res ->
                 if (!res.isSuccessful) return FetchOutcome(0, false)
                 // Branch on the STATUS, never on Accept-Ranges: AllDebrid omits
                 // that header on a 206, so reading it back would wrongly
@@ -423,6 +424,27 @@ class DownloadEngine(
      * download without credentials, which is recoverable; failing open would
      * leak the session.
      */
+    /**
+     * Sends [request], letting the half that signed it see the response and,
+     * after a 401, renew its credential and try once more.
+     *
+     * A queue runs for hours, often with no UI up, so a credential can expire
+     * in the middle of one: Shiori's access token lasts a day. Nothing renewed
+     * it here, so every page after that point failed and the chapter was
+     * silently dropped. Renzo's cookie rotates instead, and its replacement can
+     * arrive on any of these responses.
+     */
+    private fun execute(target: HubTarget, request: Request, signed: Boolean): okhttp3.Response {
+        val res = http.newCall(request).execute()
+        if (!signed) return res
+        HubSession.observe(target, res)
+        if (res.code != 401 || !HubSession.renew(target, request)) return res
+        res.close()
+        val again = http.newCall(request.newBuilder().also { HubSession.signFor(target, it) }.build()).execute()
+        HubSession.observe(target, again)
+        return again
+    }
+
     private fun sameHost(url: String, baseUrl: String): Boolean = runCatching {
         val a = url.toHttpUrlOrNull() ?: return false
         val b = (if (baseUrl.startsWith("http")) baseUrl else "https://$baseUrl").toHttpUrlOrNull()

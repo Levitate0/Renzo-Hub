@@ -43,15 +43,7 @@ open class RenzoApp : Application(), SingletonImageLoader.Factory, ShioriApp {
         // to be able to sign requests when this half is NOT on screen — a queue
         // keeps running while the user switches apps, or after a restart with
         // no UI at all.
-        HubSession.register(HubTarget.Shiori) { builder ->
-            val token = tokenStore.accessToken
-            if (token != null) {
-                builder.header("Authorization", "Bearer $token")
-            } else {
-                tokenStore.lastUsername?.takeIf { it.isNotBlank() }
-                    ?.let { builder.header("X-Renzo-User", it) }
-            }
-        }
+        app.renzoshiori.client.data.network.registerShioriSigner(this)
         // Shiori bakes its page URLs into the job at enqueue time — they are
         // stable server routes, unlike the anime half's expiring debrid links.
         DownloadSources.register(HubTarget.Shiori, StaticDownloadSource)

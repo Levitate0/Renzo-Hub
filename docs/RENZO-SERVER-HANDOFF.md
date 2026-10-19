@@ -112,6 +112,20 @@ fixed 2026-08-03: `HubDownloadService` signed *every* request, so a debrid CDN
 would have received `Cookie: fsa_session=…`. It now signs only when the request
 host matches the configured server host, and fails closed on an unparseable URL.
 
+The shared image loader had the same flaw until 1.5.13. It signed every image
+with whichever half was on screen, so AniList's poster CDN received the
+cookie. It now signs only requests to that half's own server
+(`HubSession.targetFor`).
+
+The cookie also ROTATES (`maintainSession` in `services/auth.ts`). The
+replacement rides on whichever authed response comes first after the rotation
+falls due, which is as often a poster, a video range or a download as an API
+call. So every client that sends the cookie also reads `Set-Cookie` back:
+`ApiClient.captureSession`, reached through `RequestSigner.onResponse` from
+the image loader and the downloader. Before 1.5.13 only API responses were
+read. A replacement that landed anywhere else was dropped, and once the old
+cookie's one-day grace ran out the next launch was a sign-in.
+
 Anything else that fetches a `ResolvedStream.url` — a future web downloader, a
 cast target — needs the same rule. It is not a client-local concern.
 
