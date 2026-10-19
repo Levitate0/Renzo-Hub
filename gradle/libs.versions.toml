@@ -39,6 +39,9 @@ coreKtx = "1.15.0"
 documentFile = "1.0.1"
 securityCrypto = "1.1.0"
 junit = "4.13.2"
+# WorkManager, for the new-release notification check (Android only). The
+# long-stable 2.10 line: newer ones add nothing a periodic check needs.
+work = "2.10.5"
 
 # Coil 3.5.0, not the Shiori client's pinned 3.1.0. That pin existed only
 # because Coil 3.2+ compiles against SDK 36 and that client was stuck on
@@ -76,6 +79,7 @@ androidx-documentfile = { module = "androidx.documentfile:documentfile", version
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }

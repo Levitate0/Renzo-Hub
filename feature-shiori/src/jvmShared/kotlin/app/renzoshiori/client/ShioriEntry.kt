@@ -179,6 +179,14 @@ private fun SignedInNavHost(
 ) {
     val nav = rememberNavController()
 
+    // A tapped new-chapter notification (HubLinks): its series opens as soon
+    // as this half is signed in and showing.
+    val link by top.levitatemedia.renzo.hub.core.HubLinks.pending.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(link) {
+        top.levitatemedia.renzo.hub.core.HubLinks.take(top.levitatemedia.renzo.hub.core.HubTarget.Shiori)
+            ?.let { nav.navigate("series/${it.id}") }
+    }
+
     // Paint the app in the signed-in user's saved theme (preset + accent from
     // the shared preferences blob) before anything renders.
     androidx.compose.runtime.LaunchedEffect(user.preferences) {

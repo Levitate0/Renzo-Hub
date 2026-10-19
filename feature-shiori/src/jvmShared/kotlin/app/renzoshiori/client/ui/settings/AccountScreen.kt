@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mail
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Upload
@@ -47,6 +48,7 @@ import app.renzoshiori.client.data.model.UserDto
 import app.renzoshiori.client.data.network.AccountApi
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
+import top.levitatemedia.renzo.hub.core.notify.ReleaseAlerts
 import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.launch
 
@@ -124,12 +126,15 @@ fun AccountScreen(
         }
     }
 
-    val sections = listOf(
+    val notificationsHere = ReleaseAlerts.supported && !LocalIsTv.current
+    val sections = listOfNotNull(
         SettingsNavSection("account", "Account", Icons.Filled.Person),
         // Web: MonitorSmartphone — the remembered sign-ins on this account.
         SettingsNavSection("devices", "Devices", Icons.Filled.Devices),
         SettingsNavSection("site-logins", "Site Logins", Icons.Filled.VpnKey),
         SettingsNavSection("scrobbler", "Scrobbler", Icons.Filled.Sensors),
+        // Android phones only: the web has no notifications.
+        if (notificationsHere) SettingsNavSection("notifications", "Notifications", Icons.Filled.Notifications) else null,
     )
 
     SettingsScaffold(title = "Account", onBack = onBack, snackbar = snackbar) { padding ->
@@ -489,6 +494,15 @@ fun AccountScreen(
                         "other users.",
                 ) {
                     SiteLoginsSection(snackbar)
+                }
+
+                // ── Notifications (Android phones only) ─────────────────
+                "notifications" -> SettingsCard(
+                    title = "Notifications",
+                    description = "On this device only. Get a notification when a series in your " +
+                        "library has a new chapter.",
+                ) {
+                    NotificationsSection()
                 }
 
                 // ── Scrobbler ───────────────────────────────────────────

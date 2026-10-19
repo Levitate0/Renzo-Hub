@@ -54,6 +54,8 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.outlined.Circle
@@ -115,6 +117,8 @@ import top.levitatemedia.renzo.tv.ui.kit.Green400
 import top.levitatemedia.renzo.tv.ui.kit.Green500
 import top.levitatemedia.renzo.tv.ui.kit.HairLine
 import top.levitatemedia.renzo.tv.ui.kit.HeroActionButton
+import top.levitatemedia.renzo.hub.core.HubTarget
+import top.levitatemedia.renzo.hub.core.notify.ReleaseAlerts
 import top.levitatemedia.renzo.tv.ui.kit.Hint
 import top.levitatemedia.renzo.tv.ui.kit.Pink500
 import top.levitatemedia.renzo.tv.ui.kit.PillShape
@@ -695,6 +699,25 @@ private fun TitleHero(
                     borderColor = if (inLibrary) RenzoColors.Primary.copy(alpha = 0.5f) else Border60,
                     onClick = onToggleLibrary,
                 )
+                // New-episode notifications for this title (Android phones
+                // only; the switch for the whole library is in Account). Only
+                // library titles are checked, so the bell needs the library.
+                if (inLibrary && ReleaseAlerts.supported && !app.isTv) {
+                    val key = d.id.toString()
+                    var notify by remember(d.id) { mutableStateOf(ReleaseAlerts.isOn(HubTarget.Renzo, key)) }
+                    HeroActionButton(
+                        icon = if (notify) Icons.Filled.NotificationsActive else Icons.Filled.NotificationsNone,
+                        contentDescription = if (notify) "Notifying you about new episodes — turn off" else "Notify me about new episodes",
+                        label = if (!heroWide) null else if (notify) "Notifying" else "Notify",
+                        tint = if (notify) RenzoColors.Primary else RenzoColors.Foreground,
+                        borderColor = if (notify) RenzoColors.Primary.copy(alpha = 0.5f) else Border60,
+                        onClick = {
+                            notify = !notify
+                            ReleaseAlerts.setSeries(HubTarget.Renzo, key, notify)
+                            ReleaseAlerts.platform?.let { if (notify && !it.permitted()) it.requestPermission() }
+                        },
+                    )
+                }
                 HeroActionButton(
                     icon = Icons.Filled.Sensors,
                     contentDescription = "Track this title",

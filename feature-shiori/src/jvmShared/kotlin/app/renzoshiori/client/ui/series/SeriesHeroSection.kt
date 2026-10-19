@@ -37,6 +37,10 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.NotificationsNone
+import top.levitatemedia.renzo.hub.core.HubTarget
+import top.levitatemedia.renzo.hub.core.notify.ReleaseAlerts
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.Pause
@@ -418,6 +422,24 @@ fun SeriesHeroSection(
                     background = if (state.isFavorited) Pink500.copy(alpha = 0.15f) else Color.Transparent,
                     onClick = { favoritesOpen = true },
                 )
+
+                // New-chapter notifications for this series (Android phones
+                // only; the switch for the whole library is in Account).
+                if (ReleaseAlerts.supported && !LocalIsTv.current) {
+                    var notify by remember(series.id) { mutableStateOf(ReleaseAlerts.isOn(HubTarget.Shiori, series.id)) }
+                    HeroActionButton(
+                        icon = if (notify) Icons.Filled.NotificationsActive else Icons.Filled.NotificationsNone,
+                        contentDescription = if (notify) "Notifying you about new chapters — turn off" else "Notify me about new chapters",
+                        label = if (!heroWide) null else if (notify) "Notifying" else "Notify",
+                        tint = if (notify) MaterialTheme.colorScheme.primary else RenzoColors.Foreground,
+                        borderColor = if (notify) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Border60,
+                        onClick = {
+                            notify = !notify
+                            ReleaseAlerts.setSeries(HubTarget.Shiori, series.id, notify)
+                            ReleaseAlerts.platform?.let { if (notify && !it.permitted()) it.requestPermission() }
+                        },
+                    )
+                }
 
                 if (state.hasConnectedTracker) {
                     HeroActionButton(

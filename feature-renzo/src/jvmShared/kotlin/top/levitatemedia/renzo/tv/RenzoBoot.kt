@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -158,6 +159,14 @@ private suspend fun probeSession(app: AppServices): Boot {
 private fun AppRoot(app: AppServices, onSwitchApp: (() -> Unit)?, onSessionLost: () -> Unit) {
     val nav = app.nav
     val screen = nav.stack.last()
+
+    // A tapped new-episode notification (HubLinks): its title opens as soon as
+    // this half is signed in and showing.
+    val link by top.levitatemedia.renzo.hub.core.HubLinks.pending.collectAsState()
+    LaunchedEffect(link) {
+        top.levitatemedia.renzo.hub.core.HubLinks.take(HubTarget.Renzo)
+            ?.id?.toIntOrNull()?.let { nav.push(Screen.Title(it)) }
+    }
     // Seeded so the demo build can shoot the drawer / account sheet open
     // (`-e page drawer`); both are plain `false` in debug and release.
     var drawerOpen by remember {

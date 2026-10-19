@@ -84,19 +84,20 @@ object HubSession {
      * token. Credentials go to the user's own servers and nowhere else, which
      * the downloader and the player already enforced.
      *
-     * Matched on host alone, like the downloader: the scheme or port in a
-     * server-built URL can differ from the one typed in. Two halves served from
-     * one host is ambiguous, and the half on screen wins, as before.
+     * Matched on host, like the downloader: the scheme or port in a
+     * server-built URL can differ from the one typed in. Only when both halves
+     * live on one host (a LAN box serving each on its own port) does the port
+     * decide, and if even that cannot, the half on screen wins, as before.
      */
     fun targetFor(url: HttpUrl): HubTarget? {
-        val matches = halves.entries
-            .filter { (_, half) -> hostOf(half.server())?.equals(url.host, ignoreCase = true) == true }
-            .map { it.key }
-        return when (matches.size) {
-            0 -> null
-            1 -> matches[0]
-            else -> active?.takeIf { it in matches } ?: matches[0]
+        val byHost = halves.entries.mapNotNull { (target, half) ->
+            serverUrl(half.server())?.takeIf { it.host.equals(url.host, ignoreCase = true) }?.let { target to it }
         }
+        if (byHost.size <= 1) return byHost.firstOrNull()?.first
+        val byPort = byHost.filter { it.second.port == url.port }.map { it.first }
+        if (byPort.size == 1) return byPort[0]
+        val pool = byPort.ifEmpty { byHost.map { it.first } }
+        return active?.takeIf { it in pool } ?: pool[0]
     }
 
     /**
@@ -140,9 +141,9 @@ object HubSession {
         again
     }
 
-    private fun hostOf(server: String?): String? {
+    private fun serverUrl(server: String?): HttpUrl? {
         val s = server?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        return (if (s.startsWith("http", ignoreCase = true)) s else "https://$s").toHttpUrlOrNull()?.host
+        return (if (s.startsWith("http", ignoreCase = true)) s else "https://$s").toHttpUrlOrNull()
     }
 
     /**

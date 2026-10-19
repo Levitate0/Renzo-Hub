@@ -17,8 +17,11 @@ import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import app.renzoshiori.client.ShioriRoot
 import top.levitatemedia.renzo.hub.core.HubForeground
+import top.levitatemedia.renzo.hub.core.HubLinks
 import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
+import top.levitatemedia.renzo.hub.notify.AndroidReleasePlatform
+import top.levitatemedia.renzo.hub.notify.ReleaseNotifications
 import top.levitatemedia.renzo.tv.RenzoHost
 import top.levitatemedia.renzo.tv.RenzoRoot
 
@@ -39,6 +42,14 @@ private const val SLEEP_THRESHOLD_MS = 5 * 60 * 1000L
 class HubActivity : ComponentActivity() {
     private var renzoHost: RenzoHost? = null
 
+    /** Android 13+ notification permission, asked when a release toggle is switched on. */
+    private val notifyPermission =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+
+    private val askNotify: () -> Unit = {
+        if (android.os.Build.VERSION.SDK_INT >= 33) notifyPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     private fun renzoHost(): RenzoHost =
         renzoHost ?: RenzoHost(this).also { renzoHost = it }
 
@@ -48,6 +59,8 @@ class HubActivity : ComponentActivity() {
         // content by the insets. Keeps the clock/notification bar visible with
         // the app's background showing through.
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        AndroidReleasePlatform.permissionAsker = askNotify
+        openFromIntent(intent)
 
         setContent {
             // The picker is shown every time the app comes to the foreground,
@@ -58,6 +71,12 @@ class HubActivity : ComponentActivity() {
             var target by remember { mutableStateOf<HubTarget?>(null) }
 
             val choose: (HubTarget) -> Unit = { picked -> target = picked }
+
+            // A tapped release notification opens its half straight away; the
+            // half itself opens the series once it is signed in (HubLinks).
+            LaunchedEffect(Unit) {
+                HubLinks.pending.collect { link -> if (link != null) target = link.target }
+            }
 
             // The picker comes back when the app has been AWAY for a while —
             // not every time it is brought forward. Glancing at another app and
@@ -86,7 +105,9 @@ class HubActivity : ComponentActivity() {
                             if (stoppedAt == 0L) return@LifecycleEventObserver
                             val away = android.os.SystemClock.elapsedRealtime() - stoppedAt
                             stoppedAt = 0L
-                            if (away >= SLEEP_THRESHOLD_MS) target = null
+                            // Not when a notification brought the app back:
+                            // that already says where to go.
+                            if (away >= SLEEP_THRESHOLD_MS && HubLinks.pending.value == null) target = null
                         }
                         else -> Unit
                     }
@@ -124,6 +145,23 @@ class HubActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         renzoHost?.onNewIntent(this, intent)
+        openFromIntent(intent)
+    }
+
+    override fun onDestroy() {
+        if (AndroidReleasePlatform.permissionAsker === askNotify) AndroidReleasePlatform.permissionAsker = null
+        super.onDestroy()
+    }
+
+    /** A release notification's tap: queue its series for the half that owns it. */
+    private fun openFromIntent(intent: Intent?) {
+        if (intent?.action != ReleaseNotifications.ACTION_OPEN) return
+        val target = intent.getStringExtra(ReleaseNotifications.EXTRA_TARGET)
+            ?.let { name -> HubTarget.entries.firstOrNull { it.name == name } } ?: return
+        val id = intent.getStringExtra(ReleaseNotifications.EXTRA_ID) ?: return
+        HubLinks.open(HubLinks.Open(target, id))
+        // Acted on once: the same Intent object is handed back by getIntent().
+        intent.action = Intent.ACTION_MAIN
     }
 }
 

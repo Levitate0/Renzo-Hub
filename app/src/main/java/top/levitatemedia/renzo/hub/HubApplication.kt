@@ -4,6 +4,9 @@ import app.renzoshiori.client.RenzoApp
 import coil3.ImageLoader
 import coil3.PlatformContext
 import top.levitatemedia.renzo.hub.core.HubImageLoader
+import top.levitatemedia.renzo.hub.core.notify.ReleaseAlerts
+import top.levitatemedia.renzo.hub.notify.AndroidReleasePlatform
+import top.levitatemedia.renzo.hub.notify.ReleaseSchedule
 import top.levitatemedia.renzo.tv.offline.RenzoOfflineWiring
 
 /**
@@ -27,6 +30,15 @@ class HubApplication : RenzoApp() {
         // downloader runs, and it can run with no UI at all.
         super.onCreate()
         RenzoOfflineWiring.install()
+
+        // New-release notifications: phones and tablets only. A television
+        // shows none, so it gets no toggles and no background check.
+        if (!top.levitatemedia.renzo.hub.core.isTvDevice(this)) {
+            ReleaseAlerts.platform = AndroidReleasePlatform(this)
+            // Re-registers the check after an update and drops it when
+            // everything has been switched off.
+            ReleaseSchedule.sync(this)
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

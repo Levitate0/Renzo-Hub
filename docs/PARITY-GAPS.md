@@ -5,7 +5,7 @@ critic and a synthesis pass). Every claim was re-derived from files on disk.
 Parity here is **bidirectional** — a `hub-to-web` row matters as much as a
 `web-to-hub` one. Direction says which surface already has the behaviour.
 
-76 real gaps, 8 differences judged deliberate.
+76 real gaps, 9 differences judged deliberate.
 
 > Ranked by user impact, then by effort. `DONE` rows were closed on 2026-08-21;
 > everything else is open.
@@ -542,6 +542,10 @@ Re-raising these wastes a future session's time. They are correct as they are.
 ### Emailed invite/reset links open a browser, never the Hub (no app-link intent filters)
 - **area:** Auth flows Hub cannot complete: first-run setup, invite acceptance, password reset (Renzo anime web ↔ Hub anime half)
 - **why it is correct:** None — do not close. A self-hosted server's public URL is user-specific, so App Links (which need a fixed, verifiable domain) cannot work here; the correct native answer is the paste-the-link field the manga half already uses, which the three preceding recommendations adopt. Recorded only so the paste field is understood as deliberate design rather than a shortcut.
+
+### New-release notifications exist only in the Hub on Android phones and tablets
+- **area:** Shiori Account → Notifications, the bell on a series page; Renzo Account → Notifications, the bell on a title page (both Hub halves)
+- **why it is correct:** No change. The owner asked for them on Android only (2026-10-19), and the web has nowhere to deliver them without push infrastructure the self-hosted servers do not have. The switches are device-local, as a notification permission is, so a phone and a tablet can differ. The servers' `release-heads` endpoints are additive and nothing else reads them. Televisions get no toggles and no background check. Recorded so a parity sweep does not try to port the bells to the web or to the desktop.
 
 ### Configuration and wizard routes are unreachable on TV, replaced by the instance's web address
 - **area:** First-run Setup Wizard — entirely absent from Hub (Shiori web A vs Hub manga half C1)

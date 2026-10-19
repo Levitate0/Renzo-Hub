@@ -89,6 +89,7 @@ import top.levitatemedia.renzo.tv.ui.components.focusRing
 import top.levitatemedia.renzo.tv.ui.components.tvClickable
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 import top.levitatemedia.renzo.tv.ui.kit.LocalIsTv
+import top.levitatemedia.renzo.hub.core.notify.ReleaseAlerts
 import top.levitatemedia.renzo.tv.ui.kit.CardDivider
 import top.levitatemedia.renzo.tv.ui.kit.ErrorBox
 import top.levitatemedia.renzo.tv.ui.kit.FieldLabel
@@ -97,6 +98,7 @@ import top.levitatemedia.renzo.tv.ui.kit.LabelledField
 import top.levitatemedia.renzo.tv.ui.kit.SettingsCard
 import top.levitatemedia.renzo.tv.ui.kit.Hint as KitHint
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Mail
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import top.levitatemedia.renzo.tv.ui.kit.PageHeading
@@ -139,7 +141,11 @@ fun AccountScreen(
     var current by remember { mutableStateOf(section) }
     val user = app.user.value
     val snackbar = remember { SnackbarHostState() }
-    val sections = SECTIONS.map { SettingsNavSection(it.id, it.label, it.icon) }
+    // Android phones only: the web has no notifications.
+    val notificationsHere = ReleaseAlerts.supported && !LocalIsTv.current
+    val sections = (SECTIONS + listOfNotNull(
+        if (notificationsHere) SectionDef("notifications", "Notifications", Icons.Outlined.Notifications) else null,
+    )).map { SettingsNavSection(it.id, it.label, it.icon) }
 
     SettingsScaffold(title = "Account", onBack = { app.nav.back() }, snackbar = snackbar) { padding ->
         val wide = !LocalIsTv.current && screenWidthDp() >= 1024.dp
@@ -157,6 +163,7 @@ fun AccountScreen(
                     "credentials" -> CredentialsPane(app)
                     "defaults" -> DefaultsPane(app)
                     "apikey" -> ApiKeyPane(app)
+                    "notifications" -> NotificationsPane()
                     else -> AccountPane(app, onLogout, onChangeServer)
                 }
             }
