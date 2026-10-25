@@ -19,6 +19,7 @@ import top.levitatemedia.renzo.tv.ui.kit.Hint
 import top.levitatemedia.renzo.tv.ui.kit.RenzoButton
 import top.levitatemedia.renzo.tv.ui.kit.SettingsCard
 import top.levitatemedia.renzo.tv.ui.kit.SwitchRow
+import top.levitatemedia.renzo.tv.ui.kit.WarningBox
 
 /**
  * Account → Notifications (Android phones only): the switch for every anime in
@@ -30,11 +31,13 @@ internal fun NotificationsPane() {
     val platform = ReleaseAlerts.platform ?: return
     var all by remember { mutableStateOf(ReleaseAlerts.allOn(HubTarget.Renzo)) }
     var permitted by remember { mutableStateOf(platform.permitted()) }
-    // Re-read while shown: the answer changes in the system dialog or in
+    var limited by remember { mutableStateOf(platform.backgroundLimited()) }
+    // Re-read while shown: the answers change in the system dialogs or in
     // Android's settings, and nothing tells the page.
     LaunchedEffect(Unit) {
         while (true) {
             permitted = platform.permitted()
+            limited = platform.backgroundLimited()
             delay(1_000)
         }
     }
@@ -49,7 +52,7 @@ internal fun NotificationsPane() {
             onCheckedChange = { on ->
                 all = on
                 ReleaseAlerts.setAllOn(HubTarget.Renzo, on)
-                if (on && !platform.permitted()) platform.requestPermission()
+                if (on) ReleaseAlerts.switchedOn()
             },
             label = "New episodes for every anime in my library",
             hint = "Titles you switch on or off with the bell on their page keep their own setting.",
@@ -70,5 +73,34 @@ internal fun NotificationsPane() {
                 onClick = { platform.requestPermission() },
             )
         }
+        if (permitted && ReleaseAlerts.anyOn(HubTarget.Renzo)) {
+            BackgroundChecks(limited, platform, "episodes")
+        }
+    }
+}
+
+/** The Shiori half's NotificationsSection twin: whether Android lets the check run while the phone sleeps. */
+@Composable
+private fun BackgroundChecks(limited: Boolean, platform: ReleaseAlerts.Platform, what: String) {
+    if (limited) {
+        CardDivider()
+        WarningBox(
+            "Android pauses Renzo Hub's checks while your phone sleeps, so new $what can show up " +
+                "hours late, or only once you open the app.",
+        )
+        RenzoButton(
+            text = "Allow background checks",
+            variant = "outline",
+            small = true,
+            onClick = { platform.allowBackground() },
+        )
+    }
+    if (platform.hasSleepingAppsList) {
+        Spacer(Modifier.height(8.dp))
+        Hint(
+            "On a Samsung phone, also keep Renzo Hub out of Sleeping apps and Deep sleeping apps " +
+                "(Settings → Battery → Background usage limits). Samsung stops apps on those lists " +
+                "whatever the setting above says.",
+        )
     }
 }

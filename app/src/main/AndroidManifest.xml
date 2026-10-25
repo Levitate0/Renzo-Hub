@@ -17,6 +17,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The direct "let Renzo Hub run in the background?" prompt, so the
+         new-release check isn't held while the phone sleeps. Sideloaded, so
+         Play's policy on it doesn't apply. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Package-visibility filtering (API 30+) makes resolveActivity return null
          for the speech recogniser without this, so TV voice search would find no

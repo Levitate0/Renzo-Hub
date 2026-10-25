@@ -733,6 +733,22 @@ fun ErrorBox(text: String) {
     )
 }
 
+/** The web's `p-3 text-sm text-amber-500 bg-amber-950 rounded-md` warning block. */
+@Composable
+fun WarningBox(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = Amber500,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF451A03))
+            .padding(12.dp),
+    )
+}
+
 @Composable
 fun SuccessBox(text: String) {
     Text(

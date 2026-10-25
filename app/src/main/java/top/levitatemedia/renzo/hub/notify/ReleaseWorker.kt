@@ -1,12 +1,14 @@
 package top.levitatemedia.renzo.hub.notify
 
 import android.Manifest
+import android.app.ActivityManager
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -114,6 +116,43 @@ class AndroidReleasePlatform(private val app: Context) : ReleaseAlerts.Platform 
     }
 
     override fun sync() = ReleaseSchedule.sync(app)
+
+    override fun backgroundLimited(): Boolean {
+        // Battery optimisation is on for every app by default. Then Doze holds
+        // the half-hourly check while the phone sleeps, and app standby spaces
+        // it out further the less the app is opened, so new releases showed
+        // up only around the times the app was open (reported 2026-10-25).
+        val power = app.getSystemService(PowerManager::class.java)
+        val optimised = power?.isIgnoringBatteryOptimizations(app.packageName) == false
+        return optimised || backgroundRestricted()
+    }
+
+    /** The app's battery use set to Restricted: background work stops altogether. */
+    private fun backgroundRestricted(): Boolean =
+        Build.VERSION.SDK_INT >= 28 && app.getSystemService(ActivityManager::class.java)?.isBackgroundRestricted == true
+
+    @SuppressLint("BatteryLife")
+    override fun allowBackground() {
+        val pkg = Uri.parse("package:${app.packageName}")
+        // Restricted can only be lifted on the app's own settings page
+        // (App battery usage → Unrestricted). Otherwise Android has a direct
+        // "let it run in the background?" prompt.
+        val intent = if (backgroundRestricted()) {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
+        } else {
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg)
+        }
+        val shown = runCatching { app.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        if (!shown) {
+            // Some phones drop the direct prompt; the list it belongs to always exists.
+            runCatching {
+                app.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+    }
+
+    override val hasSleepingAppsList: Boolean
+        get() = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
 
     @SuppressLint("InlinedApi")
     override fun openSettings() {

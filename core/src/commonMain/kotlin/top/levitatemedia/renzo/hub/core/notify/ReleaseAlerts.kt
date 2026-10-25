@@ -75,6 +75,25 @@ object ReleaseAlerts {
 
         /** Schedule or cancel the background check to match the settings. */
         fun sync()
+
+        /**
+         * Android is holding the background check back: battery optimisation
+         * (Doze and app standby defer it while the phone sleeps, for hours
+         * on an app that isn't opened often) or the app's battery use set to
+         * Restricted. The check then runs late or only once the app is
+         * opened, which reads as "notifications only work while it's open".
+         */
+        fun backgroundLimited(): Boolean = false
+
+        /** Ask Android to let the check run while the phone sleeps. */
+        fun allowBackground() {}
+
+        /**
+         * The phone keeps its own list of apps it stops in the background,
+         * which no API reports (Samsung's "sleeping apps"), so the page can
+         * only point at it.
+         */
+        val hasSleepingAppsList: Boolean get() = false
     }
 
     @Volatile
@@ -151,6 +170,26 @@ object ReleaseAlerts {
     fun setSince(target: HubTarget, value: String?) = prefs.putString("since.${target.name}", value)
 
     /** False until a check has taken the baseline it compares against. */
+    /**
+     * A notification switch or bell was just turned on: ask for what the
+     * notifications need. The permission first; once Android shows them, the
+     * background checks — asked for unprompted only once, because a refusal
+     * would otherwise come back on every bell. The Notifications section keeps
+     * offering it after that.
+     */
+    fun switchedOn() {
+        val p = platform ?: return
+        if (!p.permitted()) p.requestPermission() else askBackgroundOnce()
+    }
+
+    /** After the permission is granted (the activity's callback). */
+    fun askBackgroundOnce() {
+        val p = platform ?: return
+        if (!p.backgroundLimited() || prefs.getBoolean("background.asked", false)) return
+        prefs.putBoolean("background.asked", true)
+        p.allowBackground()
+    }
+
     fun primed(target: HubTarget): Boolean = prefs.getBoolean("primed.${target.name}", false)
 
     fun setPrimed(target: HubTarget, value: Boolean) {

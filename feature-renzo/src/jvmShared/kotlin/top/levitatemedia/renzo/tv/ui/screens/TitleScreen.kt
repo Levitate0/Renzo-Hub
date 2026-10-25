@@ -714,7 +714,7 @@ private fun TitleHero(
                         onClick = {
                             notify = !notify
                             ReleaseAlerts.setSeries(HubTarget.Renzo, key, notify)
-                            ReleaseAlerts.platform?.let { if (notify && !it.permitted()) it.requestPermission() }
+                            if (notify) ReleaseAlerts.switchedOn()
                         },
                     )
                 }

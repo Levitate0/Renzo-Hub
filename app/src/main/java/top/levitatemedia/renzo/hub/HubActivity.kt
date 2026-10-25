@@ -21,6 +21,7 @@ import top.levitatemedia.renzo.hub.core.HubLinks
 import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
 import top.levitatemedia.renzo.hub.notify.AndroidReleasePlatform
+import top.levitatemedia.renzo.hub.core.notify.ReleaseAlerts
 import top.levitatemedia.renzo.hub.notify.ReleaseNotifications
 import top.levitatemedia.renzo.tv.RenzoHost
 import top.levitatemedia.renzo.tv.RenzoRoot
@@ -42,9 +43,15 @@ private const val SLEEP_THRESHOLD_MS = 5 * 60 * 1000L
 class HubActivity : ComponentActivity() {
     private var renzoHost: RenzoHost? = null
 
-    /** Android 13+ notification permission, asked when a release toggle is switched on. */
+    /**
+     * Android 13+ notification permission, asked when a release toggle is
+     * switched on. Granted, the background checks are next: without them the
+     * notifications only come while the app is open.
+     */
     private val notifyPermission =
-        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) ReleaseAlerts.askBackgroundOnce()
+        }
 
     private val askNotify: () -> Unit = {
         if (android.os.Build.VERSION.SDK_INT >= 33) notifyPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)

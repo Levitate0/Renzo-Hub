@@ -436,7 +436,7 @@ fun SeriesHeroSection(
                         onClick = {
                             notify = !notify
                             ReleaseAlerts.setSeries(HubTarget.Shiori, series.id, notify)
-                            ReleaseAlerts.platform?.let { if (notify && !it.permitted()) it.requestPermission() }
+                            if (notify) ReleaseAlerts.switchedOn()
                         },
                     )
                 }
