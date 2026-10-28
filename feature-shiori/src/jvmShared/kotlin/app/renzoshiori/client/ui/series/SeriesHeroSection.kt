@@ -72,9 +72,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import org.jetbrains.compose.resources.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -802,7 +807,14 @@ private fun FavoritesDialog(
                     OutlinedTextField(
                         value = newTabName,
                         onValueChange = { newTabName = it },
-                        placeholder = { Text("New tab, e.g. Manhwa favourites #2", style = MaterialTheme.typography.bodySmall) },
+                        placeholder = {
+                            Text(
+                                "New tab, e.g. Manhwa favourites #2",
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
                         singleLine = true,
                         shape = MaterialTheme.shapes.small,
                         modifier = Modifier.weight(1f),
@@ -886,11 +898,27 @@ private fun FavoriteListRow(
                 )
             }
         }
-        Text(name, style = MaterialTheme.typography.bodyMedium, color = RenzoColors.Foreground)
+        // favorite-button.tsx: the name with its count as an inline
+        // `ml-1.5 text-[11px] tabular-nums` span, in one flex-1 block. As two
+        // Texts, the name took its full width and squeezed the count into a
+        // one-digit column on a phone, wrapping "49" onto two lines. The web
+        // truncates to one line; a phone gets two, because one cut "Manhwa/
+        // Manhua Favourites #1" and "#2" to the same "Manhwa/Manhua Favourites…".
+        // A figure space (no-break, ~ml-1.5) keeps the count with the name's
+        // last word, and lines break between whole words only, never with a
+        // hyphen inside one.
         Text(
-            "$count",
-            fontSize = 11.sp,
-            color = Muted.copy(alpha = 0.6f),
+            buildAnnotatedString {
+                append(name)
+                append("\u2007")
+                withStyle(SpanStyle(fontSize = 11.sp, color = Muted.copy(alpha = 0.6f), fontFeatureSettings = "tnum")) {
+                    append("$count")
+                }
+            },
+            style = MaterialTheme.typography.bodyMedium.copy(hyphens = Hyphens.None, lineBreak = LineBreak.Paragraph),
+            color = RenzoColors.Foreground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         Box(
