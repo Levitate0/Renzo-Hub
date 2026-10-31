@@ -65,6 +65,13 @@ interface SeriesDetailApi {
     @POST("api/serie/download-all")
     suspend fun downloadAll(@Query("seriesId") seriesId: String): QueuedResultDto
 
+    /** Starts checking the series' locked chapters against the owner's site logins. */
+    @POST("api/serie/check-purchases")
+    suspend fun checkPurchases(@Query("seriesId") seriesId: String): PurchaseCheckDto
+
+    @GET("api/serie/check-purchases")
+    suspend fun purchaseCheckStatus(@Query("seriesId") seriesId: String): PurchaseCheckDto
+
     @POST("api/serie/delete-downloads")
     suspend fun deleteDownloads(
         @Query("seriesId") seriesId: String,
@@ -200,6 +207,19 @@ data class ArchiveIntegrityResultDto(
 data class SeriesIntegrityResultDto(
     val success: Boolean = false,
     val badFiles: List<ArchiveIntegrityResultDto> = emptyList(),
+)
+
+/** seriesService.ts PurchaseCheck — progress of a series' purchase check. */
+@Serializable
+data class PurchaseCheckDto(
+    val running: Boolean = false,
+    val total: Int = 0,
+    val checked: Int = 0,
+    val owned: Int = 0,
+    val stillLocked: Int = 0,
+    /** Couldn't tell: the source timed out or errored. */
+    val failed: Int = 0,
+    val error: String? = null,
 )
 
 @Serializable

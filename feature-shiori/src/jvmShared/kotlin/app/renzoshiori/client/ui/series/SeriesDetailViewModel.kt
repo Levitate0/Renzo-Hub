@@ -124,6 +124,8 @@ data class SeriesDetailUiState(
     val markingAll: Boolean = false,
     val bulkPending: Boolean = false,
     val downloadAllPending: Boolean = false,
+    /** "Check purchases" progress (checked to total); null when not running. */
+    val purchaseCheck: Pair<Int, Int>? = null,
     val deleteDownloadsPending: Boolean = false,
     val confirmDelete: DeleteDownloadsScope? = null,
     val chaptersLoading: Boolean = true,
@@ -166,6 +168,7 @@ data class SeriesDetailUiState(
     val total: Int get() = chapters.size
     val downloadedCount: Int get() = chapters.count { it.downloaded }
     val missingCount: Int get() = total - downloadedCount
+    val lockedCount: Int get() = chapters.count { it.locked && !it.downloaded }
 
     /** The chapter rows the toolbar's filter + "Missing only" chip leave visible. */
     val filteredChapters: List<ChapterRowUi>
@@ -969,6 +972,45 @@ class SeriesDetailViewModel(
             }
         _state.update { it.copy(downloadAllPending = false) }
         loadDownloads()
+    }
+
+    /**
+     * chapters-section.tsx handleCheckPurchases: the server asks the source, with
+     * the owner's site login, about every locked chapter (after buying several at
+     * once on the site). It runs in the background, so poll until it finishes.
+     */
+    fun checkPurchases() = viewModelScope.launch {
+        val d = detail() ?: return@launch
+        runCatching {
+            var p = d.checkPurchases(seriesId)
+            _state.update { it.copy(purchaseCheck = p.checked to p.total) }
+            while (p.running) {
+                delay(2000)
+                p = d.purchaseCheckStatus(seriesId)
+                _state.update { it.copy(purchaseCheck = p.checked to p.total) }
+            }
+            p
+        }.onSuccess { p ->
+            val parts = listOfNotNull(
+                if (p.owned > 0) "${p.owned} unlocked and downloading"
+                else "None of them are owned yet",
+                "${p.stillLocked} still paid".takeIf { p.stillLocked > 0 },
+                "${p.failed} couldn't be checked (the site didn't answer) — try again later".takeIf { p.failed > 0 },
+            )
+            toast(
+                if (p.total == 0) "No locked chapters to check" else "Purchase check finished",
+                p.error ?: parts.joinToString(" · ").takeIf { p.total > 0 },
+                destructive = p.error != null,
+            )
+            loadChapters()
+            loadDownloads()
+        }.onFailure { e ->
+            // The server answers 400 {"error": "..."} when there is no site login.
+            val body = (e as? retrofit2.HttpException)?.response()?.errorBody()?.string()
+            val msg = body?.let { Regex("\"error\"\\s*:\\s*\"([^\"]+)\"").find(it)?.groupValues?.get(1) }
+            toast("Couldn't check purchases", msg ?: "Please try again.", destructive = true)
+        }
+        _state.update { it.copy(purchaseCheck = null) }
     }
 
     fun askDeleteDownloads(scope: DeleteDownloadsScope) = _state.update { it.copy(confirmDelete = scope) }

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
@@ -165,6 +166,17 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
                         accent = MaterialTheme.colorScheme.primary,
                         enabled = !state.downloadAllPending,
                         onClick = { vm.downloadAll() },
+                    )
+                }
+                if (state.canManageDownloads && state.lockedCount > 0) {
+                    val check = state.purchaseCheck
+                    RenzoChip(
+                        label = if (check != null) "Checking ${check.first}/${check.second}" else "Check purchases",
+                        icon = Icons.Filled.Key,
+                        count = state.lockedCount.takeIf { check == null },
+                        accent = RenzoColors.Amber,
+                        enabled = check == null,
+                        onClick = { vm.checkPurchases() },
                     )
                 }
                 if (state.canManageDownloads && state.downloadedCount > 0) {
