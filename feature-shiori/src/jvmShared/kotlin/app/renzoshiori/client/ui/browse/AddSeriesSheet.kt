@@ -73,6 +73,7 @@ import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import app.renzoshiori.client.ui.library.formatChapter
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -1004,6 +1005,8 @@ data class ConfirmRow(
     val title: String,
     val thumbnailUrl: String?,
     val chapterCount: Int,
+    /** Highest chapter number the source lists; null when none parses. */
+    val maxChapter: Double? = null,
     val isSelected: Boolean,
     val isStorage: Boolean,
     val useCover: Boolean,
@@ -1075,6 +1078,7 @@ private fun ConfirmStage(
                                 row.scanlator.takeIf { it.isNotBlank() && it != row.provider },
                                 row.lang.uppercase().takeIf { it.isNotBlank() },
                                 "${row.chapterCount} chapters",
+                                row.maxChapter?.let { "up to ch ${formatChapter(it)}" },
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.labelSmall,
                             color = RenzoColors.MutedForeground,
@@ -1231,6 +1235,12 @@ private fun buildConfirmRows(response: JsonObject): List<ConfirmRow> {
             thumbnailUrl = str("thumbnailUrl").takeIf { it.isNotBlank() },
             chapterCount = runCatching { obj["chapterCount"]?.jsonPrimitive?.content?.toDouble()?.toInt() }
                 .getOrNull() ?: 0,
+            maxChapter = runCatching {
+                obj["chapters"]?.jsonArray?.mapNotNull { c ->
+                    val o = c.jsonObject
+                    (o["number"] ?: o["chapterNumber"])?.jsonPrimitive?.content?.toDoubleOrNull()
+                }?.filter { it >= 0 && it.isFinite() }?.maxOrNull()
+            }.getOrNull(),
             // At least one row must be selected — default to every returned
             // source, with the preferred one owning storage/cover/title/status.
             isSelected = true,
