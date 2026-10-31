@@ -1007,6 +1007,8 @@ data class ConfirmRow(
     val chapterCount: Int,
     /** Highest chapter number the source lists; null when none parses. */
     val maxChapter: Double? = null,
+    /** How many listed chapters are decimals (57.1): snipers pad the count with them. */
+    val decimalChapters: Int = 0,
     val isSelected: Boolean,
     val isStorage: Boolean,
     val useCover: Boolean,
@@ -1079,6 +1081,7 @@ private fun ConfirmStage(
                                 row.lang.uppercase().takeIf { it.isNotBlank() },
                                 "${row.chapterCount} chapters",
                                 row.maxChapter?.let { "up to ch ${formatChapter(it)}" },
+                                row.decimalChapters.takeIf { it > 0 }?.let { "$it decimal" },
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.labelSmall,
                             color = RenzoColors.MutedForeground,
@@ -1226,6 +1229,12 @@ private fun buildConfirmRows(response: JsonObject): List<ConfirmRow> {
         val obj = element.jsonObject
         fun str(key: String): String =
             runCatching { obj[key]?.jsonPrimitive?.content }.getOrNull().orEmpty()
+        val numbers = runCatching {
+            obj["chapters"]?.jsonArray?.mapNotNull { c ->
+                val o = c.jsonObject
+                (o["number"] ?: o["chapterNumber"])?.jsonPrimitive?.content?.toDoubleOrNull()
+            }?.filter { it >= 0 && it.isFinite() }
+        }.getOrNull().orEmpty()
         ConfirmRow(
             index = index,
             provider = str("provider"),
@@ -1235,12 +1244,8 @@ private fun buildConfirmRows(response: JsonObject): List<ConfirmRow> {
             thumbnailUrl = str("thumbnailUrl").takeIf { it.isNotBlank() },
             chapterCount = runCatching { obj["chapterCount"]?.jsonPrimitive?.content?.toDouble()?.toInt() }
                 .getOrNull() ?: 0,
-            maxChapter = runCatching {
-                obj["chapters"]?.jsonArray?.mapNotNull { c ->
-                    val o = c.jsonObject
-                    (o["number"] ?: o["chapterNumber"])?.jsonPrimitive?.content?.toDoubleOrNull()
-                }?.filter { it >= 0 && it.isFinite() }?.maxOrNull()
-            }.getOrNull(),
+            maxChapter = numbers.maxOrNull(),
+            decimalChapters = numbers.count { it != kotlin.math.floor(it) },
             // At least one row must be selected — default to every returned
             // source, with the preferred one owning storage/cover/title/status.
             isSelected = true,
