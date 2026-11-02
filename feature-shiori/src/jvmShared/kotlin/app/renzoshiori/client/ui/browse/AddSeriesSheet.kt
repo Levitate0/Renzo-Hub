@@ -1232,7 +1232,9 @@ private fun buildConfirmRows(response: JsonObject): List<ConfirmRow> {
         val numbers = runCatching {
             obj["chapters"]?.jsonArray?.mapNotNull { c ->
                 val o = c.jsonObject
-                (o["number"] ?: o["chapterNumber"])?.jsonPrimitive?.content?.toDoubleOrNull()
+                // PascalCase on the wire: the server sets no JSON naming policy.
+                (o["Number"] ?: o["ChapterNumber"] ?: o["number"] ?: o["chapterNumber"])
+                    ?.jsonPrimitive?.content?.toDoubleOrNull()
             }?.filter { it >= 0 && it.isFinite() }
         }.getOrNull().orEmpty()
         ConfirmRow(
