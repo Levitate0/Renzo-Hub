@@ -1,5 +1,8 @@
 package app.renzoshiori.client.ui.settings
 
+import app.renzoshiori.client.data.model.UpdatePreferencesRequestDto
+import app.renzoshiori.client.data.network.SourcesApi
+import app.renzoshiori.client.ui.util.AutoBuyPrefs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -78,6 +81,16 @@ fun SiteLoginsSection(snackbar: SnackbarHostState) {
     var pendingId by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<SiteCredentialDto?>(null) }
 
+    // Account-wide auto-buy (site-logins-section.tsx); a series can override it.
+    var preferences by remember { mutableStateOf<String?>(null) }
+    var savingAutoBuy by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        preferences = runCatching {
+            app.network.currentServiceOf<SourcesApi>()?.me()?.preferences
+        }.getOrNull()
+    }
+    val autoBuy = AutoBuyPrefs.parse(preferences)
+
     suspend fun refresh() {
         val api = app.network.currentServiceOf<SiteAuthApi>() ?: return
         runCatching {
@@ -110,6 +123,47 @@ fun SiteLoginsSection(snackbar: SnackbarHostState) {
             style = MaterialTheme.typography.bodySmall,
             color = RenzoColors.MutedForeground,
         )
+        Spacer(Modifier.height(16.dp))
+
+        // ── Auto-buy, account-wide ──────────────────────────────────────
+        Row(
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .border(1.dp, RenzoColors.Border.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                .background(RenzoColors.Muted.copy(alpha = 0.2f))
+                .padding(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                Text("Auto-buy paid chapters", style = MaterialTheme.typography.titleSmall, color = RenzoColors.Foreground)
+                Text(
+                    "When you open, scroll or step into a paid chapter in the reader, buy it on the source " +
+                        "with your coins there. Needs a working login for that site. If it can't (signed " +
+                        "out, not enough coins, no buy button), the purchase screen says why. Each series " +
+                        "can override this from its page.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RenzoColors.MutedForeground,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            androidx.compose.material3.Switch(
+                checked = autoBuy,
+                enabled = !savingAutoBuy && preferences != null,
+                onCheckedChange = { on ->
+                    scope.launch {
+                        savingAutoBuy = true
+                        val api = app.network.currentServiceOf<SourcesApi>()
+                        runCatching {
+                            api?.updateMe(UpdatePreferencesRequestDto(
+                                AutoBuyPrefs.merge(preferences, on)))
+                        }.onSuccess { user -> if (user != null) preferences = user.preferences }
+                            .onFailure { snackbar.showSnackbar("Couldn't save the auto-buy setting") }
+                        savingAutoBuy = false
+                    }
+                },
+            )
+        }
         Spacer(Modifier.height(16.dp))
 
         // ── Existing logins ─────────────────────────────────────────────

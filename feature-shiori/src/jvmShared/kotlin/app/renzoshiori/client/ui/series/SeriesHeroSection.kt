@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -496,6 +497,40 @@ fun SeriesHeroSection(
                         borderColor = if (preferFree) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Border60,
                         onClick = { vm.togglePrioritizeFreeChapters() },
                     )
+                }
+
+                // Auto-buy paid chapters when the reader reaches them: follow the
+                // account setting, or override it for this series (series-hero.tsx).
+                if (state.canManageDownloads) {
+                    val override = state.series?.autoBuyPaidChapters
+                    val autoBuy = override ?: state.autoBuyAccountDefault
+                    var autoBuyOpen by remember { mutableStateOf(false) }
+                    Box {
+                        HeroActionButton(
+                            icon = Icons.Filled.MonetizationOn,
+                            contentDescription = if (autoBuy) "Auto-buy on" else "Auto-buy off",
+                            label = if (heroWide) (if (autoBuy) "Auto-buy On" else "Auto-buy Off") else null,
+                            tint = if (autoBuy) MaterialTheme.colorScheme.primary else RenzoColors.Foreground,
+                            borderColor = if (autoBuy) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Border60,
+                            onClick = { autoBuyOpen = true },
+                        )
+                        DropdownMenu(expanded = autoBuyOpen, onDismissRequest = { autoBuyOpen = false }) {
+                            listOf(
+                                null to "Use account setting (${if (state.autoBuyAccountDefault) "on" else "off"})",
+                                true to "On for this series",
+                                false to "Off for this series",
+                            ).forEach { (value, text) ->
+                                DropdownMenuItem(
+                                    text = { Text(text) },
+                                    leadingIcon = {
+                                        if (override == value) Icon(Icons.Filled.Check, contentDescription = null)
+                                        else Spacer(Modifier.size(24.dp))
+                                    },
+                                    onClick = { autoBuyOpen = false; vm.setAutoBuy(value) },
+                                )
+                            }
+                        }
+                    }
                 }
 
                 if (state.canEdit || state.canDelete) {

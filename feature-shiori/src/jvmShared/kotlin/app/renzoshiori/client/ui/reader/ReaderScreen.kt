@@ -424,6 +424,8 @@ fun ReaderScreen(
                 hasNext = state.hasNext,
                 checking = state.unlockChecking,
                 onCheckNow = vm::checkUnlock,
+                autoBuying = state.autoBuying,
+                autoBuyError = state.autoBuyError,
                 onPrev = { vm.goToChapter(-1) },
                 onNext = { vm.goToChapter(1) },
                 onExit = onExit,

@@ -151,3 +151,18 @@ data class ReaderMarkRequestDto(
     val chapterNumbers: List<Double>,
     val read: Boolean,
 )
+
+/**
+ * readerService.ts AutoBuyResult — answer of /api/reader/auto-buy. status is
+ * "running" | "bought" | "failed" | "off"; on "failed", [message] says which
+ * requirement wasn't met, for the purchase screen.
+ */
+@Serializable
+data class AutoBuyResultDto(
+    val status: String = "off",
+    val reason: String? = null,
+    val message: String? = null,
+    val provider: String? = null,
+    val price: Double? = null,
+    val balance: Double? = null,
+)

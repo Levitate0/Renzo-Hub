@@ -357,6 +357,10 @@ fun LockedChapterScreen(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onExit: () -> Unit,
+    /** Auto-buy is buying this chapter on the source right now. */
+    autoBuying: Boolean = false,
+    /** Why auto-buy couldn't buy it (which requirement failed), or null. */
+    autoBuyError: String? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -389,6 +393,45 @@ fun LockedChapterScreen(
             modifier = Modifier.padding(top = 8.dp),
         )
         Spacer(Modifier.height(24.dp))
+        if (autoBuying) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color(0x4DA78BFA), RoundedCornerShape(8.dp)) // violet-400/30
+                    .background(Color(0x1A8B5CF6)) // violet-500/10
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp,
+                    color = Color(0xFFEDE9FE),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Auto-buy is buying this chapter on the source…", fontSize = 14.sp, color = Color(0xFFEDE9FE))
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+        if (autoBuyError != null) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 384.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color(0x4DFBBF24), RoundedCornerShape(8.dp)) // amber-400/30
+                    .background(Color(0x1AF59E0B)) // amber-500/10
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                Text("Auto-buy couldn't buy this chapter", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFFFEF3C7))
+                Text(
+                    autoBuyError,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                    color = Color(0xCCFEF3C7),
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+        }
         if (url != null) {
             Button(
                 onClick = {

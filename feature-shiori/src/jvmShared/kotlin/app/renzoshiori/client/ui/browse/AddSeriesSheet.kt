@@ -1074,20 +1074,29 @@ private fun ConfirmStage(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        // Source on one line, the chapter figures on the next (web's
+                        // name-row / sub-row), each free to wrap: on a phone one
+                        // joined line ran off the edge and cut "up to ch" off.
                         Text(
                             listOfNotNull(
                                 row.provider.takeIf { it.isNotBlank() },
                                 row.scanlator.takeIf { it.isNotBlank() && it != row.provider },
                                 row.lang.uppercase().takeIf { it.isNotBlank() },
+                            ).joinToString(" · "),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = RenzoColors.MutedForeground,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                        Text(
+                            listOfNotNull(
                                 "${row.chapterCount} chapters",
                                 row.maxChapter?.let { "up to ch ${formatChapter(it)}" },
                                 row.decimalChapters.takeIf { it > 0 }?.let { "$it decimal" },
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.labelSmall,
                             color = RenzoColors.MutedForeground,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                 }

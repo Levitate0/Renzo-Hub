@@ -69,6 +69,13 @@ interface SeriesDetailApi {
     @POST("api/serie/check-purchases")
     suspend fun checkPurchases(@Query("seriesId") seriesId: String): PurchaseCheckDto
 
+    /** Per-series auto-buy override (seriesService.ts setAutoBuy): true/false, or null to follow the account. */
+    @POST("api/serie/auto-buy")
+    suspend fun setAutoBuy(
+        @Query("seriesId") seriesId: String,
+        @Body body: AutoBuySettingDto,
+    ): Response<ResponseBody>
+
     @GET("api/serie/check-purchases")
     suspend fun purchaseCheckStatus(@Query("seriesId") seriesId: String): PurchaseCheckDto
 
@@ -190,6 +197,8 @@ data class SeriesExtendedDto(
     val nsfw: Boolean = false,
     val hideDecimalChapters: Boolean = false,
     val prioritizeFreeChapters: Boolean = false,
+    /** Auto-buy override: true/false, or null to follow the account setting. Set via [SeriesDetailApi.setAutoBuy]. */
+    val autoBuyPaidChapters: Boolean? = null,
     val isNsfw: Boolean = false,
     val chapterList: String = "",
     val path: String = "",
@@ -208,6 +217,9 @@ data class SeriesIntegrityResultDto(
     val success: Boolean = false,
     val badFiles: List<ArchiveIntegrityResultDto> = emptyList(),
 )
+
+@Serializable
+data class AutoBuySettingDto(val value: Boolean? = null)
 
 /** seriesService.ts PurchaseCheck — progress of a series' purchase check. */
 @Serializable

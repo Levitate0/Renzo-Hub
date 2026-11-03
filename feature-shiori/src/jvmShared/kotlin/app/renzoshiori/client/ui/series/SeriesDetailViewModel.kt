@@ -1,5 +1,7 @@
 package app.renzoshiori.client.ui.series
 
+import app.renzoshiori.client.data.network.AutoBuySettingDto
+import app.renzoshiori.client.ui.util.AutoBuyPrefs
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -145,6 +147,8 @@ data class SeriesDetailUiState(
     val canManageDownloads: Boolean = false,
     val categories: List<String> = emptyList(),
     val defaultSourcePriorityOrder: List<String> = emptyList(),
+    /** The account-wide auto-buy setting a series with no override follows. */
+    val autoBuyAccountDefault: Boolean = false,
 
     // ── Hero action row ──
     val favoriteLists: List<FavoriteListDto> = emptyList(),
@@ -300,6 +304,7 @@ class SeriesDetailViewModel(
                 canManageDownloads = canManage,
                 categories = if (settings.categorizedFolders) settings.categories else emptyList(),
                 defaultSourcePriorityOrder = defaults,
+                autoBuyAccountDefault = AutoBuyPrefs.parse(me?.preferences),
             )
         }
     }
@@ -656,6 +661,19 @@ class SeriesDetailViewModel(
      */
     fun togglePrioritizeFreeChapters() = viewModelScope.launch {
         pushSeries(prioritizeFreeOverride = !(_state.value.series?.prioritizeFreeChapters ?: false))
+    }
+
+    /**
+     * Auto-buy override for this series (series-hero.tsx's Auto-buy menu): true
+     * or false, or null to follow the account setting. Its own endpoint, not the
+     * series save, so a save can't reset it.
+     */
+    fun setAutoBuy(value: Boolean?) = viewModelScope.launch {
+        val d = detail() ?: return@launch
+        val ok = runCatching { d.setAutoBuy(seriesId, AutoBuySettingDto(value)).isSuccessful }
+            .getOrDefault(false)
+        if (ok) _state.update { st -> st.copy(series = st.series?.copy(autoBuyPaidChapters = value)) }
+        else toast("Couldn't change auto-buy for this series", destructive = true)
     }
 
     fun setCategory(category: String?) = viewModelScope.launch {

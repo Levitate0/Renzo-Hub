@@ -72,6 +72,10 @@ data class ReaderUiState(
     val locked: Boolean = false,
     val lockedUrl: String? = null,
     val unlockChecking: Boolean = false,
+    /** Auto-buy is buying the locked chapter on the source right now. */
+    val autoBuying: Boolean = false,
+    /** Why auto-buy couldn't buy it (which requirement failed), for the purchase screen. */
+    val autoBuyError: String? = null,
     val appending: Boolean = false,
     /** Why the next chapter couldn't be appended — surfaced with a Retry. */
     val appendError: String? = null,
@@ -235,6 +239,8 @@ class ReaderViewModel(
                 detectedMode = null,
                 locked = false,
                 lockedUrl = null,
+                autoBuying = false,
+                autoBuyError = null,
                 openingLabel = openingLabel,
                 arrivedLabel = null,
             )
@@ -348,6 +354,7 @@ class ReaderViewModel(
                         it.copy(loading = false, locked = true, lockedUrl = result.url, openingLabel = null)
                     }
                     startUnlockWatch(number)
+                    startAutoBuy(number)
                 }
                 is SegResult.Failed ->
                     _state.update { it.copy(loading = false, error = result.message, openingLabel = null) }
@@ -994,6 +1001,42 @@ class ReaderViewModel(
             while (_state.value.locked && _state.value.chapterNumber == number) {
                 checkUnlock()
                 delay(60_000)
+            }
+        }
+    }
+
+    /**
+     * Auto-buy (page.tsx's auto-buy effect): the locked chapter is ON SCREEN, so
+     * ask the server to buy it. The server decides whether auto-buy is on for
+     * this series or account; when it can't buy, its message names the
+     * requirement that failed and shows on the purchase screen. Bought → the
+     * same reopen a manual unlock gets.
+     */
+    private fun startAutoBuy(number: Double) {
+        viewModelScope.launch {
+            val api = app.network.currentApi() ?: return@launch
+            fun stillHere() = _state.value.locked && _state.value.chapterNumber == number
+            var r = runCatching { api.startAutoBuy(seriesId, number) }.getOrNull() ?: return@launch
+            if (r.status == "running" && stillHere()) _state.update { it.copy(autoBuying = true) }
+            while (r.status == "running" && stillHere()) {
+                delay(2500)
+                r = runCatching { api.autoBuyStatus(seriesId, number) }.getOrNull() ?: continue
+            }
+            if (!stillHere()) return@launch
+            when (r.status) {
+                "bought" -> {
+                    _state.update { st ->
+                        st.copy(
+                            autoBuying = false,
+                            chapters = st.chapters.map { if (it.number == number) it.copy(locked = false) else it },
+                        )
+                    }
+                    openChapter(number)
+                }
+                "failed" -> _state.update {
+                    it.copy(autoBuying = false, autoBuyError = r.message ?: "Auto-buy couldn't buy this chapter.")
+                }
+                else -> _state.update { it.copy(autoBuying = false) }
             }
         }
     }

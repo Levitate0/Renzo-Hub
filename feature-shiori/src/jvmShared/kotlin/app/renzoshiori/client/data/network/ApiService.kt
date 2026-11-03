@@ -1,6 +1,7 @@
 package app.renzoshiori.client.data.network
 
 import app.renzoshiori.client.data.model.AuthStatusDto
+import app.renzoshiori.client.data.model.AutoBuyResultDto
 import app.renzoshiori.client.data.model.ChapterDetailDto
 import app.renzoshiori.client.data.model.LoginRequestDto
 import app.renzoshiori.client.data.model.LoginResponseDto
@@ -122,6 +123,23 @@ interface ApiService {
          */
         @Query("refreshChapters") refreshChapters: Boolean = false,
     ): PreviewPagesDto
+
+    /**
+     * Auto-buy of a paid chapter the reader has reached (on screen, never a
+     * prefetch) — readerService.ts startAutoBuy/autoBuyStatus. The server runs
+     * it in the background; start, then poll.
+     */
+    @POST("api/reader/auto-buy")
+    suspend fun startAutoBuy(
+        @Query("seriesId") seriesId: String,
+        @Query("chapter") chapter: Double,
+    ): AutoBuyResultDto
+
+    @GET("api/reader/auto-buy")
+    suspend fun autoBuyStatus(
+        @Query("seriesId") seriesId: String,
+        @Query("chapter") chapter: Double,
+    ): AutoBuyResultDto
 
     // ── Preview (Browse items — pages come live from the source, nothing
     //    is stored server- or client-side) ─────────────────────────────────
