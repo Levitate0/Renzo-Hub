@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -480,14 +479,31 @@ private fun LazyListScope.chapterListItems(
     } else if (state.filteredChapters.isEmpty()) {
         item(key = "chapters-empty") { ChaptersEmptyState(state) }
     } else {
-        items(state.filteredChapters, key = { "ch-${it.number}" }) { chapter ->
-            ChapterRow(
-                chapter = chapter,
-                state = state,
-                isOffline = chapterKey(seriesId, chapter.number) in state.offlineKeys,
-                vm = vm,
-                onOpenChapter = { number -> onReadChapter(seriesId, number) },
-            )
+        // Gap rows ("Missing · Ch. …") go just BEFORE the chapter whose
+        // missingAfter they come from: the list is newest first, so the gap
+        // above chapter N is the run between N and the next higher chapter.
+        // Highest run first; unfiltered list only (filters break adjacency).
+        // Keys carry the owning chapter + index so they can never collide with
+        // each other or with "ch-" rows. Twin: shiori/RenzoFrontend/src/
+        // components/comp/series/detail/chapters-section.tsx.
+        val showGaps = state.showGaps
+        state.filteredChapters.forEach { chapter ->
+            if (showGaps) {
+                chapter.missingAfter.asReversed().forEachIndexed { i, range ->
+                    item(key = "gap-${chapter.number}-$i", contentType = "gap") {
+                        MissingRangeRow(range)
+                    }
+                }
+            }
+            item(key = "ch-${chapter.number}", contentType = "chapter") {
+                ChapterRow(
+                    chapter = chapter,
+                    state = state,
+                    isOffline = chapterKey(seriesId, chapter.number) in state.offlineKeys,
+                    vm = vm,
+                    onOpenChapter = { number -> onReadChapter(seriesId, number) },
+                )
+            }
         }
     }
 }

@@ -1,6 +1,8 @@
 package app.renzoshiori.client.data.model
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 
 /** Mirrors RenzoBackend/Models/Enums/SeriesStatus.cs (serialized as int). */
 object SeriesStatus {
@@ -70,6 +72,32 @@ data class ChapterDetailDto(
     val url: String? = null,
     val locked: Boolean = false,
     val availableProviders: List<ChapterSourceDto> = emptyList(),
+    /**
+     * Chapter numbers absent between THIS chapter and the next higher listed
+     * one, grouped into ascending runs; null/absent when there is no gap.
+     * The series chapter list draws one "Missing · Ch. …" gap row per run.
+     * Twin: ChapterDetail.missingAfter in shiori/RenzoFrontend/src/lib/api/types.ts
+     * (drawn by chapters-section.tsx / chapter-row.tsx).
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("MissingAfter") // the server sets no naming policy; unattributed = PascalCase
+    val missingAfter: List<MissingRangeDto>? = null,
+)
+
+/**
+ * One run of absent chapter numbers inside [ChapterDetailDto.missingAfter].
+ * Twin: ChapterGap in shiori/RenzoFrontend/src/lib/api/types.ts.
+ * Double, never Float: a 32-bit float turns 28.1 into 28.100000381….
+ * The PascalCase alternates are a hedge, not the contract (the contract is
+ * camelCase): an unattributed C# property would otherwise fail this whole
+ * chapter-list parse, and the list would silently fall back to reader rows.
+ */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+data class MissingRangeDto(
+    @JsonNames("From") val from: Double,
+    @JsonNames("To") val to: Double,
+    @JsonNames("Count") val count: Int,
 )
 
 // ── Reader DTOs (Models/Dto/ReaderDtos.cs) ─────────────────────────────────

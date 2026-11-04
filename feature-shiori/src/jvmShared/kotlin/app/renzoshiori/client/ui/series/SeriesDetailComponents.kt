@@ -92,8 +92,8 @@ val PillShape = RoundedCornerShape(50)
 
 /**
  * The web's `inline-flex … rounded-full border px-3 py-1 text-[11px]` action
- * chip (Download all / Delete downloads / Mark all read / Select / Missing
- * only / the selection toolbar's buttons). Not a Material Button — the web
+ * chip (Download all / Delete downloads / Mark all read / Select / Not
+ * downloaded / the selection toolbar's buttons). Not a Material Button — the web
  * uses a bare <button> with these exact borders and fills.
  */
 @Composable

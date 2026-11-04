@@ -17,6 +17,7 @@ import top.levitatemedia.renzo.hub.core.offline.PendingItem
 import app.renzoshiori.client.data.model.ChapterDetailDto
 import app.renzoshiori.client.data.model.ChapterSourceDto
 import app.renzoshiori.client.data.model.DownloadInfoDto
+import app.renzoshiori.client.data.model.MissingRangeDto
 import app.renzoshiori.client.data.model.ReaderChaptersDto
 import app.renzoshiori.client.data.model.ReaderMarkRequestDto
 import app.renzoshiori.client.data.model.SeriesStatus
@@ -68,6 +69,12 @@ data class ChapterRowUi(
     val pageCount: Int?,
     /** Sources that can (re-)download this chapter — the row's source picker. */
     val availableProviders: List<ChapterSourceDto> = emptyList(),
+    /**
+     * Runs of chapter numbers no source lists between this chapter and the next
+     * higher one (ascending). Drawn as gap rows ABOVE this row; never a chapter.
+     * Twin: shiori/RenzoFrontend/src/components/comp/series/detail/chapters-section.tsx
+     */
+    val missingAfter: List<MissingRangeDto> = emptyList(),
 )
 
 /** The Perm / Cover / Title / Status pill toggles of one source row. */
@@ -174,7 +181,20 @@ data class SeriesDetailUiState(
     val missingCount: Int get() = total - downloadedCount
     val lockedCount: Int get() = chapters.count { it.locked && !it.downloaded }
 
-    /** The chapter rows the toolbar's filter + "Missing only" chip leave visible. */
+    /**
+     * Chapter numbers no source lists at all (the gap rows), summed over every
+     * row regardless of filters. Twin: chapters-section.tsx header count.
+     */
+    val gapCount: Int get() = chapters.sumOf { c -> c.missingAfter.sumOf { it.count } }
+
+    /**
+     * Gap rows only make sense between ADJACENT chapters, which a search or the
+     * not-downloaded filter breaks — so they show on the unfiltered list only.
+     * Twin: chapters-section.tsx.
+     */
+    val showGaps: Boolean get() = !missingOnly && query.trim().isEmpty()
+
+    /** The chapter rows the toolbar's filter + "Not downloaded" chip leave visible. */
     val filteredChapters: List<ChapterRowUi>
         get() {
             var list = chapters
@@ -441,6 +461,7 @@ class SeriesDetailViewModel(
                 filename = r?.filename,
                 pageCount = r?.pageCount,
                 availableProviders = d?.availableProviders ?: emptyList(),
+                missingAfter = d?.missingAfter ?: emptyList(),
             )
         }.sortedByDescending { it.number }
     }
@@ -976,8 +997,8 @@ class SeriesDetailViewModel(
                 toast(
                     "Downloading all chapters",
                     if (res.queued > 0)
-                        "Queued ${res.queued} missing chapter${plural(res.queued)}; also checking sources for any newer ones."
-                    else "No missing chapters to queue — checking sources for anything new.",
+                        "Queued ${res.queued} not-downloaded chapter${plural(res.queued)}; also checking sources for any newer ones."
+                    else "Nothing left to download — checking sources for anything new.",
                 )
             }
             .onFailure {

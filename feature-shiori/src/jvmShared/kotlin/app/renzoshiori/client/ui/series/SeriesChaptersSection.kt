@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckBox
@@ -59,14 +60,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.renzoshiori.client.data.model.MissingRangeDto
 import app.renzoshiori.client.ui.library.formatChapter
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
@@ -77,9 +87,10 @@ import app.renzoshiori.client.ui.util.screenWidthDp
 
 /**
  * The chapters section header + toolbar from chapters-section.tsx: the
- * "N chapters" title with its "N downloaded · N missing" summary, the filter
- * field, the action chips (Download all / Delete downloads / Save series
- * offline / Mark all read / Select / Missing only), and the multi-select
+ * "N chapters" title with its "N downloaded · N not downloaded · N missing"
+ * summary, the filter field, the action chips (Download all / Delete
+ * downloads / Save series offline / Mark all read / Select / Not
+ * downloaded), and the multi-select
  * toolbar. Rendered above the rows, which the screen's LazyColumn owns so the
  * list scrolls natively instead of nesting a second scroller.
  */
@@ -97,21 +108,37 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
                 else "Chapters",
                 style = MaterialTheme.typography.titleMedium,
                 color = RenzoColors.Foreground,
-                modifier = Modifier.weight(1f),
+                modifier = if (state.total > 0) Modifier else Modifier.weight(1f),
             )
             if (state.total > 0) {
-                Row {
-                    Text("${state.downloadedCount} downloaded", fontSize = 12.sp, color = Muted)
-                    if (state.missingCount > 0) {
-                        Text(" · ", fontSize = 12.sp, color = Muted)
-                        Text(
-                            "${state.missingCount} missing",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Amber500,
-                        )
-                    }
-                }
+                // "X downloaded · Y not downloaded · G missing" — "missing" now
+                // means numbers NO source lists (the gap rows); not-yet-downloaded
+                // chapters are "not downloaded". One wrapping Text, not a Row of
+                // three: the longer line overflowed a phone header. Non-breaking
+                // spaces keep each "N label" group whole, so it only wraps at a dot.
+                // Twin: shiori/RenzoFrontend/src/components/comp/series/detail/chapters-section.tsx
+                Text(
+                    buildAnnotatedString {
+                        append("${state.downloadedCount}\u00A0downloaded")
+                        if (state.missingCount > 0) {
+                            append("\u00A0· ")
+                            withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = Amber500)) {
+                                append("${state.missingCount}\u00A0not\u00A0downloaded")
+                            }
+                        }
+                        if (state.gapCount > 0) {
+                            append("\u00A0· ")
+                            // font-medium, muted (not amber) — same as the web's span.
+                            withStyle(SpanStyle(fontWeight = FontWeight.Medium)) {
+                                append("${state.gapCount}\u00A0missing")
+                            }
+                        }
+                    },
+                    fontSize = 12.sp,
+                    color = Muted,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1f).padding(start = 12.dp),
+                )
             }
         }
         HairLine()
@@ -222,8 +249,10 @@ fun ChaptersSectionHeader(state: SeriesDetailUiState, vm: SeriesDetailViewModel)
                         onClick = { vm.toggleSelecting() },
                     )
                 }
+                // Twin: chapters-section.tsx — was "Missing only"; "missing" now
+                // names the gap rows, so the not-downloaded filter says so.
                 RenzoChip(
-                    label = "Missing only",
+                    label = "Not downloaded",
                     count = state.missingCount.takeIf { it > 0 },
                     accent = if (state.missingOnly) Amber500 else null,
                     active = state.missingOnly,
@@ -345,7 +374,7 @@ fun ChaptersEmptyState(state: SeriesDetailUiState) {
     val message = when {
         state.chaptersError -> "Couldn't load chapters. Please try again."
         state.total == 0 -> "No chapters tracked for this series yet."
-        state.missingOnly -> "No missing chapters — everything is downloaded."
+        state.missingOnly -> "Everything is downloaded."
         else -> "No chapters match your filter."
     }
     Box(
@@ -365,8 +394,8 @@ fun ChaptersEmptyState(state: SeriesDetailUiState) {
 /**
  * chapter-row.tsx — the bordered, card-tinted row: selection box (in
  * multi-select), status icon (downloaded ✓ emerald / locked 🔒 violet /
- * missing ⚠ amber), number + name + bookmark + progress chip, the
- * "from <source>" / "Locked · purchase on source" / "Missing" subtitle with
+ * not downloaded ⚠ amber), number + name + bookmark + progress chip, the
+ * "from <source>" / "Locked · purchase on source" / "Not downloaded" subtitle with
  * its upload date, then the save-offline, read-toggle and (re-)download
  * split-button actions.
  */
@@ -443,7 +472,7 @@ fun ChapterRow(
                 tint = Violet400, modifier = Modifier.size(16.dp),
             )
             else -> Icon(
-                Icons.Filled.Warning, contentDescription = "Missing",
+                Icons.Filled.Warning, contentDescription = "Not downloaded",
                 tint = Amber500, modifier = Modifier.size(16.dp),
             )
         }
@@ -499,8 +528,9 @@ fun ChapterRow(
                         "Locked · purchase on source",
                         fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Violet400,
                     )
+                    // Twin: chapter-row.tsx — was "Missing"; that word is the gap rows' now.
                     else -> Text(
-                        "Missing",
+                        "Not downloaded",
                         fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Amber500,
                     )
                 }
@@ -689,6 +719,67 @@ fun ChapterRow(
             actions()
         }
     }
+}
+
+/**
+ * A gap row: one run of chapter numbers that NO source lists, drawn just above
+ * the chapter below the gap (the list is newest first). Deliberately not a
+ * chapter — no click, no focus, no selection, no actions, never counted — and
+ * styled apart from both real rows and the amber not-downloaded state: dashed
+ * border, no fill, muted text, shorter than a chapter row.
+ * Twin: ChapterGapRow in shiori/RenzoFrontend/src/components/comp/series/detail/chapter-row.tsx
+ * (placed by chapters-section.tsx).
+ */
+@Composable
+fun MissingRangeRow(range: MissingRangeDto) {
+    val label =
+        if (range.from == range.to) formatChapter(range.from)
+        else "${formatChapter(range.from)}–${formatChapter(range.to)}"
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .dashedBorder(Border60, 8.dp) // shapes.small, same as ChapterRow
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Icon(
+            Icons.AutoMirrored.Outlined.HelpOutline,
+            contentDescription = null,
+            tint = Muted.copy(alpha = 0.6f), // text-muted-foreground/60
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium)) {
+                    append("Missing · Ch. $label")
+                    if (range.count > 1) append(" · ${range.count} chapters")
+                }
+                withStyle(SpanStyle(fontSize = 11.sp, color = Muted.copy(alpha = 0.7f))) {
+                    append("   Not on any source")
+                }
+            },
+            color = Muted,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** Tailwind `border-dashed`: a 1dp dashed stroke, inset so no half is clipped. */
+private fun Modifier.dashedBorder(color: Color, radius: Dp): Modifier = drawBehind {
+    val stroke = 1.dp.toPx()
+    val inset = stroke / 2
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(inset, inset),
+        size = Size(size.width - stroke, size.height - stroke),
+        cornerRadius = CornerRadius(radius.toPx() - inset),
+        style = Stroke(
+            width = stroke,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()), 0f),
+        ),
+    )
 }
 
 /** The delete-downloads confirmation from chapters-section.tsx. */
