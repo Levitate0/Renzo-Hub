@@ -93,6 +93,9 @@ import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
 
+/** Tag pills shown before "Show more". Same number on the web (series-hero.tsx). */
+private const val TAG_LIMIT = 12
+
 /**
  * Transliteration of series-hero.tsx. The web hero is cover-beside-info on a
  * desktop viewport and stacks on mobile — the phone gets the stacked form:
@@ -117,6 +120,7 @@ fun SeriesHeroSection(
     // Keyed on the series id so opening a DIFFERENT series starts collapsed,
     // while the 10s/20s background re-pulls of the SAME series do not disturb it.
     var descriptionExpanded by rememberSaveable(state.series?.id) { mutableStateOf(false) }
+    var tagsExpanded by rememberSaveable(state.series?.id) { mutableStateOf(false) }
     val series = state.series ?: return
     var coverExpanded by remember { mutableStateOf(false) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -303,12 +307,15 @@ fun SeriesHeroSection(
             }
 
             // ── Genre pills ──
+            // Tag-heavy sources run to 80+ pills and push the action buttons
+            // screens down, so past TAG_LIMIT they collapse like the
+            // description. Web twin: series-hero.tsx (same limit).
             if (series.genre.isNotEmpty()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    series.genre.forEach { g ->
+                    (if (tagsExpanded) series.genre else series.genre.take(TAG_LIMIT)).forEach { g ->
                         Text(
                             g,
                             fontSize = 11.sp,
@@ -320,6 +327,15 @@ fun SeriesHeroSection(
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
+                }
+                if (series.genre.size > TAG_LIMIT) {
+                    Text(
+                        if (tagsExpanded) "Show less" else "Show more (${series.genre.size - TAG_LIMIT})",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { tagsExpanded = !tagsExpanded },
+                    )
                 }
             }
 
