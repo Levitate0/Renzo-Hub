@@ -136,6 +136,8 @@ fun AddSeriesSheet(
     var rawResults by remember { mutableStateOf<JsonArray?>(null) }
     var results by remember { mutableStateOf<List<LinkedSeriesRowDto>>(emptyList()) }
     val selectedRows = remember { mutableStateListOf<String>() }
+    /** The follow-up altNames=true search is in flight ("Also searching other names…"). */
+    var searchingAltNames by remember { mutableStateOf(false) }
 
     // Stage 2 state — the augmented payload plus the per-source toggles.
     var augmented by remember { mutableStateOf<JsonObject?>(null) }
@@ -175,24 +177,33 @@ fun AddSeriesSheet(
         augmented = null
         confirmRows = emptyList()
         mergeWarning = null
+        searchingAltNames = false
 
         if (debounced.trim().length < 3 || selectedSources.isEmpty()) {
             results = emptyList()
             rawResults = null
             return@LaunchedEffect
         }
+        val keyword = debounced.trim()
+        val searchIn = selectedSources.toList()
+        // Rows are kept raw (augment gets them verbatim) and decoded for display.
+        fun show(arr: JsonArray?) {
+            rawResults = arr
+            results = arr?.mapNotNull { element ->
+                runCatching { looseJson.decodeFromJsonElement(LinkedSeriesRowDto.serializer(), element) }.getOrNull()
+            }.orEmpty()
+            val valid = results.map { it.rowId }.toSet()
+            selectedRows.retainAll { it in valid }
+        }
         searching = true
         error = null
+        var firstOk = false
         runCatching {
-            api?.searchRaw(debounced.trim(), selectedSources.toList())
+            api?.searchRaw(keyword, searchIn)
         }
             .onSuccess { arr ->
-                rawResults = arr
-                results = arr?.mapNotNull { element ->
-                    runCatching { looseJson.decodeFromJsonElement(LinkedSeriesRowDto.serializer(), element) }.getOrNull()
-                }.orEmpty()
-                val valid = results.map { it.rowId }.toSet()
-                selectedRows.retainAll { it in valid }
+                show(arr)
+                firstOk = true
             }
             .onFailure { cause ->
                 val code = (cause as? retrofit2.HttpException)?.code()
@@ -208,6 +219,25 @@ fun AddSeriesSheet(
                 }
             }
         searching = false
+
+        // ── Other names (twin: web search-series-step.tsx) ──────────────────
+        // Once the plain results are on screen, the same search again with
+        // altNames=true: it adds the rows a source lists under the series'
+        // other names. Its answer replaces the list; selection is kept by
+        // mihonId (rowId) through show(). On error the first results stay,
+        // silently. A new search cancels this one (the effect restarts).
+        if (firstOk) {
+            searchingAltNames = true
+            val alt = try {
+                api?.searchRaw(keyword, searchIn, altNames = true)
+            } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            if (alt != null) show(alt)
+            searchingAltNames = false
+        }
     }
 
     // Web: mobile keeps the full-screen sheet; a desktop window gets the
@@ -265,6 +295,7 @@ fun AddSeriesSheet(
                             debounced = it
                         },
                         searching = searching,
+                        searchingAltNames = searchingAltNames,
                         sources = sources,
                         selectedSources = selectedSources,
                         sourcesExpanded = sourcesExpanded,
@@ -646,6 +677,7 @@ private fun SearchStage(
     onSearchValue: (String) -> Unit,
     onSubmitSearch: (String) -> Unit,
     searching: Boolean,
+    searchingAltNames: Boolean,
     sources: List<SearchSourceDto>,
     selectedSources: MutableList<String>,
     sourcesExpanded: Boolean,
@@ -883,7 +915,7 @@ private fun SearchStage(
         when {
             selectedSources.isEmpty() -> CenteredNote("Pick at least one source to search")
             searchValue.isEmpty() -> CenteredNote("Start typing to search…")
-            results.isEmpty() && !searching -> CenteredNote(
+            results.isEmpty() && !searching && !searchingAltNames -> CenteredNote(
                 if (searchValue.trim().length < 3) {
                     "Keep typing — search starts at 3 characters"
                 } else {
@@ -959,6 +991,18 @@ private fun SearchStage(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            // Found under another name (twin: web search-series-step.tsx):
+                            // the title above is the searched name; say what the source calls it.
+                            series.foundAs?.let { foundAs ->
+                                Text(
+                                    "Listed as “${series.sourceTitle ?: series.title}” · found as “$foundAs”",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = RenzoColors.MutedForeground,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                                 Text(
                                     series.provider,
@@ -986,6 +1030,16 @@ private fun SearchStage(
                         }
                     }
                     HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.5f))
+                }
+                if (searchingAltNames) {
+                    item(key = "alt-names-pending") {
+                        Text(
+                            "Also searching other names…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = RenzoColors.MutedForeground,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
                 }
             }
         }

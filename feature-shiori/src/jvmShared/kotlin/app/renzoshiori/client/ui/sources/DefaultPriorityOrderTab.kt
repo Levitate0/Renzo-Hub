@@ -511,7 +511,7 @@ private fun SortableProviderRow(
 
 /** shadcn `<Button variant="outline" size="sm">`. */
 @Composable
-private fun OutlineActionButton(
+internal fun OutlineActionButton(
     label: String,
     icon: ImageVector?,
     enabled: Boolean,
@@ -554,7 +554,7 @@ private fun OutlineActionButton(
 
 /** shadcn `<Button size="sm">` (default/primary variant). */
 @Composable
-private fun PrimaryActionButton(
+internal fun PrimaryActionButton(
     label: String,
     enabled: Boolean,
     loading: Boolean = false,

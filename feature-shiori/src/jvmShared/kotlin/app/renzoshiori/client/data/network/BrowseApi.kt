@@ -54,6 +54,14 @@ interface BrowseApi {
     suspend fun searchRaw(
         @Query("keyword") keyword: String,
         @Query("searchSources") searchSources: List<String>? = null,
+        /**
+         * true: also search the series' other names (rows carry foundAs /
+         * sourceTitle). Sent as a second request once the plain results are on
+         * screen — the plain part comes back from the server's 30 s cache.
+         * Null is left off the query. Twin: web lib/api/services/searchService.ts
+         * SearchParams.altNames.
+         */
+        @Query("altNames") altNames: Boolean? = null,
     ): JsonArray
 
     /** Expands the selected search rows into full series with chapter lists. */

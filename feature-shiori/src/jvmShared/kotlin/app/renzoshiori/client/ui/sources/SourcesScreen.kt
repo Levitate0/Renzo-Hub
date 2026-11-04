@@ -89,6 +89,8 @@ private const val INITIAL_LIMIT = 24
 
 private const val TAB_SOURCES = "sources"
 private const val TAB_DEFAULT_PRIORITY = "default-priority"
+/** Twin: app/providers/page.tsx `<TabsTrigger value="migrate">` (migrate-tab.tsx). */
+private const val TAB_MIGRATE = "migrate"
 
 private const val SORT_NAME_ASC = "name-asc"
 private const val SORT_NAME_DESC = "name-desc"
@@ -99,7 +101,7 @@ private const val NSFW_SHOW = "Show"
 /**
  * Sources — a 1:1 transliteration of RenzoFrontend src/app/providers/page.tsx
  * (the page titled "Sources") and src/components/comp/sources. Keeps the web's
- * two tabs ("Sources" / "Default priority order"), the collapsible "Extension
+ * three tabs ("Sources" / "Default priority order" / "Migrate"), the collapsible "Extension
  * versions" panel, the Installed and Available sections with their "Show all"
  * footers, and the filter toolbar (Languages / NSFW / Sort / Install from APK…)
  * that sits between them because its filters apply only to Available.
@@ -162,6 +164,7 @@ fun SourcesScreen() {
                 TabTrigger("Default priority order", tab == TAB_DEFAULT_PRIORITY) {
                     tab = TAB_DEFAULT_PRIORITY
                 }
+                TabTrigger("Migrate", tab == TAB_MIGRATE) { tab = TAB_MIGRATE }
             }
 
             Spacer(Modifier.height(8.dp))
@@ -169,6 +172,7 @@ fun SourcesScreen() {
             Box(modifier = Modifier.weight(1f)) {
                 when (tab) {
                     TAB_SOURCES -> SourcesTab(api, baseUrl, snackbar)
+                    TAB_MIGRATE -> MigrateTab(api, baseUrl, snackbar)
                     else -> DefaultPriorityOrderTab(api, snackbar)
                 }
             }

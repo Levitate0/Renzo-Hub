@@ -2,6 +2,10 @@ package app.renzoshiori.client.data.network
 
 import app.renzoshiori.client.data.model.ApplyDefaultPriorityResultDto
 import app.renzoshiori.client.data.model.ExtensionInfoDto
+import app.renzoshiori.client.data.model.MigrationApplyRequestDto
+import app.renzoshiori.client.data.model.MigrationRunDto
+import app.renzoshiori.client.data.model.MigrationSourcesDto
+import app.renzoshiori.client.data.model.MigrationStartRequestDto
 import app.renzoshiori.client.data.model.NsfwSettingsDto
 import app.renzoshiori.client.data.model.ProviderDto
 import app.renzoshiori.client.data.model.UpdatePreferencesRequestDto
@@ -9,6 +13,7 @@ import app.renzoshiori.client.data.model.UserDto
 import kotlinx.serialization.json.JsonObject
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -103,4 +108,38 @@ interface SourcesApi {
 
     @GET("api/settings")
     suspend fun settings(): NsfwSettingsDto
+
+    // ── Source migration (api/migrate, Manager+) — Sources › Migrate ────
+    // Twin: RenzoFrontend lib/api/services/migrateService.ts (used by
+    // components/comp/sources/migrate-tab.tsx). Server: MigrateController.cs.
+
+    /** The sources the caller's series use, and the ones they can move to. */
+    @GET("api/migrate/sources")
+    suspend fun migrationSources(): MigrationSourcesDto
+
+    /**
+     * The caller's latest migration. 204 (no body) when there is none, so it is
+     * read as a [Response]: a non-null body type would throw on the empty 204.
+     */
+    @GET("api/migrate/current")
+    suspend fun currentMigration(): Response<MigrationRunDto>
+
+    /** Starts looking for matches (409 {error} when it cannot); poll [migration]. */
+    @POST("api/migrate")
+    suspend fun startMigration(@Body body: MigrationStartRequestDto): MigrationRunDto
+
+    /** 404 once the run is gone. */
+    @GET("api/migrate/{id}")
+    suspend fun migration(@Path("id") id: String): MigrationRunDto
+
+    /** Adds the chosen matches (409 {error} when it cannot); poll [migration]. */
+    @POST("api/migrate/{id}/apply")
+    suspend fun applyMigration(
+        @Path("id") id: String,
+        @Body body: MigrationApplyRequestDto,
+    ): MigrationRunDto
+
+    /** Forgets a finished migration (204). */
+    @DELETE("api/migrate/{id}")
+    suspend fun discardMigration(@Path("id") id: String): Response<ResponseBody>
 }

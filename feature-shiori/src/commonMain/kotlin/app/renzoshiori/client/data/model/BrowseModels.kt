@@ -81,6 +81,14 @@ data class LinkedSeriesRowDto(
     val isStorage: Boolean = false,
     val isLocal: Boolean = false,
     val useCover: Boolean = false,
+    /**
+     * Found under one of the series' other names (an altNames=true search):
+     * the name it was found under. [title] then shows the searched name and
+     * [sourceTitle] the source's own. Mirrors RenzoBackend LinkedSeriesDto;
+     * web twin: lib/api/types.ts LinkedSeries.foundAs / sourceTitle.
+     */
+    val foundAs: String? = null,
+    val sourceTitle: String? = null,
 ) {
     /** The id the web uses as a row key: `series.mihonId ?? series.providerId`. */
     val rowId: String get() = mihonId ?: providerId
