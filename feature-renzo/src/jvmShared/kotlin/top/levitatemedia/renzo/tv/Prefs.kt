@@ -92,10 +92,19 @@ class Prefs {
         get() = p.getString("desktopPlayer", null)?.takeIf { it == "external" } ?: "builtin"
         set(v) = p.putString("desktopPlayer", v)
 
-    /** Desktop player: count down into the next episode when one ends. */
+    /** Count down into the next episode when one ends (both built-in players). */
     var autoplayNext: Boolean
         get() = p.getBoolean("autoplayNext", true)
         set(v) = p.putBoolean("autoplayNext", v)
+
+    /**
+     * With [autoplayNext] on, start the next episode the moment one ends, with
+     * no "Up next" countdown. Off by default. Web twin: watch-view.tsx
+     * SKIP_COUNTDOWN_KEY ("Skip countdown" in the player's settings menu).
+     */
+    var playNextImmediately: Boolean
+        get() = p.getBoolean("playNextImmediately", false)
+        set(v) = p.putBoolean("playNextImmediately", v)
 
     fun clearSession() { sessionCookie = null }
     fun forgetServer() {

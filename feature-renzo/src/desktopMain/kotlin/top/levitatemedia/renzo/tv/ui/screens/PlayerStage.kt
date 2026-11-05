@@ -138,6 +138,7 @@ internal class StageState(
     val ccIndex: Int,
     val rate: Float,
     val autoplay: Boolean,
+    val skipCountdown: Boolean,
     val volume: Int,
     val muted: Boolean,
     val upNext: UpNextInfo?,
@@ -153,6 +154,7 @@ internal class StageActions(
     val selectSubtitles: (Int) -> Unit,
     val setRate: (Float) -> Unit,
     val setAutoplay: (Boolean) -> Unit,
+    val setSkipCountdown: (Boolean) -> Unit,
     val setVolume: (Int) -> Unit,
     val toggleMute: () -> Unit,
     val openExternal: () -> Unit,
@@ -809,6 +811,12 @@ private fun SettingsMenu(p: VlcVideoPlayer, s: StageState, a: StageActions, clos
     LaunchedEffect(tracksVersion) { tracks = p.audioTracks(); current = p.audioTrack() }
     MenuCard("Settings") {
         MenuRow("Autoplay", checked = false, trailing = { Switch(s.autoplay) }) { a.setAutoplay(!s.autoplay) }
+        // player-controls.tsx: only shown with Autoplay on, where it means something.
+        if (s.autoplay) {
+            MenuRow("Skip countdown", checked = false, trailing = { Switch(s.skipCountdown) }) {
+                a.setSkipCountdown(!s.skipCountdown)
+            }
+        }
         // Dual-audio releases carry a Japanese and an English track.
         if (tracks.size > 1) {
             Spacer(Modifier.height(4.dp))

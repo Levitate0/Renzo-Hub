@@ -130,7 +130,8 @@ private const val RESUME_TAIL_MS = 60_000L
  *    the user's server (local /files + caption tracks). Debrid CDN hosts
  *    NEVER see it (session-token leak).
  *  - STATE_ENDED → markWatched once (server scrobbles trackers) → 8s
- *    auto-next countdown when upNext != null, else exit.
+ *    auto-next countdown when upNext != null, else exit. Account › Playback
+ *    can turn Autoplay off (stay on the ended episode) or skip the countdown.
  *  - ep+1 is prefetched fire-and-forget once playback starts to warm the
  *    server's cache so auto-next is instant.
  *  - Fatal player errors (expired debrid links) re-resolve a fresh link and
@@ -380,11 +381,19 @@ private fun PlayerContent(
                             val next = try {
                                 app.repo.markWatched(titleId, ep).upNext
                             } catch (_: Exception) { null }
-                            if (next != null) {
-                                controlsVisible = false
-                                countdown = 8
-                                upNextEp = next
-                            } else onExit()
+                            when {
+                                next == null -> onExit()
+                                // The web's Autoplay off: stay on the ended episode.
+                                !app.prefs.autoplayNext -> controlsVisible = true
+                                // Only after /watched has answered: this screen's
+                                // scope ends with the episode and would cancel it.
+                                app.prefs.playNextImmediately -> onSwitchEpisode(next)
+                                else -> {
+                                    controlsVisible = false
+                                    countdown = 8
+                                    upNextEp = next
+                                }
+                            }
                         }
                     }
                 }

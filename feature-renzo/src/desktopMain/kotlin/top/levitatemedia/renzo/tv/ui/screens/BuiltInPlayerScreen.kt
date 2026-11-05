@@ -222,6 +222,7 @@ private fun EpisodePage(
     var upNextEp by remember { mutableStateOf<Int?>(null) }
     var countdown by remember { mutableStateOf(8) }
     var autoplay by remember { mutableStateOf(app.prefs.autoplayNext) }
+    var skipCountdown by remember { mutableStateOf(app.prefs.playNextImmediately) }
     var downloadRequested by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var linkCopied by remember { mutableStateOf(false) }
@@ -385,9 +386,15 @@ private fun EpisodePage(
                 val d = session.detail
                 val next = serverNext ?: d?.episodeList?.firstOrNull { it.number == ep + 1 }
                     ?.takeIf { d.type != "movie" && !isUnaired(it, d, todayIso) }?.number
+                // Skip countdown goes once /watched has answered. This screen's
+                // scope ends with the episode, and that would cancel the call.
                 if (next != null && autoplay) {
-                    countdown = 8
-                    upNextEp = next
+                    if (skipCountdown) {
+                        onSwitchEpisode(next)
+                    } else {
+                        countdown = 8
+                        upNextEp = next
+                    }
                 }
             }
             VlcVideoPlayer.Status.Error -> {
@@ -445,6 +452,7 @@ private fun EpisodePage(
         ccIndex = ccIndex,
         rate = rate,
         autoplay = autoplay,
+        skipCountdown = skipCountdown,
         volume = volume,
         muted = muted,
         upNext = upNextEp?.let { n ->
@@ -466,6 +474,7 @@ private fun EpisodePage(
         selectSubtitles = ::selectSubtitles,
         setRate = { setRate(it); poke() },
         setAutoplay = { autoplay = it; app.prefs.autoplayNext = it },
+        setSkipCountdown = { skipCountdown = it; app.prefs.playNextImmediately = it },
         setVolume = { setVolume(it); poke() },
         toggleMute = { toggleMute(); poke() },
         openExternal = onUseExternal,

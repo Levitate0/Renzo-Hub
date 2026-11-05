@@ -946,6 +946,28 @@ private fun DefaultsPane(app: AppServices) {
         }
         StatusText(msg)
 
+        // Stored on this device, like the web's (per browser). The web keeps
+        // these two in its player's settings menu (player-controls.tsx), and so
+        // does the desktop player; the Android/TV player has no menu, so here
+        // is where a phone or TV sets them.
+        var autoplay by remember { mutableStateOf(app.prefs.autoplayNext) }
+        var skipCountdown by remember { mutableStateOf(app.prefs.playNextImmediately) }
+        PaneSection(
+            title = "Playback",
+            sub = plain("What happens when an episode ends. Saved on this device only."),
+        ) {
+            CheckboxRow(autoplay, "Autoplay the next episode") {
+                autoplay = !autoplay
+                app.prefs.autoplayNext = autoplay
+            }
+            if (autoplay) {
+                CheckboxRow(skipCountdown, "Skip the countdown: start the next episode as soon as one ends") {
+                    skipCountdown = !skipCountdown
+                    app.prefs.playNextImmediately = skipCountdown
+                }
+            }
+        }
+
         // Desktop only, and stored on this computer — not a server default:
         // the choice depends on what is installed here.
         if (top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) {
