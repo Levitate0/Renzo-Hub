@@ -11,6 +11,7 @@ import top.levitatemedia.renzo.tv.ui.kit.RibbonSelect
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
 import top.levitatemedia.renzo.tv.ui.components.tvClickable
+import top.levitatemedia.renzo.tv.ui.components.airDateLabel
 import top.levitatemedia.renzo.tv.ui.components.focusRing
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.draw.scale
@@ -1000,15 +1001,17 @@ private fun EpisodeTile(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 3.dp),
         )
-        // Web `.ep-foot`: "Subtitled" left, ⋮ kebab right.
+        // Web `.ep-foot`: "{air date} · Subtitled" left, ⋮ kebab right.
         Row(
             Modifier.fillMaxWidth().padding(top = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Subtitled",
+                (airDateLabel(ep.airDate, unaired)?.let { "$it · " } ?: "") + "Subtitled",
                 color = RenzoColors.MutedForeground,
                 fontSize = 12.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             if (!unaired) {

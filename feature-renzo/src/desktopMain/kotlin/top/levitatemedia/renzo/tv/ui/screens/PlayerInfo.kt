@@ -59,6 +59,7 @@ import top.levitatemedia.renzo.tv.api.EpisodeInfo
 import top.levitatemedia.renzo.tv.api.ResumePoint
 import top.levitatemedia.renzo.tv.api.SeasonRef
 import top.levitatemedia.renzo.tv.api.TitleDetail
+import top.levitatemedia.renzo.tv.ui.components.airDateLabel
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 
 /*
@@ -589,13 +590,18 @@ private fun EpisodeRow(ep: EpisodeInfo, m: InfoModel, modifier: Modifier, onClic
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            // episode-list.tsx: the state, then the air date ("Watched · Sep
+            // 29, 2023"); a dated unaired episode says "Airs Oct 13" instead of "Soon".
             Text(
-                when {
-                    playing -> "Now playing"
-                    unaired -> "Soon"
-                    watched -> "Watched"
-                    else -> d.duration?.takeIf { it > 0 }?.let { "${it}m" } ?: "Subtitled"
-                },
+                listOfNotNull(
+                    when {
+                        playing -> "Now playing"
+                        unaired -> if (ep.airDate != null) null else "Soon"
+                        watched -> "Watched"
+                        else -> d.duration?.takeIf { it > 0 }?.let { "${it}m" } ?: "Subtitled"
+                    },
+                    airDateLabel(ep.airDate, unaired),
+                ).joinToString(" · "),
                 color = if (playing) RenzoColors.Primary else RenzoColors.MutedForeground,
                 fontSize = 12.sp,
                 fontWeight = if (playing) FontWeight.SemiBold else FontWeight.Normal,

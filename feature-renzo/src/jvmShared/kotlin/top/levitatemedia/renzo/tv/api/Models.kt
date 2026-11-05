@@ -115,6 +115,8 @@ data class EpisodeInfo(
     val aired: String? = null,
     val thumbnail: String? = null,
     val epTitle: String? = null,
+    /** Air date "YYYY-MM-DD" (Japan) from MAL / AniList; null when neither has one. */
+    val airDate: String? = null,
 )
 
 @Serializable
