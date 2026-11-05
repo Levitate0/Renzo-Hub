@@ -60,7 +60,7 @@ data class SelectOption(
     val dotColor: Color? = null,
     /** Muted count after the label (web's live count badges). */
     val count: Int? = null,
-    /** Renders the web's "└" prefix for a favourites sub-list. */
+    /** Renders the web's "└" prefix for a sub-collection. */
     val indented: Boolean = false,
     /** Leading glyph (the Browse source picker's globe / language flag stand-in). */
     val icon: ImageVector? = null,

@@ -34,9 +34,10 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.NotificationsNone
@@ -49,6 +50,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -57,13 +59,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -85,6 +92,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import app.renzoshiori.client.ui.components.DragHandle
+import app.renzoshiori.client.ui.components.dragReorderHandle
+import app.renzoshiori.client.ui.components.dragReorderItem
+import app.renzoshiori.client.ui.components.rememberDragReorderState
 import app.renzoshiori.client.resources.Res
 import app.renzoshiori.client.resources.*
 import app.renzoshiori.client.data.network.absoluteUrl
@@ -435,10 +446,13 @@ fun SeriesHeroSection(
                     )
                 }
 
+                // Collections: an outline folder until the series is in one, a
+                // filled one (and the pink tint) once it is — the web's
+                // Folder with fill-current.
                 HeroActionButton(
-                    icon = if (state.isFavorited) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = if (state.isFavorited) "In your favourites — manage lists" else "Add to favourites",
-                    label = if (!heroWide) null else if (state.isFavorited) "Favourited" else "Favourite",
+                    icon = if (state.isFavorited) Icons.Filled.Folder else Icons.Outlined.Folder,
+                    contentDescription = if (state.isFavorited) "In your collections — manage" else "Add to a collection",
+                    label = if (!heroWide) null else if (state.isFavorited) "Collected" else "Collect",
                     tint = if (state.isFavorited) Pink500 else RenzoColors.Foreground,
                     borderColor = if (state.isFavorited) Pink500.copy(alpha = 0.6f) else Border60,
                     background = if (state.isFavorited) Pink500.copy(alpha = 0.15f) else Color.Transparent,
@@ -717,36 +731,21 @@ fun SeriesHeroSection(
             description = "Move this series into a category folder.",
             onDismiss = { categoryDialogOpen = false },
             body = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    state.categories.forEach { cat ->
-                        val selected = cat == currentCategory
-                        MenuRow(
-                            label = cat,
-                            icon = Icons.Filled.Check,
-                            iconTint = if (selected) RenzoColors.Foreground else Color.Transparent,
-                            onClick = {
-                                categoryDialogOpen = false
-                                if (!selected) vm.setCategory(cat)
-                            },
-                        )
-                    }
-                    if (currentCategory != null) {
-                        MenuRow(
-                            label = "Uncategorized",
-                            labelColor = Muted,
-                            onClick = {
-                                categoryDialogOpen = false
-                                vm.setCategory(null)
-                            },
-                        )
-                    }
-                }
+                CategoryPicker(
+                    state = state,
+                    vm = vm,
+                    currentCategory = currentCategory,
+                    onPick = { cat ->
+                        categoryDialogOpen = false
+                        if (cat != currentCategory) vm.setCategory(cat)
+                    },
+                )
             },
             footer = { OutlineDialogButton(text = "Close") { categoryDialogOpen = false } },
         )
     }
 
-    // ── Favourites picker ──
+    // ── Collections picker ──
     if (favoritesOpen) {
         FavoritesDialog(state = state, vm = vm, onDismiss = { favoritesOpen = false })
     }
@@ -754,6 +753,67 @@ fun SeriesHeroSection(
     // ── Tracker control ──
     if (trackerOpen) {
         TrackerDialog(state = state, vm = vm, onDismiss = { trackerOpen = false })
+    }
+}
+
+/**
+ * The Category picker's list (series-hero.tsx `CategoryPicker`). Pick a row to
+ * move the series there. The owner also gets a grip on each row to reorder the
+ * categories; a drop saves at once, and the library filter and Settings follow.
+ */
+@Composable
+private fun CategoryPicker(
+    state: SeriesDetailUiState,
+    vm: SeriesDetailViewModel,
+    currentCategory: String?,
+    onPick: (String?) -> Unit,
+) {
+    val drag = rememberDragReorderState<String>()
+    val categories = state.categories
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        categories.forEach { cat ->
+            key(cat) {
+                val selected = cat == currentCategory
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().dragReorderItem(drag, cat),
+                ) {
+                    if (state.canReorderCategories) {
+                        DragHandle(
+                            "Drag to reorder $cat",
+                            Modifier.dragReorderHandle(
+                                drag, cat, categories, 6.dp,
+                                onReorder = vm::showCategoryOrder,
+                                onDrop = vm::saveCategoryOrder,
+                            ),
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        MenuRow(
+                            label = cat,
+                            icon = Icons.Filled.Check,
+                            iconTint = if (selected) RenzoColors.Foreground else Color.Transparent,
+                            onClick = { onPick(cat) },
+                        )
+                    }
+                }
+            }
+        }
+        if (currentCategory != null) {
+            MenuRow(
+                label = "Uncategorized",
+                labelColor = Muted,
+                onClick = { onPick(null) },
+            )
+        }
+        if (state.canReorderCategories && categories.size > 1) {
+            Text(
+                "Drag a grip to reorder the categories. The library and Settings use the same order.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Muted,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 
@@ -816,8 +876,9 @@ private fun computeReadTarget(chapters: List<ChapterRowUi>): ReadTarget? {
 }
 
 /**
- * favorite-button.tsx's picker: tick the lists this series belongs to, plus a
- * "New tab" creator. Sub-lists render indented under their parent tab.
+ * favorite-button.tsx's picker: tick the collections this series belongs to,
+ * plus a "New collection" creator. Sub-collections render indented under their
+ * parent, and every row carries Move up / Move down within its own siblings.
  */
 @Composable
 private fun FavoritesDialog(
@@ -827,28 +888,67 @@ private fun FavoritesDialog(
 ) {
     var newTabName by remember { mutableStateOf("") }
     val seriesId = state.series?.id ?: ""
+    // sortedBy is stable: equal sortOrders keep the server's CreatedAt order,
+    // the same order vm.moveFavoriteList computes its moves against.
     val topLevel = state.favoriteLists.filter { it.parentId == null }.sortedBy { it.sortOrder }
+    val topDrag = rememberDragReorderState<String>()
 
     RenzoDialog(
-        title = "Favourites",
-        description = "Tick the lists this series belongs to. Create tabs and sub-lists to organize.",
+        title = "Collections",
+        description = "Tick the collections this series belongs to. Create collections and sub-collections to organize, and drag them or use the arrows to reorder them.",
         onDismiss = onDismiss,
         body = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (topLevel.isEmpty()) {
                     Text(
-                        "No favourites lists yet — create your first tab below (e.g. “Manhwa favourites”).",
+                        "No collections yet — create your first one below (e.g. “Manhwa”).",
                         style = MaterialTheme.typography.bodySmall,
                         color = Muted,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }
-                topLevel.forEach { list ->
-                    FavoriteListRow(list.id, list.name, seriesId in list.seriesIds, list.seriesIds.size, 0, vm)
-                    state.favoriteLists.filter { it.parentId == list.id }.sortedBy { it.sortOrder }
-                        .forEach { child ->
-                            FavoriteListRow(child.id, child.name, seriesId in child.seriesIds, child.seriesIds.size, 1, vm)
+                // Keyed by id (the web's key={list.id}) so a moved row takes its
+                // composition with it. Positional, the D-pad focus would stay in
+                // the slot and land on whichever collection was swapped in —
+                // pressing Move up twice would just swap the pair back.
+                // A top-level collection drags with its sub-collections (one
+                // Column, so one item); a sub-collection drags only among its
+                // parent's other children. Each drop saves its own group.
+                val topIds = topLevel.map { it.id }
+                topLevel.forEachIndexed { i, list ->
+                    key(list.id) {
+                        val children = state.favoriteLists.filter { it.parentId == list.id }.sortedBy { it.sortOrder }
+                        val childIds = children.map { it.id }
+                        val childDrag = rememberDragReorderState<String>()
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.dragReorderItem(topDrag, list.id),
+                        ) {
+                            FavoriteListRow(
+                                list.id, list.name, seriesId in list.seriesIds, list.seriesIds.size,
+                                depth = 0, index = i, siblings = topLevel.size, vm = vm,
+                                handle = Modifier.dragReorderHandle(
+                                    topDrag, list.id, topIds, 4.dp,
+                                    onReorder = vm::showFavoriteOrder,
+                                    onDrop = { vm.saveFavoriteOrder(null, it) },
+                                ),
+                            )
+                            children.forEachIndexed { j, child ->
+                                key(child.id) {
+                                    FavoriteListRow(
+                                        child.id, child.name, seriesId in child.seriesIds, child.seriesIds.size,
+                                        depth = 1, index = j, siblings = children.size, vm = vm,
+                                        modifier = Modifier.dragReorderItem(childDrag, child.id),
+                                        handle = Modifier.dragReorderHandle(
+                                            childDrag, child.id, childIds, 4.dp,
+                                            onReorder = vm::showFavoriteOrder,
+                                            onDrop = { vm.saveFavoriteOrder(list.id, it) },
+                                        ),
+                                    )
+                                }
+                            }
                         }
+                    }
                 }
                 HorizontalDivider(color = Border40, modifier = Modifier.padding(vertical = 8.dp))
                 Row(
@@ -860,7 +960,7 @@ private fun FavoritesDialog(
                         onValueChange = { newTabName = it },
                         placeholder = {
                             Text(
-                                "New tab, e.g. Manhwa favourites #2",
+                                "New collection, e.g. Manhwa #2",
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -870,7 +970,7 @@ private fun FavoritesDialog(
                         shape = MaterialTheme.shapes.small,
                         modifier = Modifier.weight(1f),
                     )
-                    PrimaryDialogButton(text = "Tab", enabled = newTabName.isNotBlank()) {
+                    PrimaryDialogButton(text = "Collection", enabled = newTabName.isNotBlank()) {
                         vm.createFavoriteList(newTabName)
                         newTabName = ""
                     }
@@ -882,10 +982,15 @@ private fun FavoritesDialog(
 }
 
 /**
- * One list in the picker: tick to add/remove this series, plus the web's
- * delete action (favorite-button.tsx ListRow). Delete asks first, inline —
- * "Delete “name” and its sub-lists? Series stay in your library." — the web's
- * window.confirm wording.
+ * One collection in the picker: tick to add/remove this series, plus the web's
+ * Move up / Move down and delete actions (favorite-button.tsx ListRow).
+ * [index] and [siblings] place the row among its own siblings — the top-level
+ * collections, or one parent's sub-collections — which is all a move can cross.
+ * Delete asks first, inline — "Delete “name” and its sub-collections? Series
+ * stay in your library." — the web's window.confirm wording. [handle] goes on
+ * the row's drag grip and [modifier] on the row itself (a sub-collection's
+ * dragReorderItem; a top-level row's is on the Column it shares with its
+ * sub-collections).
  */
 @Composable
 private fun FavoriteListRow(
@@ -894,13 +999,37 @@ private fun FavoriteListRow(
     checked: Boolean,
     count: Int,
     depth: Int,
+    index: Int,
+    siblings: Int,
     vm: SeriesDetailViewModel,
+    handle: Modifier,
+    modifier: Modifier = Modifier,
 ) {
     var confirming by remember(listId) { mutableStateOf(false) }
+    val canMoveUp = index > 0
+    val canMoveDown = index < siblings - 1
+    // D-pad: the arrow that moves a row onto an end disables itself (the
+    // series page's own convention, the source-priority arrows), and a
+    // disabled clickable gives up focus, which would drop a TV user back to
+    // the top of the dialog. So when a D-pad press is about to do that, the
+    // focus goes to the row's other arrow once the row has moved. Only a
+    // FOCUSED arrow's press counts, so a phone tap (touch mode never focuses
+    // a clickable) doesn't pull focus onto a control nobody was on.
+    val upFocus = remember { FocusRequester() }
+    val downFocus = remember { FocusRequester() }
+    var upFocused by remember { mutableStateOf(false) }
+    var downFocused by remember { mutableStateOf(false) }
+    // (requester, the index the row lands on). Any index change clears it, so
+    // a move that never happened (offline) can't fire later on another one.
+    var refocus by remember { mutableStateOf<Pair<FocusRequester, Int>?>(null) }
+    LaunchedEffect(index) {
+        refocus?.let { (target, at) -> if (at == index) runCatching { target.requestFocus() } }
+        refocus = null
+    }
     if (confirming) {
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
                 .padding(start = (depth * 22).dp)
                 .clip(MaterialTheme.shapes.extraSmall)
@@ -908,7 +1037,7 @@ private fun FavoriteListRow(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
         ) {
             Text(
-                "Delete “$name”${if (depth == 0) " and its sub-lists" else ""}? Series stay in your library.",
+                "Delete “$name”${if (depth == 0) " and its sub-collections" else ""}? Series stay in your library.",
                 style = MaterialTheme.typography.bodySmall,
                 color = RenzoColors.Foreground,
             )
@@ -922,69 +1051,119 @@ private fun FavoriteListRow(
         }
         return
     }
+    // The grip sits outside the row's tap target (the web's is its own
+    // button), so a tap meant for the grip doesn't tick the collection.
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = (depth * 22).dp)
-            .clip(MaterialTheme.shapes.extraSmall)
-            .clickable { vm.toggleFavoriteList(listId, checked) }
-            .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(start = (depth * 22).dp),
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
+        DragHandle("Drag to reorder $name", handle)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier
-                .size(18.dp)
+                .weight(1f)
                 .clip(MaterialTheme.shapes.extraSmall)
-                .background(if (checked) MaterialTheme.colorScheme.primary else Color.Transparent)
-                .border(1.dp, if (checked) Color.Transparent else Border60, MaterialTheme.shapes.extraSmall),
+                .clickable { vm.toggleFavoriteList(listId, checked) }
+                .padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
         ) {
-            if (checked) {
-                Icon(
-                    Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = RenzoColors.PrimaryForeground,
-                    modifier = Modifier.size(12.dp),
-                )
-            }
-        }
-        // favorite-button.tsx: the name with its count as an inline
-        // `ml-1.5 text-[11px] tabular-nums` span, in one flex-1 block. As two
-        // Texts, the name took its full width and squeezed the count into a
-        // one-digit column on a phone, wrapping "49" onto two lines. The web
-        // truncates to one line; a phone gets two, because one cut "Manhwa/
-        // Manhua Favourites #1" and "#2" to the same "Manhwa/Manhua Favourites…".
-        // A figure space (no-break, ~ml-1.5) keeps the count with the name's
-        // last word, and lines break between whole words only, never with a
-        // hyphen inside one.
-        Text(
-            buildAnnotatedString {
-                append(name)
-                append("\u2007")
-                withStyle(SpanStyle(fontSize = 11.sp, color = Muted.copy(alpha = 0.6f), fontFeatureSettings = "tnum")) {
-                    append("$count")
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(MaterialTheme.shapes.extraSmall)
+                    .background(if (checked) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .border(1.dp, if (checked) Color.Transparent else Border60, MaterialTheme.shapes.extraSmall),
+            ) {
+                if (checked) {
+                    Icon(
+                        Icons.Filled.Check,
+                        contentDescription = null,
+                        tint = RenzoColors.PrimaryForeground,
+                        modifier = Modifier.size(12.dp),
+                    )
                 }
-            },
-            style = MaterialTheme.typography.bodyMedium.copy(hyphens = Hyphens.None, lineBreak = LineBreak.Paragraph),
-            color = RenzoColors.Foreground,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(32.dp)
-                .clip(MaterialTheme.shapes.extraSmall)
-                .clickable { confirming = true },
-        ) {
-            Icon(
-                Icons.Filled.Delete,
-                contentDescription = "Delete list",
-                tint = RenzoColors.Destructive,
-                modifier = Modifier.size(16.dp),
+            }
+            // favorite-button.tsx: the name with its count as an inline
+            // `ml-1.5 text-[11px] tabular-nums` span, in one flex-1 block. As two
+            // Texts, the name took its full width and squeezed the count into a
+            // one-digit column on a phone, wrapping "49" onto two lines. The web
+            // truncates to one line; a phone gets two, because one cut "Manhwa/
+            // Manhua Favourites #1" and "#2" to the same "Manhwa/Manhua Favourites…".
+            // A figure space (no-break, ~ml-1.5) keeps the count with the name's
+            // last word, and lines break between whole words only, never with a
+            // hyphen inside one.
+            Text(
+                buildAnnotatedString {
+                    append(name)
+                    append("\u2007")
+                    withStyle(SpanStyle(fontSize = 11.sp, color = Muted.copy(alpha = 0.6f), fontFeatureSettings = "tnum")) {
+                        append("$count")
+                    }
+                },
+                style = MaterialTheme.typography.bodyMedium.copy(hyphens = Hyphens.None, lineBreak = LineBreak.Paragraph),
+                color = RenzoColors.Foreground,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
+            // The web's row actions sit together (`gap-0.5`), apart from the name.
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .focusRequester(upFocus)
+                        .onFocusChanged { upFocused = it.isFocused }
+                        .clickable(enabled = canMoveUp) {
+                            if (upFocused && index == 1) refocus = downFocus to 0
+                            vm.moveFavoriteList(listId, -1)
+                        }
+                        .then(if (canMoveUp) Modifier else Modifier.alphaHalf()),
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp,
+                        contentDescription = "Move up",
+                        tint = Muted,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .focusRequester(downFocus)
+                        .onFocusChanged { downFocused = it.isFocused }
+                        .clickable(enabled = canMoveDown) {
+                            if (downFocused && index == siblings - 2) refocus = upFocus to siblings - 1
+                            vm.moveFavoriteList(listId, 1)
+                        }
+                        .then(if (canMoveDown) Modifier else Modifier.alphaHalf()),
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "Move down",
+                        tint = Muted,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .clickable { confirming = true },
+                ) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = "Delete collection",
+                        tint = RenzoColors.Destructive,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
         }
     }
 }

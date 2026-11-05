@@ -154,7 +154,7 @@ private fun cardSizeOf(value: String): CardSize =
  * the grid share state).
  *
  * Transliterated from RenzoFrontend src/app/library/page.tsx: the whole
- * contextual ribbon (status / categories / favourites / genres / sources /
+ * contextual ribbon (status / categories / collections / genres / sources /
  * My-library / sort / card size / Track all / Add Series) plus the ListSeries
  * card grid, with the desktop ribbon row becoming a horizontally scrollable
  * strip on the phone.
@@ -307,7 +307,7 @@ fun LibraryContent(
 // Ribbon
 // ---------------------------------------------------------------------------
 
-/** Membership set for the currently selected favourites entry (page.tsx). */
+/** Membership set for the currently selected collections entry (page.tsx). */
 private fun favoriteFilterIds(state: LibraryUiState, selected: String): Set<String>? {
     if (selected == "__ALL__") return null
     val list = state.favoriteLists.firstOrNull { it.id == selected } ?: return null
@@ -375,7 +375,7 @@ private fun LibraryRibbon(
 ) {
     val favIds = favoriteFilterIds(state, selectedFavList)
 
-    // Live counts per status tab with genre/provider/category/favourites
+    // Live counts per status tab with genre/provider/category/collection
     // already applied — the web's baseFilter, verbatim. Derived from the
     // VISIBLE set (hideAdult kept as an explicit key even though visibleSeries
     // covers it — these blocks are read far more often than they are edited).
@@ -423,12 +423,17 @@ private fun LibraryRibbon(
     // with nothing on screen to undo it. The isNotEmpty() guard is
     // load-bearing: state.series is empty while the library loads, and
     // without it every cold start would reset a valid saved filter to "All".
+    // In the order Settings keeps them, not A–Z (library/page.tsx `categories`):
+    // the owner drags them into order in Settings or a series' Category picker.
     val categories = remember(state.settings) {
-        (state.settings?.categories ?: emptyList()).filter { it.isNotBlank() }.sortedBy { it.lowercase() }
+        (state.settings?.categories ?: emptyList()).filter { it.isNotBlank() }
     }
 
-    // Favourites entries: each top-level tab followed by its indented sub-lists;
-    // a tab's count aggregates its own series plus every sub-list's.
+    // Collections entries: each top-level collection followed by its indented
+    // sub-collections, both in sortOrder (stable, so ties keep the server's
+    // CreatedAt order) — a reorder in the series page's Collections dialog
+    // shows here on the next poll. A collection's count aggregates its own
+    // series plus every sub-collection's.
     val favoriteOptions = remember(state.favoriteLists) {
         val lists = state.favoriteLists
         val out = ArrayList<SelectOption>()
@@ -449,7 +454,7 @@ private fun LibraryRibbon(
         if (providers.isNotEmpty() && selectedProvider != "__ALL__" && selectedProvider !in providers) {
             onProvider("__ALL__")
         }
-        // The same stranding, category/favourites flavour (2026-08-21: a TV
+        // The same stranding, category/collections flavour (2026-08-21: a TV
         // showed ZERO series): the Categories select hides whenever
         // categorized folders are off — but a previously saved selection
         // kept filtering, with no control on screen to undo it. Guarded on
@@ -504,13 +509,13 @@ private fun LibraryRibbon(
             )
         }
 
-        // Favourites — hidden until the user creates their first list.
+        // Collections — hidden until the user creates their first one.
         if (favoriteOptions.isNotEmpty()) {
             RibbonSelect(
-                options = listOf(SelectOption("__ALL__", "Favourites: All")) + favoriteOptions,
+                options = listOf(SelectOption("__ALL__", "Collections: All")) + favoriteOptions,
                 value = selectedFavList,
                 onChange = onFavList,
-                placeholder = "Favourites",
+                placeholder = "Collections",
                 triggerWidth = if (sm) 176.dp else 128.dp,
             )
         }

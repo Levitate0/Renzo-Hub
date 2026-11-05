@@ -31,6 +31,7 @@ import app.renzoshiori.client.data.network.DisableLinkRequestDto
 import app.renzoshiori.client.data.network.FavoriteItemRequestDto
 import app.renzoshiori.client.data.network.FavoriteListDto
 import app.renzoshiori.client.data.network.ProviderExtendedDto
+import app.renzoshiori.client.data.network.ReorderFavoriteListsDto
 import app.renzoshiori.client.data.network.ScrobblerConfigDto
 import app.renzoshiori.client.data.network.SeriesDetailApi
 import app.renzoshiori.client.data.network.SeriesDetailSettingsDto
@@ -46,6 +47,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -153,6 +156,8 @@ data class SeriesDetailUiState(
     val canDelete: Boolean = false,
     val canManageDownloads: Boolean = false,
     val categories: List<String> = emptyList(),
+    /** Owner only: the Category picker's rows get drag grips (the order is server-wide). */
+    val canReorderCategories: Boolean = false,
     val defaultSourcePriorityOrder: List<String> = emptyList(),
     /** The account-wide auto-buy setting a series with no override follows. */
     val autoBuyAccountDefault: Boolean = false,
@@ -267,7 +272,7 @@ class SeriesDetailViewModel(
                 if (_state.value.deleted) return@launch
                 loadChapters()
                 loadSeries()
-                // Favourite lists were fetched once, in init, so a category
+                // Collections were fetched once, in init, so a category
                 // created on ANOTHER surface — the library ribbon, the web UI,
                 // a second device — never appeared in this page's dropdown
                 // while the page stayed open. They ride the poll now, like the
@@ -323,6 +328,7 @@ class SeriesDetailViewModel(
                 canDelete = canManage,
                 canManageDownloads = canManage,
                 categories = if (settings.categorizedFolders) settings.categories else emptyList(),
+                canReorderCategories = level >= UserLevel.OWNER,
                 defaultSourcePriorityOrder = defaults,
                 autoBuyAccountDefault = AutoBuyPrefs.parse(me?.preferences),
             )
@@ -1161,7 +1167,7 @@ class SeriesDetailViewModel(
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // Favourites + trackers (the hero's action row)
+    // Collections + trackers (the hero's action row)
     // ──────────────────────────────────────────────────────────────────────
 
     fun toggleFavoriteList(listId: String, member: Boolean) = viewModelScope.launch {
@@ -1171,7 +1177,7 @@ class SeriesDetailViewModel(
         } else {
             runCatching { d.addFavoriteItem(listId, FavoriteItemRequestDto(seriesId)) }
         }
-        result.onFailure { toast("Failed to update favourites", destructive = true) }
+        result.onFailure { toast("Failed to update collections", destructive = true) }
         loadFavorites()
     }
 
@@ -1180,16 +1186,112 @@ class SeriesDetailViewModel(
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return@launch
         runCatching { d.createFavoriteList(CreateFavoriteListDto(trimmed, parentId)) }
-            .onFailure { toast("Failed to create list", destructive = true) }
+            .onFailure {
+                // The web's two handlers word this differently (handleCreateTab /
+                // submitSub); one method here, so pick by what was being made.
+                toast(
+                    if (parentId == null) "Failed to create collection" else "Failed to create sub-collection",
+                    destructive = true,
+                )
+            }
         loadFavorites()
     }
 
-    /** favorite-button.tsx handleDelete: the list, its sub-lists and memberships. */
+    /** favorite-button.tsx handleDelete: the collection, its sub-collections and memberships. */
     fun deleteFavoriteList(listId: String) = viewModelScope.launch {
         val d = detail() ?: return@launch
         runCatching { d.deleteFavoriteList(listId) }
-            .onFailure { toast("Failed to delete list", destructive = true) }
+            .onFailure { toast("Failed to delete collection", destructive = true) }
         loadFavorites()
+    }
+
+    /**
+     * Reorders go out one at a time. Each PUT carries the WHOLE sibling order,
+     * so two quick presses race: if the second request reaches the server
+     * first, the first lands last and silently undoes it. Mutex is fair
+     * (first come, first served), so the server sees them in press order.
+     */
+    private val reorderLock = Mutex()
+
+    /**
+     * Reorders pressed but not yet answered; only the last one refetches. A
+     * plain Int is enough: it is only touched inside viewModelScope, which runs
+     * on the main thread (Android's, and coroutines-swing's on desktop).
+     */
+    private var reordersPending = 0
+
+    /**
+     * Move a collection one place up (delta -1) or down (+1) among its
+     * siblings: top-level collections among themselves, a sub-collection only
+     * within its own parent. The new order shows at once; the server then gets
+     * that sibling group's full id list, and the refetch after it is the truth.
+     */
+    fun moveFavoriteList(listId: String, delta: Int) {
+        val lists = _state.value.favoriteLists
+        val moving = lists.firstOrNull { it.id == listId } ?: return
+        // sortedBy is stable, so lists that share a sortOrder keep the order the
+        // server sent them in (it breaks ties by CreatedAt) — the dialog's order.
+        val siblings = lists.filter { it.parentId == moving.parentId }.sortedBy { it.sortOrder }.toMutableList()
+        val from = siblings.indexOfFirst { it.id == listId }
+        val to = from + delta
+        if (to !in siblings.indices) return
+        siblings.add(to, siblings.removeAt(from))
+        val ids = siblings.map { it.id }
+        showFavoriteOrder(ids)
+        saveFavoriteOrder(moving.parentId, ids)
+    }
+
+    /**
+     * Shows a new order for one group of siblings without saving it: a drag
+     * calls this at every step and [saveFavoriteOrder] once, on drop.
+     * Renumbers the group 0..n-1, exactly what the server writes, so the
+     * refetch agrees with what is already on screen and nothing jumps.
+     */
+    fun showFavoriteOrder(ids: List<String>) {
+        val rank = ids.withIndex().associate { (i, id) -> id to i }
+        _state.update { s ->
+            s.copy(favoriteLists = s.favoriteLists.map { l -> rank[l.id]?.let { l.copy(sortOrder = it) } ?: l })
+        }
+    }
+
+    /** Saves the order of the collections under [parentId] (null: the top level). */
+    fun saveFavoriteOrder(parentId: String?, ids: List<String>) = viewModelScope.launch {
+        val d = detail() ?: return@launch
+        reordersPending++
+        val ok = try {
+            reorderLock.withLock {
+                runCatching { d.reorderFavoriteLists(ReorderFavoriteListsDto(parentId, ids)).isSuccessful }
+                    .getOrDefault(false)
+            }
+        } finally {
+            reordersPending--
+        }
+        // A server older than the endpoint 404s, and a 409 means a collection
+        // was added or deleted elsewhere. Either way the refetch below puts the
+        // server's real order back on screen.
+        if (!ok) toast("Failed to reorder collections", destructive = true)
+        // An earlier press's refetch would briefly put back the order a later,
+        // still-pending press already changed — so only the last one reloads.
+        if (!ok || reordersPending == 0) loadFavorites()
+    }
+
+    /** A Category-picker drag step: shows the new order, saves nothing. */
+    fun showCategoryOrder(order: List<String>) {
+        _state.update { it.copy(categories = order) }
+    }
+
+    /**
+     * Saves the categories' order on drop (useReorderCategories). A failure
+     * (offline, a 409 because the list changed elsewhere, a server older than
+     * the endpoint) reloads the saved order.
+     */
+    fun saveCategoryOrder(order: List<String>) = viewModelScope.launch {
+        val d = detail() ?: return@launch
+        val ok = runCatching { d.reorderCategories(order).isSuccessful }.getOrDefault(false)
+        if (!ok) {
+            toast("Failed to reorder categories", destructive = true)
+            loadPermissionsAndSettings()
+        }
     }
 
     fun setTracking(enabled: Boolean) = viewModelScope.launch {

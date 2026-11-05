@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,6 +63,10 @@ import app.renzoshiori.client.data.model.ContentPreferencesDto
 import app.renzoshiori.client.data.model.ServerSettingsDto
 import app.renzoshiori.client.data.model.TestEmailRequestDto
 import app.renzoshiori.client.data.network.ServerSettingsApi
+import app.renzoshiori.client.ui.components.DragHandle
+import app.renzoshiori.client.ui.components.dragReorderHandle
+import app.renzoshiori.client.ui.components.dragReorderItem
+import app.renzoshiori.client.ui.components.rememberDragReorderState
 import app.renzoshiori.client.ui.series.flagForLanguage
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
@@ -865,27 +870,59 @@ private fun ColumnScope.StorageSection(
 
     if (s.categorizedFolders != false) {
         FieldLabel("Categories")
-        Hint("Define categories for organizing series. Category will be selectable when adding series.")
+        Hint(
+            "Define categories for organizing series. Category will be selectable when adding series. " +
+                "Drag to reorder them; the library and the series page list them in this order.",
+        )
         Spacer(Modifier.height(8.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            categories.forEach { category ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .padding(bottom = 6.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(RenzoColors.Secondary)
-                        .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                ) {
-                    Text(
-                        category,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = RenzoColors.Foreground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    IconGhostButton(Icons.Filled.Close, "Remove $category", RenzoColors.MutedForeground) {
-                        update(s.copy(categories = categories.filter { it != category }))
+        // settings-manager.tsx StorageSection: a SortableRows list. The arrows
+        // are the Hub's own, for a TV remote, which can't drag (the language
+        // rows above have them for the same reason).
+        val drag = rememberDragReorderState<String>()
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            categories.forEachIndexed { index, category ->
+                key(category) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .dragReorderItem(drag, category)
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.dp, RenzoColors.Border, RoundedCornerShape(8.dp))
+                            .background(RenzoColors.Card)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        DragHandle(
+                            "Drag to reorder $category",
+                            Modifier.dragReorderHandle(drag, category, categories, 6.dp, onReorder = {
+                                update(s.copy(categories = it))
+                            }),
+                        )
+                        Text(
+                            category,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = RenzoColors.Foreground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        )
+                        if (index > 0) {
+                            IconGhostButton(Icons.Filled.ArrowUpward, "Move up", RenzoColors.MutedForeground) {
+                                val next = categories.toMutableList()
+                                next.add(index - 1, next.removeAt(index))
+                                update(s.copy(categories = next))
+                            }
+                        }
+                        if (index < categories.size - 1) {
+                            IconGhostButton(Icons.Filled.ArrowDownward, "Move down", RenzoColors.MutedForeground) {
+                                val next = categories.toMutableList()
+                                next.add(index + 1, next.removeAt(index))
+                                update(s.copy(categories = next))
+                            }
+                        }
+                        IconGhostButton(Icons.Filled.Close, "Remove $category", RenzoColors.MutedForeground) {
+                            update(s.copy(categories = categories.filter { it != category }))
+                        }
                     }
                 }
             }

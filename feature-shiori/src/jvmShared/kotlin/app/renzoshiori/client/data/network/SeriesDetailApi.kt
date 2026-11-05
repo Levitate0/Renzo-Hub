@@ -16,7 +16,7 @@ import retrofit2.http.Query
  * Everything the native series-detail screen needs that [ApiService] doesn't
  * already carry — the FULL SeriesExtendedDto (with its providers), the
  * per-source PATCH the web page's provider switches drive, the chapter
- * download/delete actions behind the chapters toolbar, plus the favourites and
+ * download/delete actions behind the chapters toolbar, plus the collections and
  * tracker endpoints behind the hero's action row.
  *
  * Kept in its own file so it can grow with the screen without touching the
@@ -100,16 +100,37 @@ interface SeriesDetailApi {
     @GET("api/settings")
     suspend fun settings(): SeriesDetailSettingsDto
 
-    // ── Favourites ──────────────────────────────────────────────────────
+    /**
+     * Saves a new order for the categorized-folder categories and nothing else
+     * (owner only): every saved category, listed once. A different set is a 409
+     * (the list changed elsewhere), and a server older than the endpoint 404s.
+     */
+    @PUT("api/settings/categories/order")
+    suspend fun reorderCategories(@Body order: List<String>): Response<ResponseBody>
+
+    // ── Collections (still "favorites" on the wire) ─────────────────────
+    // The UI calls them collections; routes, DTOs and JSON fields kept the
+    // old name so installed Hub builds keep talking to newer servers.
     @GET("api/favorites")
     suspend fun favorites(): List<FavoriteListDto>
 
     @POST("api/favorites")
     suspend fun createFavoriteList(@Body body: CreateFavoriteListDto): FavoriteListDto
 
-    /** Deletes a list, its sub-lists and their memberships (series stay in the library). */
+    /** Deletes a collection, its sub-collections and their memberships (series stay in the library). */
     @DELETE("api/favorites/{id}")
     suspend fun deleteFavoriteList(@Path("id") listId: String): Response<ResponseBody>
+
+    /**
+     * Rewrites the order of ONE sibling group: every collection whose parent
+     * is [ReorderFavoriteListsDto.parentId], listed exactly once. The server
+     * answers 409 if that set is not exactly what it holds (a collection was
+     * added or deleted elsewhere), so a stale order is refused, never half-written.
+     * Response<ResponseBody>, not a decoded body: a server older than the
+     * endpoint 404s, and the caller has to see that as a failure.
+     */
+    @PUT("api/favorites/order")
+    suspend fun reorderFavoriteLists(@Body body: ReorderFavoriteListsDto): Response<ResponseBody>
 
     @POST("api/favorites/{id}/items")
     suspend fun addFavoriteItem(
@@ -298,6 +319,18 @@ data class CreateFavoriteListDto(
 @Serializable
 data class FavoriteItemRequestDto(
     val seriesId: String = "",
+)
+
+/**
+ * PUT /api/favorites/order. A null [parentId] (the top-level collections)
+ * leaves the body entirely — this module's Json has encodeDefaults = false and
+ * explicitNulls = false — and the server reads an absent parentId as null,
+ * so the two mean the same thing.
+ */
+@Serializable
+data class ReorderFavoriteListsDto(
+    val parentId: String? = null,
+    val ids: List<String> = emptyList(),
 )
 
 /** ScrobblerProvider (int): 0 MyAnimeList, 1 AniList, 2 ComicVine, 3 Kitsu, 4 MangaDex. */

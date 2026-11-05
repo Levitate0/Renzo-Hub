@@ -13,8 +13,9 @@ import retrofit2.http.Query
 
 /**
  * Everything the Library ribbon needs that ApiService.library() doesn't cover:
- * the viewAll (Owner) flag, the per-series provider list, the user's favourite
- * lists, the categorized-folder settings and the Track-all scrobbler action.
+ * the viewAll (Owner) flag, the per-series provider list, the user's
+ * collections (GET api/favorites), the categorized-folder settings and the
+ * Track-all scrobbler action.
  */
 interface LibraryExtrasApi {
     /** Owner-level accounts can flip viewAll to see every user's library. */

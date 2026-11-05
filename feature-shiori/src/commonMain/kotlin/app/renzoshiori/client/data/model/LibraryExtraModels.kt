@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /**
  * DTOs the Library ribbon needs beyond [SeriesInfoDto]: the per-series provider
  * list (drives the "All Sources" filter and the card's source badges), the
- * user's favourite lists (the Favourites dropdown), the categorized-folders
+ * user's collections (the Collections dropdown), the categorized-folders
  * settings (the Categories dropdown) and the scrobbler configs (Track all).
  */
 

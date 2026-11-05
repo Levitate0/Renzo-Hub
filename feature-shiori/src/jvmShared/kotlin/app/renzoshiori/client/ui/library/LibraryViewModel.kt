@@ -76,7 +76,7 @@ class LibraryViewModel : ViewModel() {
                         val seen = HashSet<String>()
                         _state.value = _state.value.copy(series = rows.filter { seen.add(it.id) })
                     }
-                // Favourite lists ride the same poll as the series rows. They
+                // Collections ride the same poll as the series rows. They
                 // used to be fetched ONCE, in init, so a category added from
                 // the series page, the web UI or another device never reached
                 // this screen's dropdown until the app was restarted — the
@@ -101,7 +101,7 @@ class LibraryViewModel : ViewModel() {
         }
         _state.value = _state.value.copy(loading = true, error = null)
         // Pulling to refresh means "make this screen current" — the ribbon's
-        // favourites, settings and trackers are part of the screen, so they go
+        // collections, settings and trackers are part of the screen, so they go
         // too. Cheap, and it is the gesture a user reaches for the moment
         // something looks stale.
         loadSideData()
@@ -149,7 +149,7 @@ class LibraryViewModel : ViewModel() {
         }
     }
 
-    /** Permissions, favourites, settings and trackers — everything the ribbon shows. */
+    /** Permissions, collections, settings and trackers — everything the ribbon shows. */
     private fun loadSideData() {
         viewModelScope.launch {
             runCatching { app.network.currentApi()?.me() }.getOrNull()?.let { me ->
