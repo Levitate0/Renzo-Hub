@@ -156,6 +156,13 @@ fun AddSeriesSheet(
             val available = list.mapNotNull { it.mihonProviderId.takeIf(String::isNotBlank) }.toSet()
             selectedSources.clear()
             selectedSources.addAll(loadSearchSources().filter { it in available })
+            // A source installed since the choice was saved starts selected, or
+            // a new source (a sideloaded extension) never shows in results.
+            // The first visit with this records the list without adding any.
+            val known = loadKnownSources()
+            if (known != null && selectedSources.isNotEmpty())
+                selectedSources.addAll(available.filter { it !in known && it !in selectedSources })
+            saveKnownSources(available)
         }
     }
     LaunchedEffect(selectedSources.size, selectedSources.toList()) {
@@ -1078,6 +1085,29 @@ private fun ConfirmStage(
 ) {
     val isTv = LocalIsTv.current
     LazyColumn(modifier = Modifier.fillMaxSize()) {
+        // The web's "N OF M" count and Select all / Deselect all, above the rows.
+        if (rows.size > 1) {
+            item(key = "select-all") {
+                val selected = rows.count { it.isSelected }
+                val all = selected == rows.size
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        "$selected of ${rows.size} selected",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RenzoColors.MutedForeground,
+                        modifier = Modifier.weight(1f),
+                    )
+                    ToggleChip(if (all) "Deselect all" else "Select all", false) {
+                        onRows(rows.map { it.copy(isSelected = !all) })
+                    }
+                }
+                HorizontalDivider(color = RenzoColors.Border.copy(alpha = 0.5f))
+            }
+        }
         items(rows, key = { it.index }) { row ->
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
                 val rowFocus = rememberFocusState()
@@ -1429,6 +1459,17 @@ private fun loadSearchSources(): List<String> =
         .getString(SEARCH_SOURCES_KEY + "_v2", null)
         ?.split('\n')?.filter { it.isNotBlank() }
         .orEmpty()
+
+/** Every source id seen when the choice was last loaded; null before the first time. */
+private fun loadKnownSources(): Set<String>? =
+    top.levitatemedia.renzo.hub.core.keyValuePrefs(SEARCH_SOURCES_PREFS)
+        .getString(SEARCH_SOURCES_KEY + "_known", null)
+        ?.split('\n')?.filter { it.isNotBlank() }?.toSet()
+
+private fun saveKnownSources(ids: Set<String>) {
+    top.levitatemedia.renzo.hub.core.keyValuePrefs(SEARCH_SOURCES_PREFS)
+        .putString(SEARCH_SOURCES_KEY + "_known", ids.joinToString("\n"))
+}
 
 private fun saveSearchSources(ids: List<String>) {
     top.levitatemedia.renzo.hub.core.keyValuePrefs(SEARCH_SOURCES_PREFS)
