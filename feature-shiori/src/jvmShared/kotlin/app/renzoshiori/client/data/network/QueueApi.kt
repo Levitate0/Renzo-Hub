@@ -8,6 +8,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /** ErrorDownloadAction (Models/Enums/ErrorDownloadAction.cs), serialized as int. */
@@ -40,9 +41,16 @@ interface QueueApi {
         @Query("action") action: Int,
     ): Response<ResponseBody>
 
-    /** "Clear completed": drops every finished row from the history; the chapters stay. */
-    @DELETE("api/downloads/completed")
-    suspend fun clearCompleted(@Query("viewAll") viewAll: Boolean = false): Response<ResponseBody>
+    /** "Clear completed" / "Clear failed" (status = "completed" | "failed"): drops those rows; the chapters stay. */
+    @DELETE("api/downloads/{status}")
+    suspend fun clearDownloads(
+        @Path("status") status: String,
+        @Query("viewAll") viewAll: Boolean = false,
+    ): Response<ResponseBody>
+
+    /** "Retry all": every failed download back in the queue. */
+    @POST("api/downloads/failed/retry")
+    suspend fun retryAllFailed(@Query("viewAll") viewAll: Boolean = false): Response<ResponseBody>
 
     /** Jobs dialog → "Update All Series". */
     @POST("api/serie/update-all")

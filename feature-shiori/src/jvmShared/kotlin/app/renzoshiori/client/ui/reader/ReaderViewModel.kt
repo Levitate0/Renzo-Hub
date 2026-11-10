@@ -49,6 +49,10 @@ data class ReaderSegment(
     val dims: List<Pair<Int, Int>?> = emptyList(),
     val streaming: Boolean = false,
     val filename: String? = null,
+    /** Streamed only: the source that served it, how many have it, and the image-URL version ("Switch source"). */
+    val streamSource: String? = null,
+    val streamSourceCount: Int = 0,
+    val streamVersion: Int = 0,
 )
 
 data class ReaderUiState(
@@ -83,6 +87,8 @@ data class ReaderUiState(
     val arrivedLabel: String? = null,
     val cacheBusy: Boolean = false,
     val toast: String? = null,
+    /** "Switch source" is reloading the active chapter from the next source. */
+    val switchingSource: Boolean = false,
     val settings: ReaderSettings = ReaderSettings(),
     val seriesModeOverride: ReaderMode? = null,
     /**
@@ -538,6 +544,8 @@ class ReaderViewModel(
                 pages = (0 until stream.pageCount).map { streamPageUrl(base, seriesId, number, it) },
                 dims = List(stream.pageCount) { null },
                 streaming = true,
+                streamSource = stream.source,
+                streamSourceCount = stream.sourceCount,
             ),
             suggestedMode = null,
             source = PageSource.STREAM,
@@ -921,6 +929,52 @@ class ReaderViewModel(
     }
 
     // ── Actions ───────────────────────────────────────────────────────────
+
+    /**
+     * "Switch source": reload the chapter being read from the next source that
+     * has it (each press moves one further down the list), for a broken or poor
+     * upload. Streamed chapters only; a downloaded one reads from its file.
+     * Web: switchSource in app/reader/page.tsx.
+     */
+    fun switchSource() {
+        if (previewMihonId != null) return
+        val s = _state.value
+        val seg = s.activeSegment ?: return
+        if (!seg.streaming || s.switchingSource) return
+        val api = app.network.currentApi() ?: return
+        val base = app.tokenStore.serverUrl ?: return
+        _state.update { it.copy(switchingSource = true) }
+        viewModelScope.launch {
+            val sp = runCatching { api.streamPages(seriesId, seg.chapterNumber, nextSource = true) }.getOrNull()
+            _state.update { st ->
+                val i = st.segments.indexOfFirst { it.key == seg.key }
+                when {
+                    sp == null -> st.copy(switchingSource = false, toast = "Couldn't switch source.")
+                    sp.pageCount <= 0 -> st.copy(switchingSource = false, toast = "No other source could load this chapter right now.")
+                    i < 0 -> st.copy(switchingSource = false)
+                    else -> {
+                        val version = seg.streamVersion + 1
+                        val segs = st.segments.toMutableList()
+                        segs[i] = seg.copy(
+                            pageCount = sp.pageCount,
+                            pages = (0 until sp.pageCount).map { streamPageUrl(base, seriesId, seg.chapterNumber, it, version) },
+                            dims = List(sp.pageCount) { null },
+                            streamSource = sp.source,
+                            streamSourceCount = sp.sourceCount,
+                            streamVersion = version,
+                        )
+                        st.copy(
+                            segments = segs,
+                            switchingSource = false,
+                            currentPage = if (st.activeSegIndex == i) st.currentPage.coerceAtMost(sp.pageCount - 1) else st.currentPage,
+                            toast = if (sp.source != null && sp.source != seg.streamSource) "Now reading from ${sp.source}"
+                            else "No other source could load it; still on the same one.",
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     fun toggleBookmark() {
         if (previewMihonId != null) return

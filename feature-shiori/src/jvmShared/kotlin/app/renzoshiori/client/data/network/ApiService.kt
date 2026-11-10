@@ -122,6 +122,8 @@ interface ApiService {
          * poll, matching readerService.ts:49-62.
          */
         @Query("refreshChapters") refreshChapters: Boolean = false,
+        /** "Switch source": reload from the next source instead of the one that served it. */
+        @Query("nextSource") nextSource: Boolean = false,
     ): PreviewPagesDto
 
     /**
@@ -171,9 +173,14 @@ fun encodeFilename(filename: String): String =
 fun pageUrl(baseUrl: String, seriesId: String, filename: String, page: Int): String =
     "$baseUrl/api/reader/page?seriesId=$seriesId&filename=${encodeFilename(filename)}&page=$page"
 
-/** Absolute page-image URL for a not-yet-downloaded chapter, streamed live from the source. */
-fun streamPageUrl(baseUrl: String, seriesId: String, chapter: Double, page: Int): String =
-    "$baseUrl/api/reader/stream/page?seriesId=$seriesId&chapter=$chapter&page=$page"
+/**
+ * Absolute page-image URL for a not-yet-downloaded chapter, streamed live from
+ * the source. [version] changes the URL after "Switch source", so the image
+ * caches don't show the old source's pages for the new one.
+ */
+fun streamPageUrl(baseUrl: String, seriesId: String, chapter: Double, page: Int, version: Int = 0): String =
+    "$baseUrl/api/reader/stream/page?seriesId=$seriesId&chapter=$chapter&page=$page" +
+        (if (version > 0) "&v=$version" else "")
 
 /** Absolute page-image URL for a PREVIEW read of a Browse item (live from the
  *  source; nothing stored). `chapter` is the source-list index. */

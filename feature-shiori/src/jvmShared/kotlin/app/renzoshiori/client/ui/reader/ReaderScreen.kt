@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -526,8 +527,9 @@ fun ReaderScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                     val next = state.nextChapterName
+                    val servedBy = state.activeSegment?.takeIf { it.streaming }?.streamSource
                     Text(
-                        state.activeLabel + (if (next != null) " · next: $next" else ""),
+                        state.activeLabel + (if (servedBy != null) " · $servedBy" else "") + (if (next != null) " · next: $next" else ""),
                         fontSize = 12.sp,
                         color = ReaderPalette.Text60,
                         maxLines = 1,
@@ -545,6 +547,16 @@ fun ReaderScreen(
                         tint = if (bookmarkable.bookmarked) ReaderPalette.Pink400 else ReaderPalette.Text,
                         isTv = isTv,
                         onClick = vm::toggleBookmark,
+                    )
+                }
+                val streamed = state.activeSegment?.takeIf { it.streaming && it.streamSourceCount > 1 && !state.preview }
+                if (streamed != null) {
+                    ChromeIconButton(
+                        icon = Icons.Filled.Shuffle,
+                        contentDescription = "Reading from ${streamed.streamSource ?: "a source"}. Load this chapter from another source",
+                        tint = if (state.switchingSource) ReaderPalette.Text60 else ReaderPalette.Text,
+                        isTv = isTv,
+                        onClick = vm::switchSource,
                     )
                 }
                 ChromeIconButton(

@@ -86,6 +86,7 @@ private val BUCKET_ORDER = listOf(
 )
 
 private val FILTER_LABELS = listOf("All", "Completed", "Failed", "Queued")
+private const val FILTER_FAILED = 2
 
 private enum class RowStatus { DOWNLOADING, QUEUED, COMPLETED, FAILED }
 
@@ -152,17 +153,9 @@ fun QueueScreen(
     var completed by remember { mutableStateOf<List<DownloadInfoDto>>(emptyList()) }
     var completedTotal by remember { mutableStateOf(0) }
     var failed by remember { mutableStateOf<List<DownloadInfoDto>>(emptyList()) }
-
-    // "Clear completed" asks once: the first click arms it, a second within
-    // four seconds clears. Only the history goes; the chapters stay downloaded.
-    var clearArmed by remember { mutableStateOf(false) }
-    var clearing by remember { mutableStateOf(false) }
-    LaunchedEffect(clearArmed) {
-        if (clearArmed) {
-            delay(4000)
-            clearArmed = false
-        }
-    }
+    var failedTotal by remember { mutableStateOf(0) }
+    // Which whole-list action is running ("completed", "failed" or "retry"), if any.
+    var busyAction by remember { mutableStateOf<String?>(null) }
 
     val effectiveViewAll = libraryState.canOwner && viewAllLibraries
     val keyword = search.ifBlank { null }
@@ -174,7 +167,9 @@ fun QueueScreen(
             val completedList = api?.downloads(QueueStatus.COMPLETED, LIST_FETCH_LIMIT, keyword, effectiveViewAll)
             completed = completedList?.downloads.orEmpty()
             completedTotal = completedList?.totalCount ?: 0
-            failed = api?.downloads(QueueStatus.FAILED, LIST_FETCH_LIMIT, keyword, effectiveViewAll)?.downloads.orEmpty()
+            val failedList = api?.downloads(QueueStatus.FAILED, LIST_FETCH_LIMIT, keyword, effectiveViewAll)
+            failed = failedList?.downloads.orEmpty()
+            failedTotal = failedList?.totalCount ?: 0
         }
         isLoading = false
         delay(5000)
@@ -338,35 +333,36 @@ fun QueueScreen(
                     modifier = Modifier.padding(end = 8.dp),
                 )
             }
-            if (completedTotal > 0) {
-                Text(
-                    when {
-                        clearing -> "Clearing…"
-                        // The count follows the search box, but the clear doesn't.
-                        clearArmed -> if (keyword != null) "Clear all completed?" else "Clear $completedTotal completed?"
-                        else -> "Clear completed"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (clearArmed) RenzoColors.Red else RenzoColors.MutedForeground,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (clearArmed) RenzoColors.Red.copy(alpha = 0.1f) else Color.Transparent)
-                        .dpadClickable(radius = 6.dp) {
-                            if (clearing) return@dpadClickable
-                            if (!clearArmed) {
-                                clearArmed = true
-                            } else {
-                                clearArmed = false
-                                clearing = true
-                                scope.launch {
-                                    runCatching { api?.clearCompleted(effectiveViewAll) }
-                                    clearing = false
-                                    reload()
-                                }
-                            }
-                        }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                )
+            // The counts follow the search box, but these act on the whole list.
+            fun runAction(action: String, call: suspend () -> Unit) {
+                busyAction = action
+                scope.launch {
+                    runCatching { call() }
+                    busyAction = null
+                    reload()
+                }
+            }
+            if (filterIndex != FILTER_FAILED && completedTotal > 0) {
+                ConfirmAction(
+                    label = "Clear completed",
+                    confirmLabel = if (keyword != null) "Clear all completed?" else "Clear $completedTotal completed?",
+                    busy = busyAction == "completed",
+                    busyLabel = "Clearing…",
+                ) { runAction("completed") { api?.clearDownloads("completed", effectiveViewAll) } }
+            }
+            if (filterIndex == FILTER_FAILED && failedTotal > 0) {
+                ConfirmAction(
+                    label = "Retry all",
+                    confirmLabel = if (keyword != null) "Retry all failed?" else "Retry $failedTotal failed?",
+                    busy = busyAction == "retry",
+                    busyLabel = "Retrying…",
+                ) { runAction("retry") { api?.retryAllFailed(effectiveViewAll) } }
+                ConfirmAction(
+                    label = "Clear failed",
+                    confirmLabel = if (keyword != null) "Clear all failed?" else "Clear $failedTotal failed?",
+                    busy = busyAction == "failed",
+                    busyLabel = "Clearing…",
+                ) { runAction("failed") { api?.clearDownloads("failed", effectiveViewAll) } }
             }
             Text(
                 "Jobs",
@@ -842,4 +838,48 @@ private fun JobsDialog(onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+/**
+ * A whole-list header action that asks once: the first tap arms it (red, with
+ * the count), a second within four seconds runs it. Web: ConfirmButton in
+ * app/queue/page.tsx.
+ */
+@Composable
+private fun ConfirmAction(
+    label: String,
+    confirmLabel: String,
+    busy: Boolean,
+    busyLabel: String,
+    onConfirm: () -> Unit,
+) {
+    var armed by remember { mutableStateOf(false) }
+    LaunchedEffect(armed) {
+        if (armed) {
+            delay(4000)
+            armed = false
+        }
+    }
+    Text(
+        when {
+            busy -> busyLabel
+            armed -> confirmLabel
+            else -> label
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = if (armed) RenzoColors.Red else RenzoColors.MutedForeground,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (armed) RenzoColors.Red.copy(alpha = 0.1f) else Color.Transparent)
+            .dpadClickable(radius = 6.dp) {
+                if (busy) return@dpadClickable
+                if (!armed) {
+                    armed = true
+                } else {
+                    armed = false
+                    onConfirm()
+                }
+            }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    )
 }

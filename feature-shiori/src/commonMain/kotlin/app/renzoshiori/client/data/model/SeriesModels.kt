@@ -145,6 +145,10 @@ data class ReaderChapterInfoDto(
 data class PreviewPagesDto(
     val pageCount: Int = 0,
     val locked: Boolean = false,
+    /** The source that served a streamed library chapter ("Switch source"). */
+    val source: String? = null,
+    /** How many of the series' sources list it; "Switch source" shows when more than one. */
+    val sourceCount: Int = 0,
 )
 
 /** One chapter of a Browse item, straight from the source (nothing stored).
