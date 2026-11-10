@@ -82,7 +82,24 @@ fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onChange
     // The password form stays one press away, and pairing declares itself
     // unsupported gracefully against an older server.
     val isTv = app.isTv
+    // The paste-a-link doors under the form (the Shiori half's "I have the
+    // reset link" / "Have an invite link?"): emailed reset and invite links
+    // open a browser, so these are how a Hub user redeems one.
+    var route by remember { mutableStateOf(AuthRoute.Login) }
+    // Declared above the route switch so it survives a trip to the reset /
+    // invite card — a TV user comes back to the password form they left.
     var pairing by remember(isTv) { mutableStateOf(isTv) }
+    when (route) {
+        AuthRoute.Login -> Unit
+        AuthRoute.Reset -> {
+            ResetPasswordScreen(app, onBackToLogin = { route = AuthRoute.Login }, onLoggedIn = onLoggedIn)
+            return
+        }
+        AuthRoute.Invite -> {
+            AcceptInviteScreen(app, onBackToLogin = { route = AuthRoute.Login }, onLoggedIn = onLoggedIn)
+            return
+        }
+    }
     if (pairing) {
         RenzoTvPairingScreen(
             app = app,
@@ -218,6 +235,8 @@ fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onChange
         GateButton(label = if (busy) "Logging in…" else "Log in", enabled = !busy) { submit() }
 
         ForgotPasswordLink(enabled = !busy) { forgot() }
+        GateLinkRow("I have the reset link", enabled = !busy) { route = AuthRoute.Reset }
+        GateLinkRow("Have an invite link? Create your account", enabled = !busy) { route = AuthRoute.Invite }
         if (onChangeServer != null) {
             GateLinkRow("Use a different server", onClick = onChangeServer)
         }
@@ -235,6 +254,8 @@ fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onChange
         }
     }
 }
+
+private enum class AuthRoute { Login, Reset, Invite }
 
 /** Centred link row (Shiori AuthLinkRow) — shared by both gates. */
 @Composable
@@ -368,11 +389,12 @@ internal fun GateCard(isTv: Boolean, content: @Composable ColumnScope.() -> Unit
 }
 
 /** TV: lay the gate out at a lower density so it fits the panel; else 1:1.
- *  640dp covers the tallest gate (login with every link row + server line). */
+ *  720dp covers the tallest gate (login with every link row — reset and
+ *  invite doors included — plus the server line). */
 @Composable
 private fun TvGateFit(isTv: Boolean, content: @Composable () -> Unit) {
     if (isTv) {
-        top.levitatemedia.renzo.hub.core.TvFit(designHeightDp = 640) { content() }
+        top.levitatemedia.renzo.hub.core.TvFit(designHeightDp = 720) { content() }
     } else {
         content()
     }
@@ -441,11 +463,14 @@ internal fun GateTextField(
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    // web `disabled:opacity-60` — the invite gate's preset (locked) username.
+    enabled: Boolean = true,
 ) {
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxWidth()
+            .let { if (enabled) it else it.alpha(0.6f) }
             .heightIn(min = 36.dp)
             .clip(RoundedCornerShape(8.dp))
             .focusRing(focused, 8.dp)
@@ -456,6 +481,7 @@ internal fun GateTextField(
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
+            enabled = enabled,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { focused = it.isFocused },

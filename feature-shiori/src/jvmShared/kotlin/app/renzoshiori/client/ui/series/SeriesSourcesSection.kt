@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -349,6 +350,17 @@ fun SeriesSourcesSection(
         )
     }
 
+    if (state.matchOpen) {
+        ProviderMatchDialog(
+            match = state.providerMatch,
+            loading = state.matchLoading,
+            saving = state.matchSaving,
+            error = state.matchError,
+            onDismiss = { vm.dismissMatch() },
+            onSave = { vm.saveMatch(it) },
+        )
+    }
+
     confirmDeleteProvider?.let { provider ->
         RenzoDialog(
             title = "Remove this source?",
@@ -662,10 +674,18 @@ private fun ProviderCard(
                     )
                 }
             } else {
-                // Unknown source: the web only offers delete (matching lives in
-                // the web's provider-match dialog, which needs a source search).
+                // Unknown source: "Search match" (provider-card.tsx handleMatch)
+                // ahead of delete. Nothing is searched — the server lists this
+                // source's orphan files against the series' other sources.
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f))
+                    SquareIconButton(
+                        icon = Icons.Filled.Search,
+                        contentDescription = "Search match",
+                        tint = MaterialTheme.colorScheme.primary,
+                        borderColor = Border60,
+                        onClick = { vm.openMatch(provider.id) },
+                    )
                     SquareIconButton(
                         icon = Icons.Filled.Delete,
                         contentDescription = "Delete source",

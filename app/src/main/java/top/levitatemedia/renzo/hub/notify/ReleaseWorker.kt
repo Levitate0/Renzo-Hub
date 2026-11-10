@@ -21,6 +21,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.notify.ShioriReleaseCheck
+import app.renzoshiori.client.data.notify.ShioriSourceAlertCheck
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,7 +35,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * The background new-release check: both halves, every half hour or so, then
- * the notifications. Each half is checked on its own, so one server being
+ * the notifications. Also the dead-source alert (SourceAlertNotifications). Each half is checked on its own, so one server being
  * down costs the other nothing.
  */
 class ReleaseWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -49,6 +50,9 @@ class ReleaseWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 notices += RenzoReleaseCheck.run(prefs, ApiClient(prefs))
             }
             ReleaseNotifications.post(applicationContext, notices)
+            attempt("Sources") {
+                SourceAlertNotifications.post(applicationContext, ShioriSourceAlertCheck.run(ShioriRuntime.app))
+            }
         }
         return Result.success()
     }

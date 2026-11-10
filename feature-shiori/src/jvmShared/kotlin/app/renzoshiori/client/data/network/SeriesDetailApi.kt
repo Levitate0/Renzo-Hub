@@ -40,6 +40,23 @@ interface SeriesDetailApi {
         @Query("alsoPhysical") alsoPhysical: Boolean,
     ): Response<ResponseBody>
 
+    /**
+     * GET /api/serie/match/{providerId} — an UNKNOWN source's orphan files plus
+     * the series' other sources as match targets (provider-match-dialog.tsx).
+     * Response<…>, not a bare DTO: an unknown id is `Ok(null)`, which ASP.NET
+     * sends as an empty 204 a non-null suspend return would choke on.
+     */
+    @GET("api/serie/match/{providerId}")
+    suspend fun providerMatch(@Path("providerId") providerId: String): Response<ProviderMatchDto>
+
+    /**
+     * POST /api/serie/match (Manager+) — answers a bare JSON `true`/`false`
+     * (false = the unknown source is gone), read as text rather than decoded
+     * as a top-level scalar.
+     */
+    @POST("api/serie/match")
+    suspend fun setProviderMatch(@Body body: ProviderMatchDto): Response<ResponseBody>
+
     @GET("api/serie/verify")
     suspend fun verifyIntegrity(@Query("g") id: String): SeriesIntegrityResultDto
 
@@ -359,4 +376,49 @@ data class SeriesMatchStatusDto(
 data class DisableLinkRequestDto(
     val seriesId: String = "",
     val provider: Int = 0,
+)
+
+/**
+ * `matchInfoId` meaning "create a new user-based source from the sentinel
+ * MatchInfo" — web types.ts NEW_PROVIDER_SENTINEL, backend
+ * SeriesProviderService.NewProviderSentinel (Guid.Empty).
+ */
+const val NEW_PROVIDER_SENTINEL = "00000000-0000-0000-0000-000000000000"
+
+/** Mirrors ProviderMatchDto — GET/POST api/serie/match. */
+@Serializable
+data class ProviderMatchDto(
+    val id: String = "",
+    val matchInfos: List<MatchInfoDto> = emptyList(),
+    val chapters: List<ProviderMatchChapterDto> = emptyList(),
+)
+
+/**
+ * Mirrors MatchInfoDto (ProviderSummaryBase + id). GetMatchAsync fills only
+ * id / provider / scanlator / language; the rest ride along so a POST hands
+ * back exactly what came in.
+ */
+@Serializable
+data class MatchInfoDto(
+    val id: String = "",
+    val provider: String = "",
+    val scanlator: String = "",
+    val language: String = "",
+    val isStorage: Boolean = false,
+    val thumbnailUrl: String? = null,
+    val status: Int = 0,
+    val url: String? = null,
+)
+
+/**
+ * Mirrors ProviderMatchChapterDto. [chapterNumber] is a C# decimal — Double
+ * here, never Float. [filename] is the server's LOOKUP KEY on the way back
+ * (extension-less), so it must round-trip untouched.
+ */
+@Serializable
+data class ProviderMatchChapterDto(
+    val filename: String = "",
+    val chapterName: String = "",
+    val chapterNumber: Double? = null,
+    val matchInfoId: String? = null,
 )

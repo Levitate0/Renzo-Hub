@@ -54,6 +54,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,6 +90,8 @@ private const val INITIAL_LIMIT = 24
 
 private const val TAB_SOURCES = "sources"
 private const val TAB_DEFAULT_PRIORITY = "default-priority"
+/** Twin: app/providers/page.tsx `<TabsTrigger value="health">` (health-tab.tsx). */
+private const val TAB_HEALTH = "health"
 /** Twin: app/providers/page.tsx `<TabsTrigger value="migrate">` (migrate-tab.tsx). */
 private const val TAB_MIGRATE = "migrate"
 
@@ -117,6 +120,8 @@ fun SourcesScreen() {
     val baseUrl = app.tokenStore.serverUrl ?: ""
     val snackbar = remember { SnackbarHostState() }
     var tab by remember { mutableStateOf(TAB_SOURCES) }
+    // The source Health's "Migrate" hands over (web: ?tab=migrate&from=).
+    var migrateFrom by remember { mutableStateOf<String?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -164,6 +169,7 @@ fun SourcesScreen() {
                 TabTrigger("Default priority order", tab == TAB_DEFAULT_PRIORITY) {
                     tab = TAB_DEFAULT_PRIORITY
                 }
+                TabTrigger("Health", tab == TAB_HEALTH) { tab = TAB_HEALTH }
                 TabTrigger("Migrate", tab == TAB_MIGRATE) { tab = TAB_MIGRATE }
             }
 
@@ -172,7 +178,12 @@ fun SourcesScreen() {
             Box(modifier = Modifier.weight(1f)) {
                 when (tab) {
                     TAB_SOURCES -> SourcesTab(api, baseUrl, snackbar)
-                    TAB_MIGRATE -> MigrateTab(api, baseUrl, snackbar)
+                    TAB_HEALTH -> HealthTab(api) { provider ->
+                        migrateFrom = provider
+                        tab = TAB_MIGRATE
+                    }
+                    // Keyed by the source so "Migrate" from Health re-picks it.
+                    TAB_MIGRATE -> key(migrateFrom) { MigrateTab(api, baseUrl, snackbar, initialFrom = migrateFrom) }
                     else -> DefaultPriorityOrderTab(api, snackbar)
                 }
             }

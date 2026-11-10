@@ -30,6 +30,30 @@ class Repo(val client: ApiClient) {
         try { client.raw("/api/auth/forgot", "POST", body.toString()) } catch (_: Exception) { /* generic regardless */ }
     }
 
+    /**
+     * Validate an emailed reset token (web reset-gate.tsx). An invalid or
+     * expired token is a 404 carrying `{valid:false, error}`, which surfaces
+     * here as an [ApiError] with that message.
+     */
+    suspend fun resetInfo(token: String): ResetInfo =
+        client.get("/api/auth/reset/" + java.net.URLEncoder.encode(token, "UTF-8"))
+
+    /** Set the new password; the server signs the user straight in (Set-Cookie + {user}). */
+    suspend fun resetPassword(token: String, password: String): PublicUser {
+        val body = buildJsonObject { put("token", token); put("password", password) }
+        return client.post<LoginResponse>("/api/auth/reset", body.toString()).user
+    }
+
+    /** Look up an invite (web invite-gate.tsx): role note + preset username. 404 = invalid/expired. */
+    suspend fun inviteInfo(token: String): InviteInfo =
+        client.get("/api/auth/invite/" + java.net.URLEncoder.encode(token, "UTF-8"))
+
+    /** Create the invited account; signs in like login (Set-Cookie + {user}). */
+    suspend fun acceptInvite(token: String, username: String, password: String): PublicUser {
+        val body = buildJsonObject { put("token", token); put("username", username); put("password", password) }
+        return client.post<LoginResponse>("/api/auth/invite/accept", body.toString()).user
+    }
+
     suspend fun logout() { try { client.raw("/api/auth/logout", "POST") } catch (_: Exception) {} }
 
     // --- discover ---------------------------------------------------------

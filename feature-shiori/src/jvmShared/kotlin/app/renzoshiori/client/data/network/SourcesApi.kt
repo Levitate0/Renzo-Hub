@@ -3,6 +3,7 @@ package app.renzoshiori.client.data.network
 import app.renzoshiori.client.data.model.ApplyDefaultPriorityResultDto
 import app.renzoshiori.client.data.model.ExtensionInfoDto
 import app.renzoshiori.client.data.model.MigrationApplyRequestDto
+import app.renzoshiori.client.data.model.SourceHealthDto
 import app.renzoshiori.client.data.model.MigrationRunDto
 import app.renzoshiori.client.data.model.MigrationSourcesDto
 import app.renzoshiori.client.data.model.MigrationStartRequestDto
@@ -108,6 +109,18 @@ interface SourcesApi {
 
     @GET("api/settings")
     suspend fun settings(): NsfwSettingsDto
+
+    // ── Source health (api/sources/health, Manager+) — Sources › Health ──
+    // Twin: RenzoFrontend lib/api/services/sourceHealthService.ts. Server:
+    // SourceHealthController.cs.
+
+    /** Every source the caller's series use, worst first. */
+    @GET("api/sources/health")
+    suspend fun sourceHealth(): List<SourceHealthDto>
+
+    /** Only the sources that have failed everywhere for a day (the alert). */
+    @GET("api/sources/health/alerts")
+    suspend fun sourceHealthAlerts(): List<SourceHealthDto>
 
     // ── Source migration (api/migrate, Manager+) — Sources › Migrate ────
     // Twin: RenzoFrontend lib/api/services/migrateService.ts (used by

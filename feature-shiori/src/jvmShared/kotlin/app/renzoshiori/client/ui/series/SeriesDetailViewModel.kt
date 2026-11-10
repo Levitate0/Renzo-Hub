@@ -31,6 +31,7 @@ import app.renzoshiori.client.data.network.DisableLinkRequestDto
 import app.renzoshiori.client.data.network.FavoriteItemRequestDto
 import app.renzoshiori.client.data.network.FavoriteListDto
 import app.renzoshiori.client.data.network.ProviderExtendedDto
+import app.renzoshiori.client.data.network.ProviderMatchDto
 import app.renzoshiori.client.data.network.ReorderFavoriteListsDto
 import app.renzoshiori.client.data.network.ScrobblerConfigDto
 import app.renzoshiori.client.data.network.SeriesDetailApi
@@ -121,6 +122,15 @@ data class SeriesDetailUiState(
     val providerOrder: List<String> = emptyList(),
     val orderDirty: Boolean = false,
     val applyingOrder: Boolean = false,
+
+    // ── "Search match" on an unknown source (provider-match-dialog.tsx) ──
+    /** The dialog is up — it opens at once and shows its own loading state, as the web's does. */
+    val matchOpen: Boolean = false,
+    val providerMatch: ProviderMatchDto? = null,
+    val matchLoading: Boolean = false,
+    val matchSaving: Boolean = false,
+    /** A failed save, shown INSIDE the dialog — the page's toast sits behind it. */
+    val matchError: String? = null,
 
     // ── Chapters ──
     val chapters: List<ChapterRowUi> = emptyList(),
@@ -614,6 +624,52 @@ class SeriesDetailViewModel(
         _state.update { it.copy(providerDisabled = it.providerDisabled + (providerId to true)) }
         if (pushSeries(disabledOverrides = mapOf(providerId to true), deleteProviderId = providerId)) {
             toast("Source removed")
+        }
+    }
+
+    // ── Unknown-source re-match (provider-card.tsx handleMatch / handleMatchSave) ──
+
+    /**
+     * Open the match dialog for an UNKNOWN source and load its orphan files.
+     * A failed load leaves [SeriesDetailUiState.providerMatch] null, which the
+     * dialog renders as "Failed to load match data" — the web's failure path.
+     */
+    fun openMatch(providerId: String) {
+        _state.update { it.copy(matchOpen = true, matchLoading = true, providerMatch = null, matchError = null) }
+        viewModelScope.launch {
+            val match = runCatching { detail()?.providerMatch(providerId)?.body() }.getOrNull()
+            _state.update { it.copy(providerMatch = match, matchLoading = false) }
+        }
+    }
+
+    fun dismissMatch() {
+        if (_state.value.matchSaving) return
+        _state.update { it.copy(matchOpen = false, providerMatch = null, matchLoading = false, matchError = null) }
+    }
+
+    /**
+     * POST the match, then reload the series AND the chapter list. The reload
+     * is not cosmetic: matched files become downloaded chapters of the target
+     * source, and once every orphan is matched the backend deletes the unknown
+     * source row outright (SeriesProviderService.SetMatchAsync) — the web
+     * invalidates the series detail + library queries for the same reason.
+     */
+    fun saveMatch(dto: ProviderMatchDto) = viewModelScope.launch {
+        val d = detail() ?: return@launch
+        _state.update { it.copy(matchSaving = true, matchError = null) }
+        val ok = runCatching {
+            val res = d.setProviderMatch(dto)
+            res.isSuccessful && res.body()?.string()?.trim() == "true"
+        }.getOrDefault(false)
+        if (ok) {
+            _state.update { it.copy(matchSaving = false, matchOpen = false, providerMatch = null) }
+            loadSeries()
+            loadChapters()
+            toast("Source matched")
+        } else {
+            // The web only logs a failed save and leaves the dialog open; keep
+            // it open too so nothing typed is lost, and say so in it.
+            _state.update { it.copy(matchSaving = false, matchError = "Couldn't save the match. Please try again.") }
         }
     }
 

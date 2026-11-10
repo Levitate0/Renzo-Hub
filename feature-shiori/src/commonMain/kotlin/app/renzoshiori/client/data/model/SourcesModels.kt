@@ -119,6 +119,28 @@ data class SourceSpeedDto(
     val medianSeconds: Double? = null,
 )
 
+/**
+ * How one source is doing across the user's series: Sources › Health and the
+ * dead-source alert (Controllers/SourceHealthController.cs; web twin:
+ * lib/api/services/sourceHealthService.ts SourceHealth).
+ */
+@Serializable
+data class SourceHealthDto(
+    val provider: String = "",
+    val seriesCount: Int = 0,
+    /** Series where the source is switched on. */
+    val enabledCount: Int = 0,
+    /** Of those, the ones it is stepped down on right now. */
+    val steppedDownCount: Int = 0,
+    val reasons: List<String> = emptyList(),
+    /** Reads and downloads that failed on it in the last day. */
+    val failuresLastDay: Int = 0,
+    val lastSuccessUtc: String? = null,
+    val speed: SourceSpeedDto = SourceSpeedDto(),
+    /** "dead", "failing", "ok" or "idle". */
+    val status: String = "idle",
+)
+
 /** A source the user's series use, to migrate away from. */
 @Serializable
 data class MigrationFromDto(

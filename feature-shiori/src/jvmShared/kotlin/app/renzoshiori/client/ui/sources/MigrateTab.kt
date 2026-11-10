@@ -153,7 +153,13 @@ private val SuspectAmber = Color(0xFFFBBF24)
  * error and "Start over".
  */
 @Composable
-internal fun MigrateTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHostState) {
+internal fun MigrateTab(
+    api: SourcesApi?,
+    baseUrl: String,
+    snackbar: SnackbarHostState,
+    /** A provider to pre-pick as the source to move off (Sources › Health). */
+    initialFrom: String? = null,
+) {
     val scope = rememberCoroutineScope()
 
     var loaded by remember { mutableStateOf(false) }
@@ -263,6 +269,8 @@ internal fun MigrateTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHos
         sourcesError = null
         sources = list
         if (list.from.none { fromKey(it) == selectedFromKey }) selectedFromKey = null
+        if (selectedFromKey == null && initialFrom != null)
+            list.from.firstOrNull { it.provider == initialFrom }?.let { selectedFromKey = fromKey(it) }
         targetOrder.clear()
         targetOrder.addAll(list.targets)
         checkedTargets.clear()

@@ -45,6 +45,24 @@ data class MeResponse(
 @Serializable
 data class LoginResponse(val user: PublicUser)
 
+/** GET /api/auth/invite/:token — web types.ts InviteInfo. */
+@Serializable
+data class InviteInfo(
+    val valid: Boolean = false,
+    val role: String = "user",
+    val username: String? = null,
+    val presetUsername: Boolean = false,
+    val error: String? = null,
+)
+
+/** GET /api/auth/reset/:token — web types.ts ResetInfo. */
+@Serializable
+data class ResetInfo(
+    val valid: Boolean = false,
+    val username: String? = null,
+    val error: String? = null,
+)
+
 /**
  * `/api/account/oauth/:provider/poll`, which answers 200 with TWO shapes:
  * `{pending:true}` while the browser half of the flow is unfinished, and

@@ -450,12 +450,8 @@ fun AuthLinkRow(text: String, onClick: () -> Unit) {
  * Reset/invite tokens reach a phone by pasting the whole emailed link
  * (`…/auth/reset-password?token=abc`), so pull the value out rather than making
  * the user surgically select it. A bare token is returned unchanged.
+ * One implementation for both halves: core's [tokenFromLink], which also
+ * handles the Renzo half's path-shaped invite links.
  */
-fun extractQueryValue(pasted: String, key: String): String {
-    val text = pasted.trim()
-    val marker = "$key="
-    val at = text.indexOf(marker)
-    if (at < 0) return text
-    val rest = text.substring(at + marker.length)
-    return rest.takeWhile { it != '&' && it != '#' && !it.isWhitespace() }
-}
+fun extractQueryValue(pasted: String, key: String): String =
+    top.levitatemedia.renzo.hub.core.tokenFromLink(pasted, listOf(key))
