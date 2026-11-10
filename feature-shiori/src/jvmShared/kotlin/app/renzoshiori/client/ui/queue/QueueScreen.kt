@@ -150,7 +150,19 @@ fun QueueScreen(
     var running by remember { mutableStateOf<List<DownloadInfoDto>>(emptyList()) }
     var waiting by remember { mutableStateOf<List<DownloadInfoDto>>(emptyList()) }
     var completed by remember { mutableStateOf<List<DownloadInfoDto>>(emptyList()) }
+    var completedTotal by remember { mutableStateOf(0) }
     var failed by remember { mutableStateOf<List<DownloadInfoDto>>(emptyList()) }
+
+    // "Clear completed" asks once: the first click arms it, a second within
+    // four seconds clears. Only the history goes; the chapters stay downloaded.
+    var clearArmed by remember { mutableStateOf(false) }
+    var clearing by remember { mutableStateOf(false) }
+    LaunchedEffect(clearArmed) {
+        if (clearArmed) {
+            delay(4000)
+            clearArmed = false
+        }
+    }
 
     val effectiveViewAll = libraryState.canOwner && viewAllLibraries
     val keyword = search.ifBlank { null }
@@ -159,7 +171,9 @@ fun QueueScreen(
         runCatching {
             running = api?.downloads(QueueStatus.RUNNING, LIST_FETCH_LIMIT, keyword, effectiveViewAll)?.downloads.orEmpty()
             waiting = api?.downloads(QueueStatus.WAITING, LIST_FETCH_LIMIT, keyword, effectiveViewAll)?.downloads.orEmpty()
-            completed = api?.downloads(QueueStatus.COMPLETED, LIST_FETCH_LIMIT, keyword, effectiveViewAll)?.downloads.orEmpty()
+            val completedList = api?.downloads(QueueStatus.COMPLETED, LIST_FETCH_LIMIT, keyword, effectiveViewAll)
+            completed = completedList?.downloads.orEmpty()
+            completedTotal = completedList?.totalCount ?: 0
             failed = api?.downloads(QueueStatus.FAILED, LIST_FETCH_LIMIT, keyword, effectiveViewAll)?.downloads.orEmpty()
         }
         isLoading = false
@@ -322,6 +336,36 @@ fun QueueScreen(
                     active = viewAllLibraries,
                     onClick = { viewAllLibraries = !viewAllLibraries },
                     modifier = Modifier.padding(end = 8.dp),
+                )
+            }
+            if (completedTotal > 0) {
+                Text(
+                    when {
+                        clearing -> "Clearing…"
+                        // The count follows the search box, but the clear doesn't.
+                        clearArmed -> if (keyword != null) "Clear all completed?" else "Clear $completedTotal completed?"
+                        else -> "Clear completed"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (clearArmed) RenzoColors.Red else RenzoColors.MutedForeground,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (clearArmed) RenzoColors.Red.copy(alpha = 0.1f) else Color.Transparent)
+                        .dpadClickable(radius = 6.dp) {
+                            if (clearing) return@dpadClickable
+                            if (!clearArmed) {
+                                clearArmed = true
+                            } else {
+                                clearArmed = false
+                                clearing = true
+                                scope.launch {
+                                    runCatching { api?.clearCompleted(effectiveViewAll) }
+                                    clearing = false
+                                    reload()
+                                }
+                            }
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                 )
             }
             Text(

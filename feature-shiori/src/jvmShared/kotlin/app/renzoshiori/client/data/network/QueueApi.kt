@@ -4,6 +4,7 @@ import app.renzoshiori.client.data.model.DownloadInfoListDto
 import app.renzoshiori.client.data.model.DownloadsMetricsDto
 import okhttp3.ResponseBody
 import retrofit2.Response
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
@@ -38,6 +39,10 @@ interface QueueApi {
         @Query("id") id: String,
         @Query("action") action: Int,
     ): Response<ResponseBody>
+
+    /** "Clear completed": drops every finished row from the history; the chapters stay. */
+    @DELETE("api/downloads/completed")
+    suspend fun clearCompleted(@Query("viewAll") viewAll: Boolean = false): Response<ResponseBody>
 
     /** Jobs dialog → "Update All Series". */
     @POST("api/serie/update-all")
