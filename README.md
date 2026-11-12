@@ -4,126 +4,147 @@
 
 # Renzo Hub
 
-One client for both halves of the Renzo ecosystem — **Renzo** (anime) and
-**Renzo Shiori** (manga) — on Android phone, Android TV and Windows.
+The one native client for the Renzo ecosystem: **Renzo** (anime) and
+**Renzo Shiori** (manga), in a single app for Android phones and tablets,
+Android TV and Windows.
 
-A launch picker chooses a half when the app starts (and again when it returns
-after a spell in the background); each half keeps its own server URL and
-credentials, and "Switch to …" in the hamburger menu moves between them without
-leaving the activity. TV shows Renzo only, by design: Shiori has no TV story.
+Renzo Hub connects to your own self-hosted servers. Each half has its own
+server address and account; a launch picker chooses a half when the app
+starts, and "Switch to …" in either half's menu moves to the other without
+restarting.
 
-**Current release: 1.4.5 (versionCode 50).**
+Renzo Hub is the only client: the earlier standalone Renzo and Renzo Shiori
+apps were retired and their sources removed.
 
-Renzo Hub replaces the per-service installers. As of 2026-08-21 the standalone
-Renzo and Renzo Shiori APKs and EXEs are retired and no longer published — this
-is the only shipping client.
+**[Download the latest release](https://github.com/Levitate0/Renzo-Hub/releases/latest)** ·
+**[Documentation wiki](https://github.com/Levitate0/Renzo-Hub/wiki)**
 
 ## Platforms
 
-| Target | Module | Output |
+| Platform | Download | Notes |
 |---|---|---|
-| Android phone / tablet | `:app` | APK (`top.levitatemedia.renzo`) |
-| Android TV | `:app` | same APK, leanback entry straight into Renzo |
-| Windows | `:hub-desktop` | Compose Desktop, packaged with jlink + NSIS |
+| Android phone / tablet | `RenzoHub-<version>.apk` | Android 7.0 (API 24) or newer |
+| Android TV | the same APK | sign in with a code instead of typing a password |
+| Windows (64-bit) | `RenzoHub-Setup-<version>.exe` | per-user install, no admin rights; Java runtime included |
 
-## Module layout
+Each release also carries a `SHA256SUMS` file.
 
-```
-:app             launcher, manifest (both intents), branding, signing
-:core            session, prefs, image loading, offline downloads,
-                 TV pairing, platform abstractions
-:feature-renzo   anime UI + Media3 player
-:feature-shiori  manga UI + reader
-:hub-desktop     Windows entry point and packaging
-```
+## Features
 
-217 Kotlin files. Both feature modules **keep their original package names**
-(`top.levitatemedia.renzo.tv`, `app.renzoshiori.client`) as their AGP namespace.
-With `android.nonTransitiveRClass=true` each keeps its own `R`. Do not "tidy"
-these into a common package — that trade buys nothing and costs a 200-file diff.
+**Manga (Renzo Shiori)**
 
-`:feature-renzo` and `:feature-shiori` must never import each other; anything
-genuinely shared belongs in `:core`.
+- Library with filters, categories and collections (drag to reorder), 18+
+  filter, and Add / Request Series across your server's sources.
+- Reader with paged (left-to-right, right-to-left, double page) and
+  continuous modes (webtoon, long strip, vertical), per-series mode memory,
+  page scale and fit, rebindable keyboard shortcuts, and slicing for very
+  tall pages so they stay sharp.
+- Clear chapter breaks in continuous reading, with an optional stop for
+  fast flicks so you don't scroll past the end of a chapter.
+- **Switch source** while reading a streamed chapter, and paid-chapter
+  handling: unlock on the source, check purchases, and optional
+  **auto-buy** through your site logins.
+- Queue (retry all, clear failed, clear completed), Updates, History, Browse
+  with tag filters, and server Status.
+- Sources: install and manage extensions, default priority order, a
+  **Health** tab for failing sources, and **Migrate** to move series to
+  other sources.
+- Trackers (AniList, MyAnimeList, Kitsu, MangaDex, ComicVine), site logins,
+  device sign-ins, and user administration for owners and admins.
 
-## The parity rule
+**Anime (Renzo)**
 
-Hub is one of three surfaces — Shiori web, Renzo web, Hub — and parity between
-them is **bidirectional**. A change to user-facing behaviour on any surface is a
-candidate for the other two. Hub is genuinely ahead of the web in places
-(offline reading, TV, page scale), so `hub → web` is as real a direction as
-`web → hub`.
+- Discover, Library, Updates, History, search, and title pages with
+  franchise season strips and episode air dates.
+- Player: Media3 on Android and TV; on Windows a built-in libVLC player
+  (through the project's own LGPL-clean binding, not vlcj) with subtitles,
+  audio-track choice and playback speed, or an external player (mpv / VLC).
+- Resume from where you stopped, up-next countdown with **Autoplay** and
+  **Skip countdown** settings.
+- AniList / MyAnimeList tracking with status, progress and score.
 
-Native screens are **transliterated from the web component source, not
-approximated** — "copy and paste, but in Kotlin". Where the web keeps two
-variants of the same thing in two files, port both faithfully rather than
-tidying them into one; that difference is usually deliberate.
+**Both halves**
 
-- `docs/UI_PARITY.md` — the screen-by-screen map.
-- `docs/PARITY-GAPS.md` (and `.pdf`) — open gaps with evidence and a fix each,
-  plus a register of differences that are **deliberate** and must not be closed.
+- **Offline:** save manga chapters and anime episodes to the device and use
+  them without a connection.
+- **New-release notifications** on Android phones and tablets, per series or
+  for a whole library.
+- **TV mode and TV pairing:** a remote-friendly layout scaled to the TV, and
+  sign-in by approving a code from another device.
+- Sign-in with remember-me, password reset and invite links (paste the link
+  from the email into the app), theme presets and accent colours.
 
-## Toolchain
+See the **[Features](https://github.com/Levitate0/Renzo-Hub/wiki/Features)**
+page for the full user guide.
 
-| | Version |
-|---|---|
-| AGP | 8.13.0 |
-| Kotlin | 2.4.10 |
-| Gradle | 8.14.3 |
-| compile / targetSdk | 36 |
-| JDK | 21 |
-| Compose BOM | 2026.06.01 |
-| Coil | 3.5.0 |
-| androidx.tv-material | 1.1.0 |
-| Media3 | 1.7.1 |
+## Install
 
-Media3 is deliberately held at **1.7.1** rather than the current 1.10.x. The
-player is the most fragile thing here; a media3 bump is an independent change
-with its own regression surface.
+**Android (phone, tablet, TV):** download `RenzoHub-<version>.apk` from the
+[Releases page](https://github.com/Levitate0/Renzo-Hub/releases), open it and
+allow installing from that source if asked. On a TV, sideload the same APK
+(for example with a downloader app or `adb install`).
 
-`local.properties` (untracked) must point `sdk.dir` at an SDK with android-36
-and build-tools 36.0.0.
+**Windows:** download and run `RenzoHub-Setup-<version>.exe`. It installs for
+the current user without admin rights and adds Start menu and desktop
+shortcuts. Run a newer installer to update.
 
-## Build
+**First run:** pick *Anime* or *Manga*, enter that server's address (for
+example `192.168.1.10:8787` — the app tries `https://` then `http://`), and
+sign in with your account on that server. Repeat for the other half if you use
+both. A brand-new server needs its owner account created from its web UI
+first.
+
+Details, checksums and upgrade notes:
+**[Installing](https://github.com/Levitate0/Renzo-Hub/wiki/Installing)**.
+
+## Building
+
+Requires JDK 21 and an Android SDK with platform 36.
 
 ```bash
-./gradlew :app:assembleDebug                 # app/build/outputs/apk/debug/
-./gradlew :app:assembleRelease               # R8 + resource shrinking
-./gradlew :app:assembleBeta                  # side-by-side install, separate appId
-./gradlew :app:assembleDemo                  # fixture-backed screenshot build
-./gradlew :feature-shiori:compileKotlinDesktop   # fastest sanity check
+./gradlew :app:assembleRelease                  # Android APK (all form factors)
+./gradlew :feature-shiori:compileKotlinDesktop  # fastest compile check
+./gradlew :hub-desktop:run                      # run the desktop app
+tools/build-windows-exe.sh                      # Windows installer (cross-built on Linux)
 ```
 
-**Build the APKs before any desktop target.** Compiling a desktop target first
-poisons Gradle's *transform* cache with Kotlin metadata from the wrong variant,
-and `clean` does not touch the transform cache — recovery means deleting
-`~/.gradle/caches/<gradle-version>/transforms/`.
+Build the APK before any desktop target in a fresh Gradle cache — see
+**[Building](https://github.com/Levitate0/Renzo-Hub/wiki/Building)** for the
+reason, signing via an untracked `key.properties`, and the installer's
+requirements. Releases are cut as described in
+**[Releasing](https://github.com/Levitate0/Renzo-Hub/wiki/Releasing)**.
 
-### Signing
+## Repository layout
 
-`assembleRelease` reads an untracked `key.properties` at the repo root
-(`keystoreFile`, `keystorePassword`, `keyAlias`, `keyPassword`) and falls back
-to the debug key when it is absent. Neither the keystore nor `key.properties` is
-in this repository or its history.
+```
+app/            Android app: launch picker, manifest, notifications, signing
+hub-desktop/    Windows / desktop entry point and installer scripts
+core/           shared: request signing, prefs, images, offline downloads,
+                TV pairing, release alerts
+feature-shiori/ manga half (Renzo Shiori)
+feature-renzo/  anime half (Renzo), including both video players
+docs/           parity ledger, parity gaps, design and handoff notes, brand art
+tools/          Windows installer build, store-screenshot helpers
+```
 
-Hub inherits Renzo's `applicationId` and signing key: Renzo is the half headed
-for Google Play, and a listing is bound to both permanently. Old Shiori installs
-(`app.renzoshiori.client`) cannot upgrade in place — they reinstall, losing the
-saved server URL, session and offline chapters.
+`:core`, `:feature-shiori` and `:feature-renzo` are Kotlin Multiplatform
+modules with an Android and a desktop target; nearly all UI code is shared.
+The two feature modules never depend on each other. See
+**[Architecture](https://github.com/Levitate0/Renzo-Hub/wiki/Architecture)**.
 
-## Predecessors
+## Parity with the web
 
-Renzo Hub supersedes four trees, all now **archived with a build guard that
-exits non-zero**:
+Renzo Hub is one of three surfaces — the Renzo Shiori web UI, the Renzo web
+UI and the Hub — kept in step in both directions. Native screens are
+transliterated from the web component source rather than approximated.
 
-- `shiori/clients/android` — standalone manga APK
-- `renzo-clients/tv-native` — standalone anime APK
-- `renzo-clients/capacitor` — old Capacitor shell
-- `renzo-clients/android` — old raw-WebView client
+- [`docs/UI_PARITY.md`](docs/UI_PARITY.md) — the rule and the screen map.
+- [`docs/PARITY-GAPS.md`](docs/PARITY-GAPS.md) — open gaps, and differences
+  that are deliberate.
 
-Edits to any of them reach nobody. This is not hypothetical: on 2026-08-21 an
-18+ filter fix landed in the archived manga fork instead of the shipping client,
-leaving users with a 24-tag-short adult filter for five and a half hours. If a
-document tells you one of those trees is live, that document is stale.
+An index of everything in `docs/`, marking which notes are historical, is on
+the **[Project Notes](https://github.com/Levitate0/Renzo-Hub/wiki/Project-Notes)**
+wiki page.
 
 ## Brand assets
 

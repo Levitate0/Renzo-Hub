@@ -1,14 +1,11 @@
-> **Relocated 2026-08-21** from `shiori/clients/android/UI_PARITY.md`.
+> **Relocated 2026-08-21** from the standalone Renzo Shiori Android client,
+> which was removed on 2026-10-09. Renzo Hub is the only client.
 >
-> The ledger used to live inside the standalone Android client, which is now
-> archived and ships to nobody — so the one document defining the web -> Compose
-> transliteration rule sat in a tree nobody was supposed to open. Its rows still
-> reference `clients/android/app/.../ui/` paths; the live equivalents are under
-> `hub/feature-shiori/src/jvmShared/kotlin/app/renzoshiori/client/ui/`.
->
-> Rewriting those rows against the Hub, and clearing the stale "in progress"
-> marks on screens that have long since shipped, is tracked in
-> `hub/docs/PARITY-GAPS.md`.
+> The `ui/…` paths in the table are relative to
+> `feature-shiori/src/jvmShared/kotlin/app/renzoshiori/client/ui/` in this
+> repository. The 🔄 marks date from the original port: every screen in the
+> table now exists and ships in the Hub. Open differences between the Hub and
+> the web are tracked in [`PARITY-GAPS.md`](PARITY-GAPS.md), not here.
 
 # UI parity contract — native Compose app ⇄ web frontend
 
@@ -35,7 +32,7 @@ Two absolute rules added after the 2026-08-01 review:
 |---|---|---|
 | `theme/Theme.kt` | `styles/globals.css` `:root` tokens | ✅ tokens ported verbatim (hex of each HSL var; 8dp radius scale); Geist Sans bundled |
 | `home/HomeShell.kt` top bar | `components/comp/layout/command-bar.tsx` (<lg branch) | ✅ hamburger/logo/wordmark/expanding search/pill/avatar (avatar image when set) |
-| `home/HomeShell.kt` drawer | `components/comp/layout/section-pills.tsx` `SectionList` + drawer footer | ✅ all 7 sections incl. native-only Downloads, accent bar, Queue dot+badge, footer = offline pill + download status + GitHub/Discord/Website |
+| `home/HomeShell.kt` drawer | `components/comp/layout/section-pills.tsx` `SectionList` + drawer footer | ✅ all 7 sections incl. native-only Downloads, accent bar, Queue dot+badge, footer = offline pill + download status + GitHub/Website |
 | `home/HomeShell.kt` account panel | `components/comp/layout/user-menu.tsx` | ✅ slides in from the RIGHT; role badge, OPDS copy (full external URL), every item live, Import Series picker modal, adult toggle |
 | `components/DownloadsPanel.kt` + `home/HomeShell.kt` `DownloadStatusBar` | `components/comp/layout/download-status.tsx` | ✅ desktop: the counters open the live downloads panel (icon ringed with the running downloads' progress, rows open their series, View full queue). Replaced the floating Activity Dock 2026-10-17. TV: counters → Queue. Phone: no live panel (deliberate, see PARITY-GAPS) |
 | `library/LibraryScreen.kt` | `app/library/page.tsx` + `components/comp/series/list-series/*` | 🔄 full port in progress |
@@ -67,21 +64,25 @@ Two absolute rules added after the 2026-08-01 review:
 - `ui/util/AdultFilter.kt` is the native twin of `lib/utils/adult-filter.ts`
   (same key name, same tag set, local-only — unrelated to the server's
   `nsfwVisibility` setting, which filters the Sources list).
-- Crash forensics: `RenzoApp` persists uncaught exceptions to
-  `filesDir/last-crash.txt` **and kills the process** (handing off to a
-  missing default handler left a dead UI thread behind a live window — the
-  "app glitched to a black screen" report). `MainActivity` shows the trace on
-  the next launch with a Copy button, since the device has no adb.
+- Crash forensics: on Android, `RenzoApp` persists uncaught exceptions to
+  `last-crash.txt` **and kills the process** (handing off to a missing default
+  handler left a dead UI thread behind a live window — the "app glitched to a
+  black screen" report). The file's location comes from `:core`'s
+  `hubCrashFile()` (`filesDir` on Android, the app's config directory on
+  desktop). `CrashReportScreen` in `ShioriEntry.kt` shows the trace on the
+  next launch with a Copy button, since the device has no adb.
 
 ## Gotchas learned porting
 
 - M3 `Button` does NOT take shapes from the theme — pass
   `shape = MaterialTheme.shapes.small` explicitly or you get Material pills.
   (`IconButton` has no shape param at all — don't add one.)
-- `painterResource()` on a **platform** drawable (`android.R.drawable.*`) can
-  throw at runtime while compiling fine — it crashed the app at drawer
-  composition. Use bundled vectors (`res/drawable/ic_github.xml`, `ic_discord.xml`,
-  `ic_globe.xml`) or Material icons.
+- Shared screens use Compose Multiplatform resources:
+  `org.jetbrains.compose.resources.painterResource` with `Res.drawable.*`
+  from each feature module's `composeResources/`, never `R.drawable.*` or
+  `android.R.drawable.*` (a platform drawable can also throw at runtime while
+  compiling fine — it once crashed the app at drawer composition). Bundled
+  vectors: `ic_github.xml`, `ic_globe.xml`; otherwise Material icons.
 - Material icon names ≠ lucide names: lucide `Activity` → `MonitorHeart`,
   `Sparkles` → `AutoAwesome`, `Medal` → `MilitaryTech`, `KeyRound` → `VpnKey`.
 - Web `text-[11px]`≈labelSmall, `text-sm`≈bodyMedium/titleSmall(medium),

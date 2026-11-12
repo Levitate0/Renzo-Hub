@@ -1,6 +1,7 @@
 # Play-listing capture for Renzo Hub
 
-Ported from `tv-native/tools/` as part of the decommission. Two scripts:
+Ported from the retired standalone Renzo client (`tv-native`, removed
+2026-10-09). Two scripts:
 
 | | |
 |---|---|
@@ -9,10 +10,9 @@ Ported from `tv-native/tools/` as part of the decommission. Two scripts:
 
 ## One change is needed in the Hub before phone/tablet capture works
 
-`HubActivity` starts with `target = null` on anything that isn't leanback, so
-**every `am start` lands on the launch picker**, not the page the capture asked
-for. TV is unaffected (`target` starts `Renzo`), so TV screenshots work today —
-phone, 7" and 10" do not.
+`HubActivity` starts with `target = null` on every device, TV included (TV
+shows the launch picker too), so **every `am start` lands on
+the launch picker**, not the page the capture asked for.
 
 The script therefore passes `-e app renzo`. For that to do anything,
 `HubActivity.onCreate` needs to seed the target from the intent:
@@ -37,16 +37,16 @@ half is shown, exactly as tapping a tile does — so it's safe in release builds
 and doubles as the basis for launcher shortcuts. I did not apply it: it's your
 activity and you're actively working in this tree.
 
-Until it lands, capture TV with the script and shoot the phone/tablet form
-factors by hand after tapping through the picker.
+Until it lands, shoot each form factor by hand after picking Renzo on the
+picker; the demo extras below still apply once Renzo is open.
 
 ## Everything else carried over unchanged
 
 The `-e page` values, `-e tv 1`, `-e theme`, `-e query`, `-e id`, `-e ep`
-extras all still work — `RenzoEntry` calls `DemoMode.readIntent` /
-`applyWindow` / `applyNav` exactly as `MainActivity` used to.
+extras all still work once the Renzo half is open — `RenzoEntry` calls
+`DemoMode.readIntent` / `applyWindow` / `applyNav` exactly as the old
+standalone `MainActivity` used to.
 
 Form factors, the animation-disabling, the status-bar demo mode, and the
 `screencap`-then-`pull` capture (never `exec-out >`, which corrupts the PNG in
-PowerShell) are all as documented in `tv-native/DEMO-BUILD.md`, which is still
-accurate for everything except the activity name and the picker.
+PowerShell) are all as documented in [`docs/DEMO-BUILD.md`](../docs/DEMO-BUILD.md).
