@@ -33,7 +33,13 @@ data class LibraryUiState(
     /** Owner-only display preference — every user's library instead of just mine. */
     val viewAllLibraries: Boolean = false,
     val canOwner: Boolean = false,
-    /** Manager+ — gates the Add Series wording ("Request Series" otherwise). */
+    /**
+     * Manager+ — the level the server's manager actions require
+     * (RequireUserLevel(Manager): scan-all, sources/health, extensions).
+     * Shared with the screens that hang off this ViewModel.
+     */
+    val canManage: Boolean = false,
+    /** Manager+ — gates Add Series (POST /api/serie is RequireUserLevel(Manager)); hidden below that. */
     val canAddSeries: Boolean = false,
     val favoriteLists: List<FavoriteListDto> = emptyList(),
     /**
@@ -156,6 +162,7 @@ class LibraryViewModel : ViewModel() {
                 _state.value = _state.value.copy(
                     canOwner = me.level >= UserLevel.OWNER,
                     canAddSeries = me.level >= UserLevel.MANAGER,
+                    canManage = me.level >= UserLevel.MANAGER,
                 )
             }
             val api = extras() ?: return@launch

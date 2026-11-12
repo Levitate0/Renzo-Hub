@@ -114,7 +114,16 @@ private const val NSFW_SHOW = "Show"
  * web itself uses below `md`: one ⋮ menu per row with Settings… and Uninstall.
  */
 @Composable
-fun SourcesScreen() {
+fun SourcesScreen(
+    /**
+     * Manager+. The Health tab (api/sources/health), the Migrate tab
+     * (api/migrate) and the extension-versions panel (api/extensions) are
+     * RequireUserLevel(Manager) on the server, so below that they are hidden
+     * rather than shown to fail. "Default priority order" › Apply to All is
+     * per-user and open to everyone, so it stays.
+     */
+    canManage: Boolean,
+) {
     val app = ShioriRuntime.app
     val api = remember { app.network.currentServiceOf<SourcesApi>() }
     val baseUrl = app.tokenStore.serverUrl ?: ""
@@ -122,6 +131,9 @@ fun SourcesScreen() {
     var tab by remember { mutableStateOf(TAB_SOURCES) }
     // The source Health's "Migrate" hands over (web: ?tab=migrate&from=).
     var migrateFrom by remember { mutableStateOf<String?>(null) }
+    // Health and Migrate are Manager+ server-side; a tab left on either (e.g.
+    // before the level was known) falls back to Sources below that.
+    val shown = if (!canManage && (tab == TAB_HEALTH || tab == TAB_MIGRATE)) TAB_SOURCES else tab
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -165,19 +177,21 @@ fun SourcesScreen() {
                     .background(RenzoColors.Muted)
                     .padding(4.dp),
             ) {
-                TabTrigger("Sources", tab == TAB_SOURCES) { tab = TAB_SOURCES }
-                TabTrigger("Default priority order", tab == TAB_DEFAULT_PRIORITY) {
+                TabTrigger("Sources", shown == TAB_SOURCES) { tab = TAB_SOURCES }
+                TabTrigger("Default priority order", shown == TAB_DEFAULT_PRIORITY) {
                     tab = TAB_DEFAULT_PRIORITY
                 }
-                TabTrigger("Health", tab == TAB_HEALTH) { tab = TAB_HEALTH }
-                TabTrigger("Migrate", tab == TAB_MIGRATE) { tab = TAB_MIGRATE }
+                if (canManage) {
+                    TabTrigger("Health", shown == TAB_HEALTH) { tab = TAB_HEALTH }
+                    TabTrigger("Migrate", shown == TAB_MIGRATE) { tab = TAB_MIGRATE }
+                }
             }
 
             Spacer(Modifier.height(8.dp))
 
             Box(modifier = Modifier.weight(1f)) {
-                when (tab) {
-                    TAB_SOURCES -> SourcesTab(api, baseUrl, snackbar)
+                when (shown) {
+                    TAB_SOURCES -> SourcesTab(api, baseUrl, snackbar, canManage)
                     TAB_HEALTH -> HealthTab(api) { provider ->
                         migrateFrom = provider
                         tab = TAB_MIGRATE
@@ -220,7 +234,7 @@ private fun TabTrigger(label: String, active: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHostState) {
+private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHostState, canManage: Boolean) {
     val scope = rememberCoroutineScope()
 
     val extensions = remember { mutableStateListOf<ProviderDto>() }
@@ -419,9 +433,11 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
             Spacer(Modifier.height(16.dp))
         }
 
-        item(key = "extension-versions") {
-            ExtensionVersionsPanel(api, snackbar)
-            Spacer(Modifier.height(24.dp))
+        if (canManage) {
+            item(key = "extension-versions") {
+                ExtensionVersionsPanel(api, snackbar)
+                Spacer(Modifier.height(24.dp))
+            }
         }
 
         // ── Installed section ────────────────────────────────────────────────

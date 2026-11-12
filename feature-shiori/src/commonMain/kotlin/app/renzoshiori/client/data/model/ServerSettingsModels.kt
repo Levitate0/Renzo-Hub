@@ -48,7 +48,10 @@ data class ServerSettingsDto(
     val socksProxyHost: String? = null,
     val socksProxyPort: Int? = null,
     val socksProxyUsername: String? = null,
+    /** Write-only: the server always answers "" and keeps the stored one when PUT blank. */
     val socksProxyPassword: String? = null,
+    /** True when a SOCKS password is stored (read-only; ignored on PUT). */
+    val socksProxyPasswordSet: Boolean? = null,
     val nsfwVisibility: String? = null,
     val releaseCadenceMultiplierYellow: Double? = null,
     val releaseCadenceMultiplierRed: Double? = null,
@@ -63,7 +66,10 @@ data class ServerSettingsDto(
     val smtpHost: String? = null,
     val smtpPort: Int? = null,
     val smtpUsername: String? = null,
+    /** Write-only: the server always answers "" and keeps the stored one when PUT blank. */
     val smtpPassword: String? = null,
+    /** True when an SMTP password is stored (read-only; ignored on PUT). */
+    val smtpPasswordSet: Boolean? = null,
     val smtpUseSsl: Boolean? = null,
     val smtpFromAddress: String? = null,
     val downloadAllChapters: Boolean? = null,

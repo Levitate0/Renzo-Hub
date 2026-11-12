@@ -1,11 +1,12 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 /*
- * :feature-renzo as Kotlin Multiplatform (HANDOFF_renzo-hub_desktop-exe.md §2).
- * Same strategy as :feature-shiori: everything starts in androidMain
- * (identical to the old android-library), hoisted to commonMain as seams are
- * cut. The desktop target exists but is empty until the tv.material3 →
- * material3 mapping and the VideoPlayer seam (§6) land.
+ * :feature-renzo as Kotlin Multiplatform, built for Android (phone + TV) AND
+ * the desktop (hub-desktop). Same layout as :feature-shiori: the screens live
+ * in jvmShared; androidMain carries the Media3 PlayerScreen and the Android
+ * entry, desktopMain the built-in libVLC player (own LGPL-clean JNA binding),
+ * the external-player fallback and the desktop entry, behind the
+ * RenzoPlayerRoute seam.
  */
 plugins {
     alias(libs.plugins.android.library)

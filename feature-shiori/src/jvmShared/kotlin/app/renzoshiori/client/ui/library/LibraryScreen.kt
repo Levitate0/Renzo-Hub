@@ -625,40 +625,43 @@ private fun LibraryRibbon(
             )
         }
 
-        // Add Series — relabelled "Request Series" below Manager, exactly as the
-        // web relabels the same always-available button.
-        val isTv = LocalIsTv.current
-        val addFocus = rememberFocusState()
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .height(if (isTv) 40.dp else 32.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(RenzoColors.Primary)
-                .then(
-                    if (isTv) {
-                        Modifier
-                            .focusRing(addFocus.focused, 8.dp)
-                            .tvClickable(onFocused = addFocus::set, onClick = onAddSeries)
-                    } else {
-                        Modifier.clickable(onClick = onAddSeries)
-                    },
+        // Add Series — Manager+ only. It posts to /api/serie, which the server
+        // keeps at RequireUserLevel(Manager); the old "Request Series" label
+        // below that only led to a 403, so the button is hidden instead.
+        if (state.canAddSeries) {
+            val isTv = LocalIsTv.current
+            val addFocus = rememberFocusState()
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .height(if (isTv) 40.dp else 32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(RenzoColors.Primary)
+                    .then(
+                        if (isTv) {
+                            Modifier
+                                .focusRing(addFocus.focused, 8.dp)
+                                .tvClickable(onFocused = addFocus::set, onClick = onAddSeries)
+                        } else {
+                            Modifier.clickable(onClick = onAddSeries)
+                        },
+                    )
+                    .padding(horizontal = 12.dp),
+            ) {
+                Icon(
+                    Icons.Filled.AddCircle,
+                    contentDescription = null,
+                    tint = RenzoColors.PrimaryForeground,
+                    modifier = Modifier.size(16.dp),
                 )
-                .padding(horizontal = 12.dp),
-        ) {
-            Icon(
-                Icons.Filled.AddCircle,
-                contentDescription = null,
-                tint = RenzoColors.PrimaryForeground,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                if (state.canAddSeries) "Add Series" else "Request Series",
-                style = MaterialTheme.typography.labelMedium,
-                color = RenzoColors.PrimaryForeground,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 6.dp),
-            )
+                Text(
+                    "Add Series",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = RenzoColors.PrimaryForeground,
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
         }
     }
 }

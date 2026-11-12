@@ -529,38 +529,20 @@ fun SeriesHeroSection(
                     )
                 }
 
-                // Auto-buy paid chapters when the reader reaches them: follow the
-                // account setting, or override it for this series (series-hero.tsx).
+                // Auto-buy paid chapters when the reader reaches them: one tap flips
+                // it for this series; landing back on the account setting clears the
+                // override so the series follows the account again (series-hero.tsx).
                 if (state.canManageDownloads) {
-                    val override = state.series?.autoBuyPaidChapters
-                    val autoBuy = override ?: state.autoBuyAccountDefault
-                    var autoBuyOpen by remember { mutableStateOf(false) }
-                    Box {
-                        HeroActionButton(
-                            icon = Icons.Filled.MonetizationOn,
-                            contentDescription = if (autoBuy) "Auto-buy on" else "Auto-buy off",
-                            label = if (heroWide) (if (autoBuy) "Auto-buy On" else "Auto-buy Off") else null,
-                            tint = if (autoBuy) MaterialTheme.colorScheme.primary else RenzoColors.Foreground,
-                            borderColor = if (autoBuy) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Border60,
-                            onClick = { autoBuyOpen = true },
-                        )
-                        DropdownMenu(expanded = autoBuyOpen, onDismissRequest = { autoBuyOpen = false }) {
-                            listOf(
-                                null to "Use account setting (${if (state.autoBuyAccountDefault) "on" else "off"})",
-                                true to "On for this series",
-                                false to "Off for this series",
-                            ).forEach { (value, text) ->
-                                DropdownMenuItem(
-                                    text = { Text(text) },
-                                    leadingIcon = {
-                                        if (override == value) Icon(Icons.Filled.Check, contentDescription = null)
-                                        else Spacer(Modifier.size(24.dp))
-                                    },
-                                    onClick = { autoBuyOpen = false; vm.setAutoBuy(value) },
-                                )
-                            }
-                        }
-                    }
+                    val autoBuy = state.series?.autoBuyPaidChapters ?: state.autoBuyAccountDefault
+                    val next = !autoBuy
+                    HeroActionButton(
+                        icon = Icons.Filled.MonetizationOn,
+                        contentDescription = if (autoBuy) "Auto-buy on" else "Auto-buy off",
+                        label = if (heroWide) (if (autoBuy) "Auto-buy On" else "Auto-buy Off") else null,
+                        tint = if (autoBuy) MaterialTheme.colorScheme.primary else RenzoColors.Foreground,
+                        borderColor = if (autoBuy) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Border60,
+                        onClick = { vm.setAutoBuy(if (next == state.autoBuyAccountDefault) null else next) },
+                    )
                 }
 
                 if (state.canEdit || state.canDelete) {

@@ -968,6 +968,24 @@ private fun DefaultsPane(app: AppServices) {
             }
         }
 
+        // Android only (the desktop downloader has no metered-network gate).
+        // One device-wide switch, shared with Shiori's Downloads page.
+        if (!top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) {
+            var mobileData by remember {
+                mutableStateOf(top.levitatemedia.renzo.hub.core.offline.DownloadNetworkPrefs.allowMobileData(app.offlineStore))
+            }
+            PaneSection(
+                title = "Downloads on this device",
+                sub = plain("Off: saved episodes wait for Wi-Fi or another unmetered network. Saved on this device only."),
+            ) {
+                CheckboxRow(mobileData, "Download over mobile data") {
+                    mobileData = !mobileData
+                    top.levitatemedia.renzo.hub.core.offline.DownloadNetworkPrefs
+                        .setAllowMobileData(app.offlineStore, mobileData)
+                }
+            }
+        }
+
         // Desktop only, and stored on this computer — not a server default:
         // the choice depends on what is installed here.
         if (top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop) {

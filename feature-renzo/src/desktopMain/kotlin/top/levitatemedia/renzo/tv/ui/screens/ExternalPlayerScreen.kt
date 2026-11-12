@@ -45,8 +45,10 @@ import java.io.File
  * Desktop playback, phase one (RENZO-DESKTOP-NATIVE-HANDOFF.md §6.5): resolve
  * the stream — the same up-to-~45s debrid block the Android player sits
  * through behind a full-screen state — then hand the URL, the VTT sidecars
- * and the resume position to an external mpv/VLC. Embedded VLCJ playback
- * follows behind the same RenzoPlayerRoute seam.
+ * and the resume position to an external mpv/VLC. The built-in libVLC player
+ * (BuiltInPlayerScreen) now sits behind the same RenzoPlayerRoute seam; this
+ * screen is what the route falls back to when the user prefers an external
+ * player, libVLC is missing, or "Open in external player" was chosen.
  *
  * Progress can't flow back from an external process, so the screen stays up
  * with explicit "Mark watched" actions, exactly as the handoff prescribes.
@@ -234,10 +236,21 @@ private fun isWindows(): Boolean =
     System.getProperty("os.name")?.lowercase()?.contains("win") == true
 
 /**
- * §6.5's exact hand-off: subtitles ride along (mpv accepts VTT URLs; VLC is
- * unreliable with sub URLs, so its sidecars download to temp files first),
- * the resume position becomes --start, and the session cookie goes in the
- * HTTP headers for anything served by Renzo itself.
+ * §6.5's hand-off: subtitles ride along as temp files, the resume position
+ * becomes --start, and the session cookie goes ONLY where it is needed.
+ *
+ * The cookie is the user's live Renzo session, so two rules:
+ *  - **Scoped to the server's own host.** It is handed over only when the
+ *    video itself is served by Renzo (a local /files episode). A debrid CDN
+ *    stream never gets it — the player would otherwise send it to every host
+ *    it touches. Captions come from the server too, so the Hub fetches them
+ *    itself (cookie on that request only) and gives the player plain files.
+ *  - **Never on the command line**, where any local process can read it.
+ *    mpv takes it from a private, short-lived `--include` config file. VLC has
+ *    no option for a cookie value at all (`http-cookies` is an internal
+ *    cookie-jar variable, not a command-line option), so a server-hosted
+ *    episode cannot be handed to VLC — the user is told to use mpv or the
+ *    built-in player instead.
  */
 private fun launchExternal(
     app: AppServices,
@@ -248,19 +261,38 @@ private fun launchExternal(
     titleName: String,
 ) {
     val videoUrl = app.client.absolute(stream.url)
-    val cookie = app.client.cookieHeader()
+    val serverHost = runCatching { java.net.URI(app.client.base()).host }.getOrNull()
+    val videoHost = runCatching { java.net.URI(videoUrl).host }.getOrNull()
+    val videoOnServer = serverHost != null && videoHost != null && videoHost.equals(serverHost, ignoreCase = true)
+    val cookie = if (videoOnServer) app.client.cookieHeader() else null
     val resumeSec = app.prefs.resumePositionMs(episodeKey(titleId, ep)) / 1000
     val subUrls = stream.subtitles.map { app.client.absolute("/api/captions/${it.id}.vtt") }
     val isMpv = File(exe).name.lowercase().startsWith("mpv")
 
+    if (!isMpv && cookie != null) {
+        error(
+            "VLC can't send your Renzo sign-in, so it can't play episodes stored on your server. " +
+                "Use mpv or the built-in player for this one.",
+        )
+    }
+
+    var secretFile: File? = null
     val args = buildList {
         add(exe)
         if (isMpv) {
             add(videoUrl)
             add("--force-media-title=$titleName — Episode $ep")
-            subUrls.forEach { add("--sub-file=$it") }
+            subUrls.forEach { url -> downloadToTemp(app, url)?.let { add("--sub-file=${it.absolutePath}") } }
             if (resumeSec > 0) add("--start=$resumeSec")
-            if (cookie != null) add("--http-header-fields=Cookie: $cookie")
+            if (cookie != null) {
+                secretFile = privateTempFile("renzo-mpv-", ".conf").also { f ->
+                    // `-append` adds ONE list item (no comma splitting) and
+                    // %len% quotes the value verbatim.
+                    val header = "Cookie: $cookie"
+                    f.writeText("http-header-fields-append=%${header.length}%$header\n")
+                    add("--include=${f.absolutePath}")
+                }
+            }
         } else {
             add(videoUrl)
             // VLC won't take a URL for sub-file — fetch the first sidecar to a
@@ -269,13 +301,30 @@ private fun launchExternal(
                 downloadToTemp(app, url)?.let { add("--sub-file=${it.absolutePath}") }
             }
             if (resumeSec > 0) add("--start-time=$resumeSec")
-            if (cookie != null) add("--http-cookies=$cookie")
         }
     }
     ProcessBuilder(args)
         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
         .redirectError(ProcessBuilder.Redirect.DISCARD)
         .start()
+    // mpv reads --include while starting up; the session must not outlive that
+    // on disk. deleteOnExit covers a Hub that quits first.
+    secretFile?.let { f ->
+        Thread {
+            runCatching { Thread.sleep(30_000) }
+            f.delete()
+        }.apply { isDaemon = true }.start()
+    }
+}
+
+/** A temp file only this OS user can read or write. */
+private fun privateTempFile(prefix: String, suffix: String): File {
+    val f = File.createTempFile(prefix, suffix)
+    f.deleteOnExit()
+    f.setReadable(false, false); f.setReadable(true, true)
+    f.setWritable(false, false); f.setWritable(true, true)
+    f.setExecutable(false, false)
+    return f
 }
 
 private fun downloadToTemp(app: AppServices, url: String): File? = runCatching {

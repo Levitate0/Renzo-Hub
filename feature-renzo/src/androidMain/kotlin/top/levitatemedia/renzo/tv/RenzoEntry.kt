@@ -58,7 +58,8 @@ class RenzoHost(activity: ComponentActivity) {
 
 /**
  * @param onSwitchApp invoked by the hamburger menu's "Switch to Renzo Shiori".
- *   Null on TV, where the manga half is deliberately unreachable.
+ *   HubActivity always passes it, on phone and TV alike; null only hides the
+ *   menu entry.
  */
 @Composable
 fun RenzoRoot(host: RenzoHost, onSwitchApp: (() -> Unit)? = null, onBackToPicker: (() -> Unit)? = null) {

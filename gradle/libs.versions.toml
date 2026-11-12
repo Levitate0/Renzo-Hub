@@ -6,7 +6,8 @@
 # "take the newer of each", with two deliberate exceptions noted below.
 
 [versions]
-# Desktop built-in Renzo player (libvlc 3.x binding). GPLv3 — see the player's KDoc.
+# Desktop built-in Renzo player: our own LGPL-clean libVLC 3.x binding over JNA
+# (never vlcj, which is GPLv3) — see player/LibVlc.kt's KDoc.
 jna = "5.14.0"
 agp = "8.13.0"
 kotlin = "2.4.10"

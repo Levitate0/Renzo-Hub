@@ -47,7 +47,8 @@ private val Focused = Color(0xFF1C1D23)
 /**
  * Launch picker, shown on every cold start. The choice is intentionally not
  * persisted — defaulting to one half is wrong for anyone who only uses the
- * other. Never shown on TV, where the Hub simply is Renzo.
+ * other. Shown on TV too, laid out like the desktop picker and scaled to the
+ * panel (see below) — both halves are reachable from the couch.
  *
  * The tiles use each half's own wordmark, pulled from the feature modules'
  * resources so the picker always matches what the app itself shows on its

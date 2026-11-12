@@ -45,9 +45,10 @@ expect fun renzoToast(message: String)
 
 /**
  * The player route (RENZO-DESKTOP-NATIVE-HANDOFF.md §6.2): Android renders
- * the Media3 PlayerScreen; the desktop renders the external-player hand-off
- * screen (resolve → launch mpv/VLC → mark watched), with embedded VLCJ to
- * follow behind the same seam.
+ * the Media3 PlayerScreen; the desktop renders the built-in libVLC player
+ * (BuiltInPlayerScreen, our own LGPL-clean binding), falling back to the
+ * external-player hand-off screen (resolve → launch mpv/VLC → mark watched)
+ * when the user prefers an external player or libVLC is missing.
  */
 @Composable
 expect fun RenzoPlayerRoute(

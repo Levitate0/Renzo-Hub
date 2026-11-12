@@ -4,14 +4,21 @@
 #   2. a Windows JRE image, cross-linked with the local jlink against a
 #      Windows JDK's jmods (downloaded once, cached)
 #   3. an NSIS launcher exe + NSIS installer
-#   4. Authenticode signing with osslsigncode (codesign.pfx)
+#   4. Authenticode signing with osslsigncode (hub-codesign.pfx)
+#
+# Environment (all optional):
+#   VERSION   installer version string            (default 1.0.0)
+#   WORK      scratch/cache dir                   (default /tmp/renzohub-exe)
+#   OUT_DIR   where RenzoHub-Setup.exe lands      (default <repo>/build/out)
+#   SIGN_DIR  folder holding hub-codesign.pfx and hub-codesign-password.txt.
+#             Unset = the launcher and installer are built UNSIGNED.
 set -euo pipefail
 
 HUB="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${VERSION:-1.0.0}"
 WORK="${WORK:-/tmp/renzohub-exe}"
-OUT_DIR="${OUT_DIR:-/export/Main/Renzo-out}"
-SIGN_DIR="/export/Main/Renzo-Apps/signing"
+OUT_DIR="${OUT_DIR:-$HUB/build/out}"
+SIGN_DIR="${SIGN_DIR:-}"
 JDK_ZIP_URL="https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
 ICON="$HUB/hub-desktop/windows/renzohub.ico"
 # libvlc for the built-in anime player (VlcRuntime finds <app>/vlc), from
@@ -86,13 +93,21 @@ makensis -DOUTDIR="$WORK/stage" -DICON="$ICON" "$HUB/hub-desktop/windows/renzohu
 echo "── 4/5 signing the launcher, building + signing the installer"
 # The Hub's own identity (CN=Levitate Media), generated 2026-08-14 — the old
 # codesign.pfx signs as "Renzo Shiori", which is the app this exe replaces.
-PFX="$SIGN_DIR/hub-codesign.pfx"
-PASS="$(cat "$SIGN_DIR/hub-codesign-password.txt")"
-sign() {
-  osslsigncode sign -pkcs12 "$PFX" -pass "$PASS" \
-    -n "Renzo Hub" -i "https://www.renzo.net" -t http://timestamp.digicert.com \
-    -in "$1" -out "$1.signed" && mv "$1.signed" "$1"
-}
+# Signing material is never in the repo: point SIGN_DIR at it, or build unsigned.
+if [ -n "$SIGN_DIR" ]; then
+  PFX="$SIGN_DIR/hub-codesign.pfx"
+  [ -r "$PFX" ] && [ -r "$SIGN_DIR/hub-codesign-password.txt" ] \
+    || { echo "SIGN_DIR is set but hub-codesign.pfx / hub-codesign-password.txt are not readable there"; exit 1; }
+  PASS="$(cat "$SIGN_DIR/hub-codesign-password.txt")"
+  sign() {
+    osslsigncode sign -pkcs12 "$PFX" -pass "$PASS" \
+      -n "Renzo Hub" -i "https://www.renzo.net" -t http://timestamp.digicert.com \
+      -in "$1" -out "$1.signed" && mv "$1.signed" "$1"
+  }
+else
+  echo "   SIGN_DIR not set — skipping Authenticode signing (the exe will be UNSIGNED)."
+  sign() { :; }
+fi
 sign "$WORK/stage/RenzoHub.exe"
 mkdir -p "$OUT_DIR"
 makensis -DVERSION="$VERSION" -DSRC="$WORK/stage" -DICON="$ICON" \

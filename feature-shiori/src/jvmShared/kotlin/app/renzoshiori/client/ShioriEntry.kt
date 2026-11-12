@@ -79,8 +79,9 @@ import app.renzoshiori.client.ui.theme.RenzoTheme
  * change. Everything below is byte-for-byte the old `setContent` body; only its
  * container changed.
  *
- * @param onSwitchApp invoked by the account menu's "Switch to Renzo". Null on
- *   TV, where this half is deliberately unreachable.
+ * @param onSwitchApp invoked by the account menu's "Switch to Renzo". Both
+ *   hosts (HubActivity on phone and TV, the desktop window) always pass it;
+ *   null only hides the menu entry.
  */
 @Composable
 fun ShioriRoot(onSwitchApp: (() -> Unit)? = null, onBackToPicker: (() -> Unit)? = null) {
@@ -208,6 +209,20 @@ private fun SignedInNavHost(
         androidx.compose.runtime.mutableStateOf<AccountDialog?>(null)
     }
     var tourVisible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    // Web onboarding-walkthrough.tsx: auto-open ONCE per account, gated on the
+    // `onboardedVersion` key in the user's server-side preferences blob (the
+    // overlay's close() persists it, on finish or skip). The flag below only
+    // covers this session — [user] is the sign-in snapshot, so its prefs stay
+    // stale until the next sign-in/restore re-reads /me.
+    var tourDismissed by androidx.compose.runtime.remember(user.id) { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(user.id, user.preferences) {
+        // A blank id is the offline placeholder (no prefs known) — never tour on it.
+        if (!tourDismissed && user.id.isNotBlank() &&
+            !app.renzoshiori.client.ui.onboarding.hasSeenOnboarding(user)
+        ) {
+            tourVisible = true
+        }
+    }
 
     // Hoisted section + search state: the persistent command bar (below) and
     // HomeShell must agree on them across route changes.
@@ -255,6 +270,9 @@ private fun SignedInNavHost(
     // Live downloads for the command bar's panel. Held here, above the routes,
     // so the connection survives a trip into the chromeless reader.
     val liveDownloads = app.renzoshiori.client.ui.components.rememberLiveDownloads()
+
+    // Offline reading sync + the reconnect clean-up prompt (web OfflineWatcher).
+    app.renzoshiori.client.ui.downloads.OfflineWatcher()
 
     androidx.compose.foundation.layout.Column(
         modifier = androidx.compose.ui.Modifier.fillMaxSize(),
@@ -305,7 +323,7 @@ private fun SignedInNavHost(
                 },
                 onAccountAction = handleAccountAction,
                 showTour = tourVisible,
-                onTourFinish = { tourVisible = false },
+                onTourFinish = { tourVisible = false; tourDismissed = true },
             )
         }
         composable("appearance") {

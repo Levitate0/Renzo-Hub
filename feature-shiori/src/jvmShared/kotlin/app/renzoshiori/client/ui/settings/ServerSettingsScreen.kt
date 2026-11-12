@@ -402,13 +402,16 @@ private fun ColumnScope.SecuritySection(
             )
         },
         right = {
-            LabelledField(
-                label = "Password",
-                value = s.smtpPassword.orEmpty(),
-                onValueChange = { update(s.copy(smtpPassword = it)) },
-                placeholder = "App password / API key",
-                password = true,
-            )
+            Column {
+                LabelledField(
+                    label = "Password",
+                    value = s.smtpPassword.orEmpty(),
+                    onValueChange = { update(s.copy(smtpPassword = it)) },
+                    placeholder = if (s.smtpPasswordSet == true) "Saved — leave blank to keep" else "App password / API key",
+                    password = true,
+                )
+                if (s.smtpPasswordSet == true) SavedPasswordNote()
+            }
         },
     )
     FieldPair(
@@ -1048,19 +1051,33 @@ private fun ColumnScope.SocksSettingsSection(
     )
     FieldPair(
         left = {
-            LabelledField(
-                label = "Password",
-                value = s.socksProxyPassword.orEmpty(),
-                onValueChange = { update(s.copy(socksProxyPassword = it)) },
-                placeholder = "Optional",
-                password = true,
-            )
+            Column {
+                LabelledField(
+                    label = "Password",
+                    value = s.socksProxyPassword.orEmpty(),
+                    onValueChange = { update(s.copy(socksProxyPassword = it)) },
+                    placeholder = if (s.socksProxyPasswordSet == true) "Saved — leave blank to keep" else "Optional",
+                    password = true,
+                )
+                if (s.socksProxyPasswordSet == true) SavedPasswordNote()
+            }
         },
     )
     Hint("Configure a SOCKS4/5 proxy for provider requests.")
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
+
+/** settings-manager.tsx: the note under a password the server has stored. */
+@Composable
+private fun SavedPasswordNote() {
+    Text(
+        "A password is saved. Type a new one to replace it; clear the username to remove it.",
+        style = MaterialTheme.typography.labelSmall,
+        color = RenzoColors.MutedForeground,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
 
 // FieldPair (the web's `sm:/md:grid-cols-2` pairing) lives in SettingsCommon.kt,
 // shared with AccountScreen's password grid.

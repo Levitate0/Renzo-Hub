@@ -23,7 +23,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ClosedCaption
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -150,11 +153,14 @@ fun PlayerScreen(
     onSwitchEpisode: (Int) -> Unit,
     @Suppress("UNUSED_PARAMETER") onSwitchTitle: (Int, Int, String) -> Unit, // reserved for franchise auto-advance
 ) {
+    // Speed carries over from one episode to the next, as on the desktop
+    // player (BuiltInPlayerScreen hoists it above its own per-episode key).
+    var rate by remember { mutableStateOf(1f) }
     // Fully qualified to avoid clashing with the KeyEvent.key extension import.
     // key() guarantees a FULL state reset when the episode (or title) changes:
     // fresh resolve, fresh ExoPlayer, fresh overlay state.
     androidx.compose.runtime.key(titleId, ep) {
-        PlayerContent(app, titleId, ep, titleName, onExit, onSwitchEpisode)
+        PlayerContent(app, titleId, ep, titleName, onExit, onSwitchEpisode, rate, setRate = { rate = it })
     }
 }
 
@@ -166,6 +172,8 @@ private fun PlayerContent(
     titleName: String,
     onExit: () -> Unit,
     onSwitchEpisode: (Int) -> Unit,
+    rate: Float,
+    setRate: (Float) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -232,6 +240,14 @@ private fun PlayerContent(
     var ccIndex by remember { mutableStateOf(-1) }   // -1 = off; else index into textGroups
     val ccInitialized = remember { mutableStateOf(false) }
 
+    // Audio tracks (dual-audio releases carry a Japanese and an English one),
+    // picked by exact group like the CC tracks above. -1 = nothing selected yet.
+    var audioGroups by remember { mutableStateOf(listOf<Tracks.Group>()) }
+    var audioIndex by remember { mutableStateOf(-1) }
+
+    // The open picker menu (desktop PlayerStage's StageMenu): null = closed.
+    var menu by remember { mutableStateOf<PlayerMenu?>(null) }
+
     // Seek-bar scrubbing: non-null while the user is choosing a position.
     var scrubMs by remember { mutableStateOf<Long?>(null) }
 
@@ -264,6 +280,16 @@ private fun PlayerContent(
                 addOverride(TrackSelectionOverride(group.mediaTrackGroup, 0))
             }
         }.build()
+    }
+
+    fun selectAudio(index: Int) {
+        val p = player ?: return
+        val g = audioGroups.getOrNull(index) ?: return
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .addOverride(TrackSelectionOverride(g.mediaTrackGroup, (0 until g.length).toList()))
+            .build()
+        audioIndex = index
     }
 
     fun ccLabel(): String {
@@ -399,6 +425,9 @@ private fun PlayerContent(
                 }
 
                 override fun onTracksChanged(tracks: Tracks) {
+                    val audio = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO && it.length > 0 }
+                    audioGroups = audio
+                    audioIndex = audio.indexOfFirst { it.isSelected }
                     val groups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT && it.length > 0 }
                     textGroups = groups
                     if (ccInitialized.value || groups.isEmpty()) {
@@ -521,6 +550,17 @@ private fun PlayerContent(
         }
     }
 
+    // Nothing to resolve for a saved episode: stream stays null by design, so
+    // "still resolving" must not be read off stream alone — that kept the
+    // opaque Resolving pane over the playing download and ate every key.
+    val resolving = stream == null && offlineItem == null
+
+    // Playback speed (carried across episodes by PlayerScreen).
+    LaunchedEffect(player, rate) { player?.setPlaybackSpeed(rate) }
+
+    // A menu belongs to the visible overlay; hiding the overlay closes it.
+    LaunchedEffect(controlsVisible) { if (!controlsVisible) menu = null }
+
     // --- position polling (500ms) while the overlay is visible -------------
     LaunchedEffect(player, controlsVisible) {
         val p = player ?: return@LaunchedEffect
@@ -552,8 +592,8 @@ private fun PlayerContent(
     }
 
     // --- auto-hide 4s after the last interaction, only while playing -------
-    LaunchedEffect(controlsVisible, pokeCount, isPlaying) {
-        if (controlsVisible && isPlaying) {
+    LaunchedEffect(controlsVisible, pokeCount, isPlaying, menu) {
+        if (controlsVisible && isPlaying && menu == null) {
             delay(4000)
             controlsVisible = false
         }
@@ -570,11 +610,12 @@ private fun PlayerContent(
     }
 
     // --- focus routing -------------------------------------------------------
-    LaunchedEffect(controlsVisible, player, upNextEp, fatalError) {
+    LaunchedEffect(controlsVisible, player, upNextEp, fatalError, menu) {
         runCatching {
             when {
                 upNextEp != null -> cancelFocus.requestFocus()
                 fatalError != null -> retryFocus.requestFocus()
+                menu != null -> Unit // the open menu focuses its own selected row
                 player != null && controlsVisible -> playFocus.requestFocus()
                 else -> rootFocus.requestFocus()
             }
@@ -586,6 +627,7 @@ private fun PlayerContent(
     BackHandler(enabled = true) {
         when {
             scrubMs != null -> scrubMs = null // abandon the scrub, keep playing
+            menu != null -> menu = null
             upNextEp != null -> { upNextEp = null; onExit() }
             player != null && controlsVisible -> controlsVisible = false
             else -> onExit()
@@ -604,7 +646,7 @@ private fun PlayerContent(
                     // Let BackHandler own Back; don't wake the overlay for it.
                     k == Key.Back || k == Key.Escape -> false
                     // Panes/countdown have their own focused buttons.
-                    fatalError != null || stream == null || upNextEp != null -> false
+                    fatalError != null || resolving || upNextEp != null -> false
                     k == Key.MediaPlayPause || k == Key.MediaPlay || k == Key.MediaPause -> {
                         togglePlay(); poke(); true
                     }
@@ -654,7 +696,7 @@ private fun PlayerContent(
                 onRetry = { attempt++ },
                 onBack = onExit,
             )
-            stream == null -> ResolvingPane(titleName = titleName, ep = ep)
+            resolving -> ResolvingPane(titleName = titleName, ep = ep)
             else -> {
                 if (controlsVisible) {
                     // Top: title context over a soft scrim.
@@ -744,12 +786,45 @@ private fun PlayerContent(
                                 label = ccLabel(),
                             )
                             ControlButton(
+                                icon = Icons.Rounded.Speed,
+                                contentDesc = "Playback speed",
+                                onClick = { menu = if (menu == PlayerMenu.Speed) null else PlayerMenu.Speed },
+                                label = rateLabel(rate),
+                            )
+                            // Desktop: Settings › Audio, listed only with more than one track.
+                            if (audioGroups.size > 1) {
+                                ControlButton(
+                                    icon = Icons.Rounded.Audiotrack,
+                                    contentDesc = "Audio",
+                                    onClick = { menu = if (menu == PlayerMenu.Audio) null else PlayerMenu.Audio },
+                                    label = "Audio",
+                                )
+                            }
+                            ControlButton(
                                 icon = Icons.Rounded.SkipNext,
                                 contentDesc = "Next episode",
                                 onClick = { onSwitchEpisode(ep + 1) },
                                 label = "Next",
                             )
                         }
+                    }
+                }
+
+                if (controlsVisible) {
+                    when (menu) {
+                        PlayerMenu.Speed -> PlayerMenuCard(
+                            title = "Playback speed",
+                            labels = RATES.map { r -> if (r == 1f) "Normal" else rateLabel(r) },
+                            selected = RATES.indexOf(rate),
+                            onPick = { i -> setRate(RATES[i]); menu = null; poke() },
+                        )
+                        PlayerMenu.Audio -> PlayerMenuCard(
+                            title = "Audio",
+                            labels = audioGroups.mapIndexed { i, g -> audioTrackName(g, i) },
+                            selected = audioIndex,
+                            onPick = { i -> selectAudio(i); menu = null; poke() },
+                        )
+                        null -> Unit
                     }
                 }
 
@@ -771,6 +846,90 @@ private fun PlayerContent(
 }
 
 // --- panes & pieces ---------------------------------------------------------
+
+/** The player's picker menus — desktop PlayerStage's StageMenu (Speed; Audio lives under its Settings). */
+private enum class PlayerMenu { Speed, Audio }
+
+/** Web player-controls.tsx / desktop PlayerStage RATES, verbatim. */
+private val RATES = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+
+/** Desktop rateLabel: "1x", "1.25x", "0.5x". */
+private fun rateLabel(r: Float): String =
+    (if (r == r.toInt().toFloat()) r.toInt().toString() else r.toString().trimEnd('0')) + "x"
+
+/** A human name for an audio track: its label, else its language, else "Track n". */
+private fun audioTrackName(group: Tracks.Group, index: Int): String {
+    val f = group.getTrackFormat(0)
+    f.label?.takeIf { it.isNotBlank() }?.let { return it }
+    val lang = f.language?.takeIf { it.isNotBlank() && it != "und" }
+        ?.let { java.util.Locale.forLanguageTag(it).displayLanguage.takeIf { n -> n.isNotBlank() } ?: it }
+    return lang ?: "Track ${index + 1}"
+}
+
+/**
+ * Desktop PlayerStage MenuCard + MenuRow: a small card above the controls'
+ * right end, an uppercase heading, the checked row in the accent with a tick.
+ * D-pad: the checked row takes focus on open; Back closes (PlayerContent).
+ */
+@Composable
+private fun PlayerMenuCard(title: String, labels: List<String>, selected: Int, onPick: (Int) -> Unit) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(title) { runCatching { first.requestFocus() } }
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 40.dp, bottom = 150.dp)
+                .width(240.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(RenzoColors.Popover.copy(alpha = 0.96f))
+                .border(1.dp, RenzoColors.Border, RoundedCornerShape(10.dp))
+                .padding(6.dp),
+        ) {
+            Text(
+                title.uppercase(),
+                color = RenzoColors.MutedForeground,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.8.sp,
+                modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+            )
+            val focusIndex = if (selected in labels.indices) selected else 0
+            labels.forEachIndexed { i, label ->
+                val checked = i == selected
+                var focused by remember { mutableStateOf(false) }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .then(if (i == focusIndex) Modifier.focusRequester(first) else Modifier)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (focused) RenzoColors.Accent else Color.Transparent)
+                        .tvClickable(onFocused = { focused = it }, onClick = { onPick(i) })
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        label,
+                        color = if (checked) RenzoColors.Primary else RenzoColors.Foreground,
+                        fontSize = 14.sp,
+                        fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (checked) {
+                        Image(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = null,
+                            colorFilter = ColorFilter.tint(RenzoColors.Primary),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 /** Full-screen blocking state while the server resolves the stream (up to ~45s). */
 @Composable

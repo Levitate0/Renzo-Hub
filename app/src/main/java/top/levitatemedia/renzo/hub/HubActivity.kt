@@ -183,10 +183,11 @@ private fun HubPicker(onPick: (HubTarget) -> Unit) {
  * The whole TV app was designed against the ~540dp of height a 1080p set
  * reports at xhdpi. Panels and boxes disagree on density: a 4K set that
  * reports a LOWER density hands the same layout 1080dp and everything renders
- * half-size and dense. GROW-ONLY scaling by `panelHeightDp / 540` makes a 2K
- * or 4K panel draw the identical apparent UI a 1080p set gets — and a normal
- * 540dp panel passes through at exactly 1:1 (minScale = 1 means phones and
- * standard TVs are untouched).
+ * half-size and dense. Scaling by `panelHeightDp / TV_DESIGN_HEIGHT_DP` makes
+ * a 2K or 4K panel draw the identical apparent UI a 1080p set gets. It scales
+ * BOTH ways: the design height (620) is above a 1080p set's ~540dp, so a
+ * standard set is SHRUNK to ≈0.87× (see TV_DESIGN_HEIGHT_DP), within TvScale's
+ * 0.6–4× clamp. Phones never get here — the scaling is TV-only.
  */
 @Composable
 private fun TvResolutionNormalized(content: @Composable () -> Unit) {

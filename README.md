@@ -34,7 +34,7 @@ Each release also carries a `SHA256SUMS` file.
 **Manga (Renzo Shiori)**
 
 - Library with filters, categories and collections (drag to reorder), 18+
-  filter, and Add / Request Series across your server's sources.
+  filter, and Add Series (Manager and up) across your server's sources.
 - Reader with paged (left-to-right, right-to-left, double page) and
   continuous modes (webtoon, long strip, vertical), per-series mode memory,
   page scale and fit, rebindable keyboard shortcuts, and slicing for very
@@ -57,8 +57,9 @@ Each release also carries a `SHA256SUMS` file.
 - Discover, Library, Updates, History, search, and title pages with
   franchise season strips and episode air dates.
 - Player: Media3 on Android and TV; on Windows a built-in libVLC player
-  (through the project's own LGPL-clean binding, not vlcj) with subtitles,
-  audio-track choice and playback speed, or an external player (mpv / VLC).
+  (through the project's own LGPL-clean binding, not vlcj), or an external
+  player (mpv / VLC). Both built-in players have subtitles, audio-track choice
+  and playback speed.
 - Resume from where you stopped, up-next countdown with **Autoplay** and
   **Skip countdown** settings.
 - AniList / MyAnimeList tracking with status, progress and score.

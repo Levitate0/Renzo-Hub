@@ -704,9 +704,15 @@ fun BrowseScreen(
                                 items = spotlightItems,
                                 eyebrow = "DISCOVER · From your sources",
                                 ctaLabel = "Add to library",
-                                onCtaClick = { spot ->
-                                    addSeriesTitle = spot.title
-                                    addSeriesOpen = true
+                                // Manager+ only: adding posts to /api/serie
+                                // (RequireUserLevel(Manager)), as on the web.
+                                onCtaClick = if (libraryState.canAddSeries) {
+                                    { spot ->
+                                        addSeriesTitle = spot.title
+                                        addSeriesOpen = true
+                                    }
+                                } else {
+                                    null
                                 },
                             )
                         }
@@ -1455,9 +1461,11 @@ private fun CloudLatestDetailsSheet(
             // Footer.
             HorizontalDivider(color = RenzoColors.Border)
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                if (item.inLibrary == InLibraryStatus.NOT_IN_LIBRARY) {
+                // Adding posts to /api/serie, which the server keeps at Manager+
+                // (RequireUserLevel) — below that the button would only 403.
+                if (item.inLibrary == InLibraryStatus.NOT_IN_LIBRARY && canAddSeries) {
                     SheetButton(
-                        label = if (canAddSeries) "Add to Library" else "Request Series",
+                        label = "Add to Library",
                         icon = Icons.Filled.Add,
                         primary = true,
                         onClick = onAddSeries,
@@ -1747,9 +1755,10 @@ private fun CloudLatestDetailsDialog(
                         onClick = onRead,
                     )
                 }
-                if (item.inLibrary == InLibraryStatus.NOT_IN_LIBRARY) {
+                // Manager+ only, as the server's POST /api/serie requires.
+                if (item.inLibrary == InLibraryStatus.NOT_IN_LIBRARY && canAddSeries) {
                     DialogActionButton(
-                        label = if (canAddSeries) "Add to Library" else "Request Series",
+                        label = "Add to Library",
                         icon = Icons.Filled.Add,
                         primary = true,
                         onClick = onAddSeries,

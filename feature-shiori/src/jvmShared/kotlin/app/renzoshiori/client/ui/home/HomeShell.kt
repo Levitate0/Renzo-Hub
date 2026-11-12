@@ -411,7 +411,7 @@ fun HomeShell(
                                 path = "/sources",
                             )
                         } else {
-                            SourcesScreen()
+                            SourcesScreen(canManage = libraryState.canManage)
                         }
                         Section.Downloads -> DownloadsScreen()
                     }

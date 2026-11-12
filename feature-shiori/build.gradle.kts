@@ -1,11 +1,12 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 /*
- * :feature-shiori as Kotlin Multiplatform (HANDOFF_renzo-hub_desktop-exe.md
- * §2, step 3). Conversion strategy: ALL existing sources sit in androidMain —
- * behaviourally identical to the old android-library — and files are hoisted
- * to commonMain/jvmShared as their platform seams are cut, per the handoff's
- * 25-file coupling table. Android must stay green at every hoist.
+ * :feature-shiori as Kotlin Multiplatform, built for Android (phone + TV) AND
+ * the desktop (hub-desktop). The UI and API layer live in jvmShared (both
+ * targets are JVM-family, so Retrofit/OkHttp/material3 are shared there);
+ * commonMain holds the models; androidMain and desktopMain carry only the
+ * platform seams (storage, folder pickers, bootstrap). Both targets must stay
+ * green on every change.
  */
 plugins {
     alias(libs.plugins.android.library)

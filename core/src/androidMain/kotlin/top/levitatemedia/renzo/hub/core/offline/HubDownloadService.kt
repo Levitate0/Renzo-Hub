@@ -53,8 +53,9 @@ class HubDownloadService : Service() {
         const val ACTION_ENQUEUE = "enqueue"
         const val ACTION_STOP = "stop"
 
-        /** Downloads wait for unmetered network unless this is turned off. */
-        const val KEY_WIFI_ONLY = "downloads.wifiOnly"
+        /** Downloads wait for unmetered network unless this is turned off
+         *  ("Download over mobile data" — see [DownloadNetworkPrefs]). */
+        const val KEY_WIFI_ONLY = DownloadNetworkPrefs.KEY_WIFI_ONLY
 
         fun start(context: Context) {
             val intent = Intent(context, HubDownloadService::class.java).setAction(ACTION_ENQUEUE)
@@ -126,7 +127,7 @@ class HubDownloadService : Service() {
 
     /** True when downloads should wait for an unmetered connection. */
     private fun blockedByMeteredNetwork(): Boolean {
-        if (store.kvGet(KEY_WIFI_ONLY) == "off") return false
+        if (DownloadNetworkPrefs.allowMobileData(store)) return false
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
             ?: return false
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false

@@ -217,53 +217,57 @@ fun UpdatesScreen(
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
-                // "Update now" — scan every source for new chapters now.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .height(32.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(RenzoColors.Primary.copy(alpha = 0.10f))
-                        .dpadClickable(radius = 50.dp, enabled = !scanning, fill = null) {
-                            scanning = true
-                            scope.launch {
-                                // updates/page.tsx:335-346 — toast the outcome.
-                                val ok = runCatching { api?.scanAll() }.isSuccess
-                                hubToast(
-                                    if (ok) {
-                                        "Library scan queued — new chapters will appear here as sources are checked."
-                                    } else {
-                                        "Could not queue the library scan."
-                                    },
-                                )
-                                // Brief lockout so double-taps don't queue twice.
-                                delay(4000)
-                                scanning = false
+                // "Update now" — scan every source for new chapters now. Manager+
+                // only: POST /api/serie/scan-all is RequireUserLevel(Manager).
+                if (libraryState.canManage) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .height(32.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(RenzoColors.Primary.copy(alpha = 0.10f))
+                            .dpadClickable(radius = 50.dp, enabled = !scanning, fill = null) {
+                                scanning = true
+                                scope.launch {
+                                    // updates/page.tsx:335-346 — toast the outcome.
+                                    // A refusal answers with a status, not an exception.
+                                    val ok = runCatching { api?.scanAll() }.getOrNull()?.isSuccessful == true
+                                    hubToast(
+                                        if (ok) {
+                                            "Library scan queued — new chapters will appear here as sources are checked."
+                                        } else {
+                                            "Could not queue the library scan."
+                                        },
+                                    )
+                                    // Brief lockout so double-taps don't queue twice.
+                                    delay(4000)
+                                    scanning = false
+                                }
                             }
+                            .padding(horizontal = 12.dp),
+                    ) {
+                        if (scanning) {
+                            CircularProgressIndicator(
+                                color = RenzoColors.Primary,
+                                strokeWidth = 1.5.dp,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.Refresh,
+                                contentDescription = null,
+                                tint = RenzoColors.Primary,
+                                modifier = Modifier.size(14.dp),
+                            )
                         }
-                        .padding(horizontal = 12.dp),
-                ) {
-                    if (scanning) {
-                        CircularProgressIndicator(
+                        Text(
+                            "Update now",
+                            style = MaterialTheme.typography.labelMedium,
                             color = RenzoColors.Primary,
-                            strokeWidth = 1.5.dp,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    } else {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = null,
-                            tint = RenzoColors.Primary,
-                            modifier = Modifier.size(14.dp),
+                            maxLines = 1,
+                            modifier = Modifier.padding(start = 6.dp),
                         )
                     }
-                    Text(
-                        "Update now",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = RenzoColors.Primary,
-                        maxLines = 1,
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
                 }
             }
 

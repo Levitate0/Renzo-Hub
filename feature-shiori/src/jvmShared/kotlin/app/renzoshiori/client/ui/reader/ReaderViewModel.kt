@@ -16,6 +16,7 @@ import app.renzoshiori.client.data.network.encodeFilename
 import app.renzoshiori.client.data.network.pageUrl
 import app.renzoshiori.client.data.network.previewPageUrl
 import app.renzoshiori.client.data.network.streamPageUrl
+import app.renzoshiori.client.data.offline.OfflineSync
 import app.renzoshiori.client.ui.series.chapterKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -253,6 +254,8 @@ class ReaderViewModel(
         }
         lastReportedKey = ""
         lastReportedPage = -1
+        // The reconnect clean-up never removes the chapter that is open.
+        if (previewMihonId == null) OfflineSync.currentReadingKey = chapterKey(seriesId, number)
         appendStopped = false
         appendAttempts = 0
         prependStopped = false
@@ -830,8 +833,13 @@ class ReaderViewModel(
             )
         }
 
+        OfflineSync.currentReadingKey = chapterKey(seriesId, seg.chapterNumber)
         viewModelScope.launch {
             val api = app.network.currentApi() ?: return@launch
+            // A write that can't REACH the server (offline, a saved chapter on a
+            // trip) is queued and synced on reconnect — OfflineSync. A refusal
+            // (HTTP error) is the server's answer and is not retried.
+            var unreachable = false
             runCatching {
                 api.setProgress(
                     ReaderProgressRequestDto(
@@ -842,9 +850,15 @@ class ReaderViewModel(
                         filename = seg.filename,
                     ),
                 )
-            }
-            if (markRead) {
+            }.onFailure { if (it is java.io.IOException) unreachable = true }
+            if (markRead && !unreachable) {
                 runCatching { api.markChapters(ReaderMarkRequestDto(seriesId, listOf(seg.chapterNumber), true)) }
+                    .onFailure { if (it is java.io.IOException) unreachable = true }
+            }
+            if (unreachable) {
+                OfflineSync.record(seriesId, seg.chapterNumber, page1, total, seg.filename, completed = markRead)
+            } else {
+                OfflineSync.forget(seriesId, seg.chapterNumber)
             }
         }
     }
@@ -1021,6 +1035,13 @@ class ReaderViewModel(
         viewModelScope.launch {
             val api = app.network.currentApi() ?: return@launch
             runCatching { api.markChapters(ReaderMarkRequestDto(seriesId, listOf(number), completed)) }
+                .onFailure { e ->
+                    // Offline "mark read" is queued; an offline UN-read is not —
+                    // the sync never makes a chapter less read than the server has it.
+                    if (completed && e is java.io.IOException) {
+                        OfflineSync.record(seriesId, number, 0, 0, chapter.filename, completed = true)
+                    }
+                }
         }
     }
 
@@ -1146,6 +1167,7 @@ class ReaderViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        if (previewMihonId == null) OfflineSync.currentReadingKey = null
         // Clear the server's streamed-page cache on exit — but only if pages were
         // actually streamed (downloaded reads don't touch that cache). viewModelScope
         // is already cancelled here, so this runs on its own short-lived scope.

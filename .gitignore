@@ -8,8 +8,7 @@ build/
 local.properties
 
 # Release signing secrets — key.properties points at the keystore and carries
-# its password; the keystore itself lives outside the tree entirely
-# (/export/Main/Renzo-Apps/signing/).
+# its password; the keystore itself lives outside the tree entirely.
 key.properties
 
 # IDE

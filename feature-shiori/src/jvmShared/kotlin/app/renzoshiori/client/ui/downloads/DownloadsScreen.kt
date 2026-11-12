@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -51,6 +52,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.renzoshiori.client.ShioriRuntime
 import app.renzoshiori.client.data.offline.OfflineRepository
+import app.renzoshiori.client.data.offline.OfflineSync
+import top.levitatemedia.renzo.hub.core.HubPlatform
+import top.levitatemedia.renzo.hub.core.offline.DownloadNetworkPrefs
 import app.renzoshiori.client.ui.library.formatBytes
 import app.renzoshiori.client.ui.library.formatChapter
 import app.renzoshiori.client.ui.theme.RenzoColors
@@ -60,7 +64,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** The auto-clean-on-reconnect toggle, stored under the web's own key name. */
-private const val AUTO_PURGE_KEY = "renzo.offline.autopurge"
+private const val AUTO_PURGE_KEY = OfflineSync.AUTO_PURGE_KEY
 
 private data class ActiveSeriesProgress(val title: String, val done: Int, val total: Int)
 
@@ -68,7 +72,8 @@ private data class ActiveSeriesProgress(val title: String, val done: Int, val to
  * Offline downloads — 1:1 port of RenzoFrontend src/app/downloads/page.tsx
  * (the page is native-only on the web too: it renders a "this lives in the
  * app" notice in a browser). Header with the chapter/byte totals and Clear
- * all, the live "Downloading now" panel, the Download folder + Auto-clean
+ * all, the live "Downloading now" panel, the Download folder + Auto-clean (+ the
+ * Hub-only "Download over mobile data" on Android)
  * settings card, and the saved-chapter list with per-row delete.
  */
 @Composable
@@ -82,6 +87,7 @@ fun DownloadsScreen() {
     var bytes by remember { mutableStateOf(0L) }
     var folder by remember { mutableStateOf<String?>(null) }
     var autoPurge by remember { mutableStateOf(store.kvGet(AUTO_PURGE_KEY) != "off") }
+    var mobileData by remember { mutableStateOf(DownloadNetworkPrefs.allowMobileData(store)) }
     var toast by remember { mutableStateOf<String?>(null) }
     var reloadTick by remember { mutableStateOf(0) }
 
@@ -128,8 +134,10 @@ fun DownloadsScreen() {
         }
     }
 
-    // Any completed item (or a drained queue) means the saved list changed.
-    LaunchedEffect(revision) { reloadTick++ }
+    // Any completed item (or a drained queue) means the saved list changed;
+    // so does the reconnect clean-up removing read chapters.
+    val purgedRevision by OfflineSync.revision.collectAsState()
+    LaunchedEffect(revision, purgedRevision) { reloadTick++ }
 
     val list = chapters
     val activeList = activeSeries.entries.filter { it.value.total > 0 }
@@ -353,8 +361,8 @@ fun DownloadsScreen() {
                             )
                         }
                         Text(
-                            "When you're back online, ask to remove trip downloads " +
-                                "(never the chapter you're reading).",
+                            "When you're back online, ask to remove trip downloads you've " +
+                                "already read (never the chapter you're reading).",
                             style = MaterialTheme.typography.labelSmall,
                             color = RenzoColors.MutedForeground,
                             modifier = Modifier.padding(top = 2.dp),
@@ -378,6 +386,56 @@ fun DownloadsScreen() {
                             .onFocusChanged { switchFocused = it.isFocused }
                             .focusRing(isTv && switchFocused, 50.dp),
                     )
+                }
+
+                // Android only: the desktop downloader has no metered-network gate.
+                if (!HubPlatform.isDesktop) {
+                    Spacer(Modifier.height(12.dp))
+                    HorizontalDivider(color = RenzoColors.Border)
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Filled.SignalCellularAlt,
+                                    contentDescription = null,
+                                    tint = RenzoColors.Foreground,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Text(
+                                    "Download over mobile data",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                    color = RenzoColors.Foreground,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
+                            Text(
+                                "Off: downloads wait for Wi-Fi or another unmetered network. " +
+                                    "Applies to chapters and episodes alike.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = RenzoColors.MutedForeground,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                        var mobileFocused by remember { mutableStateOf(false) }
+                        Switch(
+                            checked = mobileData,
+                            onCheckedChange = { value ->
+                                mobileData = value
+                                DownloadNetworkPrefs.setAllowMobileData(store, value)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = RenzoColors.PrimaryForeground,
+                                checkedTrackColor = RenzoColors.Primary,
+                                uncheckedThumbColor = RenzoColors.MutedForeground,
+                                uncheckedTrackColor = RenzoColors.Muted,
+                            ),
+                            modifier = Modifier
+                                .padding(start = 12.dp)
+                                .onFocusChanged { mobileFocused = it.isFocused }
+                                .focusRing(isTv && mobileFocused, 50.dp),
+                        )
+                    }
                 }
             }
         }

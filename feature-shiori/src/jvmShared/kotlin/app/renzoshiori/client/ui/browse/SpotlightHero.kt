@@ -90,7 +90,8 @@ fun SpotlightHero(
     items: List<SpotlightItem>,
     eyebrow: String,
     ctaLabel: String,
-    onCtaClick: (SpotlightItem) -> Unit,
+    /** Null = no CTA (below Manager the Browse "Add to library" would only 403). */
+    onCtaClick: ((SpotlightItem) -> Unit)?,
 ) {
     val safeItems = remember(items) { items.take(7) }
     if (safeItems.isEmpty()) return
@@ -354,7 +355,8 @@ fun SpotlightHero(
         }
     }
 
-    val ctaButton: @Composable () -> Unit = {
+    val ctaButton: @Composable () -> Unit = ctaButton@{
+        if (onCtaClick == null) return@ctaButton
         val ctaFocus = rememberFocusState()
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -534,7 +536,7 @@ fun SpotlightHero(
                     metaRow()
                     descriptionBlock()
                     tagsRow()
-                    Spacer(Modifier.height(20.dp))
+                    if (onCtaClick != null) Spacer(Modifier.height(20.dp))
                     ctaButton()
                 }
             }
@@ -563,7 +565,7 @@ fun SpotlightHero(
                 metaRow()
                 descriptionBlock()
                 tagsRow()
-                Spacer(Modifier.height(20.dp))
+                if (onCtaClick != null) Spacer(Modifier.height(20.dp))
                 ctaButton()
                 if (safeItems.size > 1) {
                     Spacer(Modifier.height(20.dp))
