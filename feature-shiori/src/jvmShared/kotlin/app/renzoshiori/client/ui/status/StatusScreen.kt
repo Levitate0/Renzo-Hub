@@ -84,6 +84,7 @@ import app.renzoshiori.client.ui.tv.LocalIsTv
 import app.renzoshiori.client.ui.tv.focusRing
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
+import app.renzoshiori.client.ui.util.oneLine
 
 // ── Tailwind literals used by the web page, as Compose colors ────────────────
 private val Red400 = Color(0xFFF87171)
@@ -982,7 +983,7 @@ private fun CadenceInput(
         }
         BasicTextField(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = { onValueChange(it.oneLine()) },
             singleLine = true,
             textStyle = TextStyle(
                 fontFamily = FontFamily.Monospace,

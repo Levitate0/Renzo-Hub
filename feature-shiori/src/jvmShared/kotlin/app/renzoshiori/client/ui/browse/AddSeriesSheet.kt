@@ -82,6 +82,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import app.renzoshiori.client.ui.theme.RenzoColors
+import app.renzoshiori.client.ui.util.oneLine
 
 private val looseJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
@@ -733,7 +734,7 @@ private fun SearchStage(
                 )
                 BasicTextField(
                     value = searchValue,
-                    onValueChange = onSearchValue,
+                    onValueChange = { onSearchValue(it.oneLine()) },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = RenzoColors.Foreground),
                     cursorBrush = SolidColor(RenzoColors.Foreground),

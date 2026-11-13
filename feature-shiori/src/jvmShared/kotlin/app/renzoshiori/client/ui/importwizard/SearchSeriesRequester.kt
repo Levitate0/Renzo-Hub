@@ -64,6 +64,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import app.renzoshiori.client.ui.util.oneLine
 
 /** One row of the results list, plus the raw object POSTed back to /api/setup/augment. */
 private data class SearchHit(
@@ -214,7 +215,7 @@ fun SearchSeriesRequester(
                 )
                 BasicTextField(
                     value = searchValue,
-                    onValueChange = { searchValue = it },
+                    onValueChange = { searchValue = it.oneLine() },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(color = WizardColors.Fg),
                     cursorBrush = SolidColor(WizardColors.Primary),

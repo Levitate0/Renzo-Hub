@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.focusRing
 import app.renzoshiori.client.ui.tv.rememberFocusState
+import app.renzoshiori.client.ui.util.oneLine
 
 /**
  * The TV search field: a bordered box with the text field in its `decorationBox`,
@@ -84,7 +85,7 @@ fun TvSearchBar(
             )
             BasicTextField(
                 value = value,
-                onValueChange = onValueChange,
+                onValueChange = { onValueChange(it.oneLine()) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
                 cursorBrush = SolidColor(RenzoColors.Foreground),

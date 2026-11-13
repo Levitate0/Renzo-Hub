@@ -83,6 +83,7 @@ import app.renzoshiori.client.ui.tv.tvContentColor
 import app.renzoshiori.client.ui.tv.tvFocusable
 import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlin.math.roundToInt
+import app.renzoshiori.client.ui.util.oneLine
 
 /**
  * Tailwind hexes the web reader's chrome uses literally. Kept together so the
@@ -946,7 +947,7 @@ fun ReaderChapterListSheet(
                     }
                     BasicTextField(
                         value = query,
-                        onValueChange = { query = it },
+                        onValueChange = { query = it.oneLine() },
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = ReaderPalette.Text),
                         cursorBrush = SolidColor(RenzoColors.Primary),

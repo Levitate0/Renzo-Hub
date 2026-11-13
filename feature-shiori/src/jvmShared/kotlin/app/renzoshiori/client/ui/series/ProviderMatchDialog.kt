@@ -65,6 +65,7 @@ import app.renzoshiori.client.ui.tv.focusRing
 import app.renzoshiori.client.ui.tv.rememberFocusState
 import app.renzoshiori.client.ui.tv.tvClickable
 import java.math.BigDecimal
+import app.renzoshiori.client.ui.util.oneLine
 
 /** The provider Select's "Create New Provider" item (web `value="__new__"`). */
 private const val NEW_ITEM = "__new__"
@@ -605,7 +606,7 @@ private fun CompactField(
     ) {
         BasicTextField(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = { onValueChange(it.oneLine()) },
             singleLine = true,
             textStyle = TextStyle(
                 color = RenzoColors.Foreground,

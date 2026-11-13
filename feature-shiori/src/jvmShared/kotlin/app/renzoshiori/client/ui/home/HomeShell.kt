@@ -147,6 +147,7 @@ import app.renzoshiori.client.ui.util.rememberHideAdult
 import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import app.renzoshiori.client.ui.util.oneLine
 
 /**
  * Everything the account menu can do. The shell raises these; MainActivity
@@ -321,7 +322,7 @@ fun HomeShell(
                         var searchFocused by remember { mutableStateOf(false) }
                         BasicTextField(
                             value = libraryState.searchTerm,
-                            onValueChange = libraryVm::setSearch,
+                            onValueChange = { libraryVm.setSearch(it.oneLine()) },
                             singleLine = true,
                             textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
                             cursorBrush = SolidColor(RenzoColors.Foreground),
@@ -1380,7 +1381,7 @@ private fun DesktopSearchField(
     }
     BasicTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = { onValueChange(it.oneLine()) },
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
         cursorBrush = SolidColor(RenzoColors.Foreground),

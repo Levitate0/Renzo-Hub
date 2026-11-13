@@ -106,6 +106,7 @@ import app.renzoshiori.client.ui.util.rememberHideAdult
 import app.renzoshiori.client.ui.util.screenHeightDp
 import app.renzoshiori.client.ui.util.screenWidthDp
 import coil3.compose.AsyncImage
+import app.renzoshiori.client.ui.util.oneLine
 
 // ---------------------------------------------------------------------------
 // Constants (cloud-latest/page.tsx)
@@ -1052,7 +1053,7 @@ private fun TagFilterBody(
         )
         BasicTextField(
             value = tagSearch,
-            onValueChange = { tagSearch = it },
+            onValueChange = { tagSearch = it.oneLine() },
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
             cursorBrush = SolidColor(RenzoColors.Foreground),

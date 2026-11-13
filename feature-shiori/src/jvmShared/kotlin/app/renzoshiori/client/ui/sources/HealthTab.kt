@@ -99,7 +99,8 @@ internal fun HealthTab(api: SourcesApi?, onMigrate: (String) -> Unit) {
             item {
                 Text(
                     "How each source your series use has been doing. A source is Not working when it has failed " +
-                        "on your series all day without serving a single chapter. Failure counts start over when the server restarts.",
+                        "on your series all day without serving a single chapter or even answering a chapter check. " +
+                        "Failure counts start over when the server restarts.",
                     style = MaterialTheme.typography.bodySmall,
                     color = RenzoColors.MutedForeground,
                     modifier = Modifier.padding(vertical = 8.dp),

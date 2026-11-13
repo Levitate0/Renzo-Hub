@@ -84,6 +84,7 @@ import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import app.renzoshiori.client.ui.util.oneLine
 
 /** Number of rows visible before "Show all" is displayed. */
 private const val INITIAL_LIMIT = 24
@@ -641,7 +642,7 @@ private fun SourcesSearchField(value: String, onValueChange: (String) -> Unit) {
             }
             BasicTextField(
                 value = value,
-                onValueChange = onValueChange,
+                onValueChange = { onValueChange(it.oneLine()) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = RenzoColors.Foreground),
                 cursorBrush = SolidColor(RenzoColors.Primary),
