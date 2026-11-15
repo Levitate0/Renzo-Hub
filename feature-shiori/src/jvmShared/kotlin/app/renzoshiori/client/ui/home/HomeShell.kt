@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DriveFolderUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Menu
@@ -102,10 +103,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import org.jetbrains.compose.resources.painterResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -148,6 +147,7 @@ import app.renzoshiori.client.ui.util.screenWidthDp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import app.renzoshiori.client.ui.util.oneLine
+import top.levitatemedia.renzo.hub.core.isCleartextServer
 
 /**
  * Everything the account menu can do. The shell raises these; MainActivity
@@ -412,7 +412,7 @@ fun HomeShell(
                                 path = "/sources",
                             )
                         } else {
-                            SourcesScreen(canManage = libraryState.canManage)
+                            SourcesScreen(canManage = libraryState.canManage, canOwner = libraryState.canOwner)
                         }
                         Section.Downloads -> DownloadsScreen()
                     }
@@ -889,7 +889,6 @@ private fun AccountMenuBody(
     /** false: the caller pins its own Sign out (the TV sheet's sticky footer). */
     showSignOut: Boolean = true,
 ) {
-    val clipboard = LocalClipboardManager.current
     val hideAdult = rememberHideAdult()
     val isTv = LocalIsTv.current
     var copied by remember { mutableStateOf(false) }
@@ -944,6 +943,27 @@ private fun AccountMenuBody(
             }
             HorizontalDivider(color = RenzoColors.Border)
 
+            // Plain-http server: the session travels unencrypted, so say so
+            // for as long as it does (Connect only gets this past a warning).
+            if (isCleartextServer(app.renzoshiori.client.ShioriRuntime.app.tokenStore.serverUrl)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.LockOpen, contentDescription = null,
+                        tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        "Not secure — connected over http://",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFEF4444),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+                HorizontalDivider(color = RenzoColors.Border)
+            }
+
             // OPDS path + copy-the-full-URL button.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -967,7 +987,8 @@ private fun AccountMenuBody(
                         .size(24.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .dpadClickable(radius = 6.dp) {
-                            clipboard.setText(AnnotatedString(fullOpdsUrl))
+                            // Sensitive: the OPDS path is a bearer credential.
+                            top.levitatemedia.renzo.hub.core.HubPlatform.copySensitive(fullOpdsUrl)
                             copied = true
                         },
                 ) {
@@ -1013,7 +1034,9 @@ private fun AccountMenuBody(
                 if (user.level >= UserLevel.OWNER) {
                     MenuRow(Icons.Filled.Settings, "Settings") { onAction(AccountAction.ServerSettings) }
                 }
-                if (user.level >= UserLevel.MANAGER) {
+                // Owner: the import wizard is the server's setup flow (api/setup/*),
+                // which scans the library folders and installs extensions.
+                if (user.level >= UserLevel.OWNER) {
                     MenuRow(Icons.Filled.Download, "Import Series") { importPickerOpen = true }
                     HorizontalDivider(color = RenzoColors.Border)
                 }

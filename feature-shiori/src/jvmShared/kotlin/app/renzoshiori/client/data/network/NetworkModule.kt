@@ -2,6 +2,8 @@ package app.renzoshiori.client.data.network
 
 import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
+import top.levitatemedia.renzo.hub.core.credentialGuard
+import top.levitatemedia.renzo.hub.core.isServerOrigin
 import app.renzoshiori.client.data.auth.TokenStore
 import kotlinx.serialization.json.Json
 import okhttp3.Cookie
@@ -27,6 +29,13 @@ import java.util.concurrent.ConcurrentHashMap
  * `String` with a default. Without coercion kotlinx throws and the whole
  * screen fails to load; with it, null falls back to the declared default.
  */
+/**
+ * Paths whose request or response body is itself a credential. See loggingInterceptor.
+ * `/users` and `opds`: UserDto carries each user's OPDS path, a bearer
+ * credential for the whole library.
+ */
+private val SECRET_BODY_PATH = Regex("/auth/|site-auth|password|token|apikey|invite|pair|/scrobbler/config/|/users|opds")
+
 private val json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = false
@@ -45,6 +54,11 @@ private class RefreshCookieJar(private val tokenStore: TokenStore) : CookieJar {
     private val store = ConcurrentHashMap<String, List<Cookie>>()
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        // Only the connected server may set the remember-me cookie. Anything
+        // else this client reaches (a Connect probe of another server, a
+        // redirect hop, another port on the same host) could otherwise
+        // overwrite or fixate it, here and in the encrypted store.
+        if (!isServerOrigin(url, tokenStore.serverUrl)) return
         // Merged by name, not replaced wholesale. Replacing meant any response
         // that set some OTHER cookie for this host (a proxy's, a CDN's) dropped
         // the refresh cookie from the live jar, and the next refresh then went
@@ -67,6 +81,7 @@ private class RefreshCookieJar(private val tokenStore: TokenStore) : CookieJar {
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        if (!isServerOrigin(url, tokenStore.serverUrl)) return emptyList()
         val now = System.currentTimeMillis()
         val live = store[url.host].orEmpty().filter { it.expiresAt > now }
         if (live.any { it.name == REFRESH_COOKIE }) return live
@@ -314,19 +329,11 @@ class NetworkModule(private val tokenStore: TokenStore) {
             }
             .addInterceptor(auth)
             .addInterceptor(PerRequestTimeoutInterceptor())
-            .addInterceptor(
-                HttpLoggingInterceptor().apply {
-                    // Full bodies in debug so a failing request can actually be
-                    // read off logcat — "it looked like it worked" is otherwise
-                    // impossible to tell from "it was never sent". Release stays
-                    // at BASIC: bodies carry tokens and library contents.
-                    level = if (NetworkModule.logBodies) {
-                        HttpLoggingInterceptor.Level.BODY
-                    } else {
-                        HttpLoggingInterceptor.Level.BASIC
-                    }
-                },
-            )
+            .addInterceptor(loggingInterceptor())
+            // Credentials go to the connected server only. Retrofit is also
+            // pointed at Connect candidates, and OkHttp keeps hand-set headers
+            // across redirects; see credentialGuard.
+            .addNetworkInterceptor(credentialGuard { isServerOrigin(it, tokenStore.serverUrl) })
             // OkHttp defaults to a 10s read timeout, which several endpoints
             // legitimately exceed: /api/provider/list walks the online
             // extension repositories, scans and imports do real work, and
@@ -335,6 +342,32 @@ class NetworkModule(private val tokenStore: TokenStore) {
             .readTimeout(90, java.util.concurrent.TimeUnit.SECONDS)
             .writeTimeout(90, java.util.concurrent.TimeUnit.SECONDS)
             .build()
+    }
+
+    /**
+     * Full bodies in debug so a failing request can actually be read off
+     * logcat — "it looked like it worked" is otherwise impossible to tell from
+     * "it was never sent". Release stays at BASIC: bodies carry tokens and
+     * library contents.
+     *
+     * Even in debug, credentials never reach the log: the auth headers are
+     * redacted, and the endpoints whose bodies ARE credentials (login and
+     * password flows, token and pairing answers, site logins, API keys,
+     * invites) log headers only. Debug and demo builds get shared with
+     * logcat dumps attached.
+     */
+    private fun loggingInterceptor(): Interceptor {
+        fun logger(level: HttpLoggingInterceptor.Level) = HttpLoggingInterceptor().apply {
+            this.level = level
+            listOf("Authorization", "Cookie", "Set-Cookie", "X-Renzo-User").forEach(::redactHeader)
+        }
+        if (!NetworkModule.logBodies) return logger(HttpLoggingInterceptor.Level.BASIC)
+        val bodies = logger(HttpLoggingInterceptor.Level.BODY)
+        val headersOnly = logger(HttpLoggingInterceptor.Level.HEADERS)
+        return Interceptor { chain ->
+            val path = chain.request().url.encodedPath.lowercase()
+            (if (SECRET_BODY_PATH.containsMatchIn(path)) headersOnly else bodies).intercept(chain)
+        }
     }
 
     fun retrofitFor(baseUrl: String): Retrofit = Retrofit.Builder()

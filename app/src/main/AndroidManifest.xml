@@ -42,13 +42,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:banner="@drawable/renzo_tv_banner"
         android:theme="@style/Theme.RenzoHub"
-        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:largeHeap="true"
         android:supportsRtl="true"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules">
-        <!-- usesCleartextTraffic: most self-hosted LAN servers have no TLS cert. -->
+        <!-- network_security_config: cleartext stays allowed (LAN servers by
+             IP have no cert); why, and what guards it, is written there. -->
 
         <activity
             android:name=".HubActivity"

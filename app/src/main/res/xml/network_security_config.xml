@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext stays PERMITTED, on purpose. The Hub talks to servers the user
+  hosts, and the usual one is a LAN box reached by IP (http://192.168.1.10:8787)
+  that has no certificate and cannot get one. Blocking cleartext here would
+  lock those users out entirely, and there is no fixed host list to scope an
+  exception to.
+
+  What keeps that from being a silent downgrade lives in the app, not here:
+  both Connect screens use an https:// address exactly as typed, never fall
+  back to http after a certificate failure, offer http for a bare address only
+  behind a "Not secure" warning the user has to accept, and keep a
+  "Not secure" marker on the login gate and account menu while connected
+  over http. Credentials are scoped to the server's exact origin (scheme, host
+  and port), so an https session is never replayed over http.
+
+  Trust anchors are left at the platform default (system CAs only).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

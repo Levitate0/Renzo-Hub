@@ -242,9 +242,10 @@ class Repo(val client: ApiClient) {
     fun captionUrl(subId: String): String = client.absolute("/api/captions/$subId.vtt")
 
     // --- account settings (web-parity surface) ------------------------------
-    /** Email for password-reset links; "" clears it. */
-    suspend fun setEmail(email: String): PublicUser {
-        val body = buildJsonObject { put("email", email) }
+    /** Email for password-reset links; "" clears it. The server requires the
+     *  current password for any change (403 wrong / 429 too many tries). */
+    suspend fun setEmail(email: String, currentPassword: String): PublicUser {
+        val body = buildJsonObject { put("email", email); put("currentPassword", currentPassword) }
         return client.post("/api/account/email", body.toString())
     }
 

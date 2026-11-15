@@ -124,6 +124,13 @@ fun SourcesScreen(
      * per-user and open to everyone, so it stays.
      */
     canManage: Boolean,
+    /**
+     * Owner. APK upload (install/file, extensions/sideload) and extension
+     * settings (POST api/provider/preferences — one store shared by every
+     * user) are Owner-only on the server, so their entry points are hidden
+     * below that, as on the web.
+     */
+    canOwner: Boolean = false,
 ) {
     val app = ShioriRuntime.app
     val api = remember { app.network.currentServiceOf<SourcesApi>() }
@@ -192,7 +199,7 @@ fun SourcesScreen(
 
             Box(modifier = Modifier.weight(1f)) {
                 when (shown) {
-                    TAB_SOURCES -> SourcesTab(api, baseUrl, snackbar, canManage)
+                    TAB_SOURCES -> SourcesTab(api, baseUrl, snackbar, canManage, canOwner)
                     TAB_HEALTH -> HealthTab(api) { provider ->
                         migrateFrom = provider
                         tab = TAB_MIGRATE
@@ -235,7 +242,13 @@ private fun TabTrigger(label: String, active: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHostState, canManage: Boolean) {
+private fun SourcesTab(
+    api: SourcesApi?,
+    baseUrl: String,
+    snackbar: SnackbarHostState,
+    canManage: Boolean,
+    canOwner: Boolean,
+) {
     val scope = rememberCoroutineScope()
 
     val extensions = remember { mutableStateListOf<ProviderDto>() }
@@ -312,7 +325,7 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
                 } else {
                     reload()
                     extensions.firstOrNull { it.packageName == pkgName }?.let {
-                        showPreferencesFor = it.packageName to it.name
+                        if (canOwner) showPreferencesFor = it.packageName to it.name
                     }
                 }
             }
@@ -387,7 +400,7 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
                 val i = extensions.indexOfFirst { it.packageName == pkgName }
                 if (i >= 0) extensions[i] = extensions[i].copy(isInstaled = true, isEnabledForMe = true)
                 searchTerm = ""
-                if (target != null) showPreferencesFor = target.packageName to target.name
+                if (target != null && canOwner) showPreferencesFor = target.packageName to target.name
             } else {
                 snackbar.showSnackbar("Failed to install source")
             }
@@ -436,7 +449,7 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
 
         if (canManage) {
             item(key = "extension-versions") {
-                ExtensionVersionsPanel(api, snackbar)
+                ExtensionVersionsPanel(api, snackbar, canSideload = canOwner)
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -457,7 +470,7 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
                     isLast = !showAll && index == visibleInstalled.lastIndex,
                     onInstall = { handleInstall(it) },
                     onUninstall = { handleUninstall(it) },
-                    onOpenSettings = { showPreferencesFor = ext.packageName to ext.name },
+                    onOpenSettings = if (canOwner) ({ showPreferencesFor = ext.packageName to ext.name }) else null,
                 )
             }
             if (showAll) {
@@ -486,7 +499,7 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
                 onDismissLanguages = { langSheetOpen = false },
                 onToggleLanguage = { toggleLanguage(it) },
                 onToggleAllLanguages = { toggleAllLanguages() },
-                onInstallFromApk = { apkPicker() },
+                onInstallFromApk = if (canOwner) ({ apkPicker() }) else null,
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -505,9 +518,11 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
                     isLoading = actionLoading == ext.packageName,
                     isFirst = index == 0,
                     isLast = !showAll && index == visibleAvailable.lastIndex,
-                    onInstall = { handleInstall(it) },
+                    // A real install loads code into the shared sidecar (Manager+);
+                    // enabling one already installed system-wide is open to all.
+                    onInstall = if (ext.isInstaled || canManage) ({ handleInstall(it) }) else null,
                     onUninstall = { handleUninstall(it) },
-                    onOpenSettings = { showPreferencesFor = ext.packageName to ext.name },
+                    onOpenSettings = null,
                 )
             }
             if (showAll) {
@@ -602,7 +617,7 @@ private fun SourcesTab(api: SourcesApi?, baseUrl: String, snackbar: SnackbarHost
     }
 
     // ── Auto-open preferences after install / from the row menu ──────────────
-    showPreferencesFor?.let { (pkgName, providerName) ->
+    showPreferencesFor?.takeIf { canOwner }?.let { (pkgName, providerName) ->
         ProviderPreferencesDialog(
             api = api,
             pkgName = pkgName,
@@ -784,9 +799,9 @@ private fun SourceRow(
     isLoading: Boolean,
     isFirst: Boolean,
     isLast: Boolean,
-    onInstall: (String) -> Unit,
+    onInstall: ((String) -> Unit)?,
     onUninstall: (String) -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenSettings: (() -> Unit)?,
 ) {
     val isFailing = installed && (extension.isBroken || extension.isDead)
     val meta = formatLanguageMeta(extension)
@@ -857,7 +872,7 @@ private fun SourceRow(
                     onSettings = onOpenSettings,
                     onUninstall = { onUninstall(extension.packageName) },
                 )
-            } else {
+            } else if (onInstall != null) {
                 InstallButton(isLoading = isLoading) { onInstall(extension.packageName) }
             }
         }
@@ -911,25 +926,27 @@ private fun InstallButton(isLoading: Boolean, onClick: () -> Unit) {
 private fun InstalledRowActions(
     extensionName: String,
     isLoading: Boolean,
-    onSettings: () -> Unit,
+    onSettings: (() -> Unit)?,
     onUninstall: () -> Unit,
 ) {
     if (screenWidthDp() >= 1024.dp) {
         var menuOpen by remember { mutableStateOf(false) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(enabled = !isLoading) { onSettings() },
-            ) {
-                Icon(
-                    Icons.Filled.Settings,
-                    contentDescription = "$extensionName settings",
-                    tint = RenzoColors.MutedForeground,
-                    modifier = Modifier.size(16.dp),
-                )
+            if (onSettings != null) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(enabled = !isLoading) { onSettings() },
+                ) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = "$extensionName settings",
+                        tint = RenzoColors.MutedForeground,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
             Box {
                 Row(
@@ -1008,14 +1025,16 @@ private fun InstalledRowActions(
             onDismissRequest = { open = false },
             containerColor = RenzoColors.Popover,
         ) {
-            DropdownMenuItem(
-                text = { Text("Settings…", color = RenzoColors.Foreground) },
-                leadingIcon = {
-                    Icon(Icons.Filled.Settings, contentDescription = null, tint = RenzoColors.Foreground)
-                },
-                onClick = { open = false; onSettings() },
-            )
-            HorizontalDivider(color = SourcesLine)
+            if (onSettings != null) {
+                DropdownMenuItem(
+                    text = { Text("Settings…", color = RenzoColors.Foreground) },
+                    leadingIcon = {
+                        Icon(Icons.Filled.Settings, contentDescription = null, tint = RenzoColors.Foreground)
+                    },
+                    onClick = { open = false; onSettings() },
+                )
+                HorizontalDivider(color = SourcesLine)
+            }
             DropdownMenuItem(
                 text = { Text("Uninstall", color = RenzoColors.Red) },
                 leadingIcon = {
@@ -1047,7 +1066,8 @@ private fun SourcesToolbar(
     onDismissLanguages: () -> Unit,
     onToggleLanguage: (String) -> Unit,
     onToggleAllLanguages: () -> Unit,
-    onInstallFromApk: () -> Unit,
+    /** Null below Owner (POST api/provider/install/file is Owner-only), which hides the ⋮ menu. */
+    onInstallFromApk: (() -> Unit)?,
 ) {
     val sortLabel = if (sort == SORT_NAME_ASC) "A–Z" else "Z–A"
     val langLabel = when {
@@ -1134,33 +1154,35 @@ private fun SourcesToolbar(
                 }
             }
             Spacer(Modifier.weight(1f))
-            Box {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { overflowOpen = true },
-                ) {
-                    Icon(
-                        Icons.Filled.MoreVert,
-                        contentDescription = "More options",
-                        tint = RenzoColors.MutedForeground,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-                DropdownMenu(
-                    expanded = overflowOpen,
-                    onDismissRequest = { overflowOpen = false },
-                    containerColor = RenzoColors.Popover,
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Install from APK…", color = RenzoColors.Foreground) },
-                        leadingIcon = {
-                            Icon(Icons.Filled.FileUpload, contentDescription = null, tint = RenzoColors.Foreground)
-                        },
-                        onClick = { overflowOpen = false; onInstallFromApk() },
-                    )
+            if (onInstallFromApk != null) {
+                Box {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { overflowOpen = true },
+                    ) {
+                        Icon(
+                            Icons.Filled.MoreVert,
+                            contentDescription = "More options",
+                            tint = RenzoColors.MutedForeground,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = overflowOpen,
+                        onDismissRequest = { overflowOpen = false },
+                        containerColor = RenzoColors.Popover,
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Install from APK…", color = RenzoColors.Foreground) },
+                            leadingIcon = {
+                                Icon(Icons.Filled.FileUpload, contentDescription = null, tint = RenzoColors.Foreground)
+                            },
+                            onClick = { overflowOpen = false; onInstallFromApk() },
+                        )
+                    }
                 }
             }
         }

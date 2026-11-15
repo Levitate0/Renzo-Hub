@@ -59,6 +59,8 @@ java {
 compose.desktop {
     application {
         mainClass = "top.levitatemedia.renzo.hub.desktop.MainKt"
+        // Strict Windows argument quoting for external-player launches.
+        jvmArgs += listOf("-Djdk.lang.Process.allowAmbiguousCommands=false")
         nativeDistributions {
             // jpackage cannot cross-build; Windows artifacts come from the
             // uber-jar + the NSIS/osslsigncode pipeline (handoff §7). These

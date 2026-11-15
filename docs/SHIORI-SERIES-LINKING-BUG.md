@@ -1,6 +1,6 @@
 # Unrelated series are being merged, and adding one silently edits the other
 
-**For:** the Shiori server chat (`/opt/zurg-stack/renzo-ecosystem/shiori`).
+**For:** the Shiori server chat (`<ecosystem>/shiori`).
 **Date:** 2026-08-10.
 **Severity:** destructive — it writes foreign sources into an existing series,
 and the user has to notice and undo it by hand.

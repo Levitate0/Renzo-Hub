@@ -40,6 +40,7 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
+import top.levitatemedia.renzo.hub.core.isServerOrigin
 
 /**
  * Desktop playback, phase one (RENZO-DESKTOP-NATIVE-HANDOFF.md §6.5): resolve
@@ -261,9 +262,14 @@ private fun launchExternal(
     titleName: String,
 ) {
     val videoUrl = app.client.absolute(stream.url)
-    val serverHost = runCatching { java.net.URI(app.client.base()).host }.getOrNull()
-    val videoHost = runCatching { java.net.URI(videoUrl).host }.getOrNull()
-    val videoOnServer = serverHost != null && videoHost != null && videoHost.equals(serverHost, ignoreCase = true)
+    // Java on Windows joins argv into one command line without escaping
+    // embedded quotes, so server/AniList text could smuggle extra player
+    // options in. Only a plain http(s) URL goes through, and the title is
+    // scrubbed of quotes and control characters.
+    require(isSafePlayerUrl(videoUrl)) { "This stream's address can't be handed to an external player." }
+    val safeTitle = titleName.filterNot { it == '"' || it.isISOControl() }
+    // By origin, not host: the cookie must not ride an http:// or other-port link.
+    val videoOnServer = isServerOrigin(videoUrl, app.prefs.serverUrl)
     val cookie = if (videoOnServer) app.client.cookieHeader() else null
     val resumeSec = app.prefs.resumePositionMs(episodeKey(titleId, ep)) / 1000
     val subUrls = stream.subtitles.map { app.client.absolute("/api/captions/${it.id}.vtt") }
@@ -280,8 +286,7 @@ private fun launchExternal(
     val args = buildList {
         add(exe)
         if (isMpv) {
-            add(videoUrl)
-            add("--force-media-title=$titleName — Episode $ep")
+            add("--force-media-title=$safeTitle — Episode $ep")
             subUrls.forEach { url -> downloadToTemp(app, url)?.let { add("--sub-file=${it.absolutePath}") } }
             if (resumeSec > 0) add("--start=$resumeSec")
             if (cookie != null) {
@@ -293,7 +298,12 @@ private fun launchExternal(
                     add("--include=${f.absolutePath}")
                 }
             }
+            // `--` ends option parsing, so the URL can only ever be a file.
+            add("--")
+            add(videoUrl)
         } else {
+            // VLC: the URL is checked above to be http(s), so it can never
+            // read as an option.
             add(videoUrl)
             // VLC won't take a URL for sub-file — fetch the first sidecar to a
             // temp path (the server already picked the best track per language).
@@ -315,6 +325,13 @@ private fun launchExternal(
             f.delete()
         }.apply { isDaemon = true }.start()
     }
+}
+
+/** http(s) only, with nothing that could break out of a Windows command-line argument. */
+private fun isSafePlayerUrl(url: String): Boolean {
+    if (url.any { it == '"' || it.isWhitespace() || it.isISOControl() }) return false
+    val scheme = runCatching { java.net.URI(url).scheme }.getOrNull()?.lowercase()
+    return scheme == "http" || scheme == "https"
 }
 
 /** A temp file only this OS user can read or write. */

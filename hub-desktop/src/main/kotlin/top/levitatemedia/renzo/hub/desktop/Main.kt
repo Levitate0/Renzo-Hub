@@ -35,6 +35,11 @@ import top.levitatemedia.renzo.tv.RenzoDesktopRoot
  * do not fork screens).
  */
 fun main() {
+    // Windows: make ProcessBuilder quote arguments strictly, so text handed
+    // to an external player can't split into extra options. Read once when
+    // ProcessImpl loads, so it must be set before any process is started;
+    // the launcher passes it too.
+    System.setProperty("jdk.lang.Process.allowAmbiguousCommands", "false")
     // Before any window exists: bind the process to the app's Windows
     // taskbar identity so pinning works (see WindowsIntegration).
     WindowsIntegration.installAppUserModelId()

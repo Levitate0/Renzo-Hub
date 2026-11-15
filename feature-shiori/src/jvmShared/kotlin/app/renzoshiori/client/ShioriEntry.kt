@@ -118,6 +118,9 @@ fun ShioriRoot(onSwitchApp: (() -> Unit)? = null, onBackToPicker: (() -> Unit)? 
                     loading = state.loading,
                     error = state.error,
                     onConnect = authViewModel::connect,
+                    insecureOffer = state.insecureOffer,
+                    onAcceptInsecure = authViewModel::acceptInsecure,
+                    onDeclineInsecure = authViewModel::declineInsecure,
                     onBackToPicker = onBackToPicker,
                 )
                 is AuthStep.Login -> LoginScreen(

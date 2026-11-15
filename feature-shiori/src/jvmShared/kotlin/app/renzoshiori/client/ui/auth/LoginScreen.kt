@@ -25,6 +25,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import app.renzoshiori.client.resources.Res
 import app.renzoshiori.client.resources.*
 import app.renzoshiori.client.ui.tv.LocalIsTv
+import top.levitatemedia.renzo.hub.core.isCleartextServer
 
 /**
  * The signed-out half of the app, ported 1:1 from RenzoFrontend:
@@ -113,6 +114,7 @@ fun LoginScreen(
                 onHaveInvite = { vm.clearPasswordFlow(); route = AuthRoute.SetPassword },
                 onBackToPicker = onBackToPicker,
                 onChangeServer = onChangeServer,
+                insecure = isCleartextServer(step.serverUrl),
             )
         }
 
@@ -153,6 +155,8 @@ private fun LoginCard(
     onHaveInvite: () -> Unit,
     onBackToPicker: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
+    /** Server reached over plain http: say so where the password is typed. */
+    insecure: Boolean = false,
 ) {
     var username by remember { mutableStateOf(rememberedUsername.orEmpty()) }
     var password by remember { mutableStateOf("") }
@@ -194,6 +198,10 @@ private fun LoginCard(
                 AuthCardDescription("Enter your credentials to log in")
             }
             AuthCardContent {
+                if (insecure) {
+                    AuthErrorBox("Not secure: this server is reached over http://, so your password is sent unencrypted.")
+                    Spacer(Modifier.height(16.dp))
+                }
                 if (resetDone && shownError == null) {
                     AuthNoticeBox("Password reset successful. Log in with your new password.")
                     Spacer(Modifier.height(16.dp))

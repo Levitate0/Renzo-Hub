@@ -30,7 +30,7 @@ misread the job.
 
 ## 1. What actually exists — measured, not assumed
 
-Counted on 2026-08-14 in `/opt/zurg-stack/renzo-ecosystem/hub/`.
+Counted on 2026-08-14 in `<ecosystem>/hub/`.
 
 **The UI is already written.** `feature-shiori/.../ui/` has 17 screen packages:
 `auth, browse, components, downloads, home, importwizard, library, onboarding,
@@ -208,9 +208,9 @@ early rather than discovering it at packaging time.
 The existing pipeline is not Compose-shaped, but it is proven, and its outputs
 are what the release process expects:
 
-- **NSIS** installer (`renzoshiori-installer.nsi`) → `/export/Main/Renzo-out/RenzoShiori-Setup.exe`
+- **NSIS** installer (`renzoshiori-installer.nsi`) → `<export dir>/RenzoShiori-Setup.exe`
 - **Authenticode-signed** with `osslsigncode` using
-  `/export/Main/Renzo-Apps/signing/codesign.pfx`
+  the code-signing PFX (kept outside the repo; `tools/build-windows-exe.sh` reads it from `SIGN_DIR`)
 
 Compose Desktop's own `packageExe`/`jpackage` path produces a different artifact
 shape (a bundled JRE). Decide deliberately which one survives, and keep signing

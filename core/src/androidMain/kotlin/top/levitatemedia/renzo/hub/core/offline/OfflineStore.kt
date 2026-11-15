@@ -20,7 +20,9 @@ import java.io.OutputStream
  *    a different prefs file would orphan every chapter a user has already
  *    downloaded even though the files are still on disk.
  *  - **The same default root** (`getExternalFilesDir("offline")`), so non-SAF
- *    installs resolve their existing paths unchanged.
+ *    installs resolve their existing paths unchanged — on Android 11+. Below
+ *    that, new downloads go to internal storage instead (see [writeRoot]),
+ *    and files already under the external root still resolve (see [fileFor]).
  *
  * New writes go under [ROOT_DIR]; pre-existing Shiori files live under
  * `RenzoShiori/` and stay readable through their memoised URIs. Nothing is
@@ -39,8 +41,34 @@ class OfflineStore(private val context: Context) : HubOfflineFiles {
 
     @Volatile private var noMediaEnsured = false
 
-    private val defaultRoot: File
-        get() = context.getExternalFilesDir("offline") ?: File(context.filesDir, "offline")
+    private val externalRoot: File? get() = context.getExternalFilesDir("offline")
+    private val internalRoot: File get() = File(context.filesDir, "offline")
+
+    /**
+     * Where new non-SAF downloads go. Before Android 11, Android/data is not
+     * private: any app holding READ_EXTERNAL_STORAGE can read it, and
+     * .nomedia only hides files from the gallery, so downloads go to internal
+     * storage there (on these devices usually the same partition, so no space
+     * is lost). From 11 on, the external app dir is private to the app.
+     */
+    private val writeRoot: File
+        get() = if (android.os.Build.VERSION.SDK_INT >= 30) externalRoot ?: internalRoot else internalRoot
+
+    /** The other root: where downloads made before an upgrade (or the rule above) may sit. */
+    private val otherRoot: File?
+        get() = (if (writeRoot == internalRoot) externalRoot else internalRoot)
+
+    /**
+     * The file for [relPath]: in [writeRoot] when it is there, else in the
+     * other root when it is there (an older download), else where a new one
+     * would be written. Nothing is moved, for the same reason as the SAF paths.
+     */
+    private fun fileFor(relPath: String): File {
+        val rel = segments(relPath).joinToString("/")
+        val primary = File(writeRoot, rel)
+        if (primary.exists()) return primary
+        return otherRoot?.let { File(it, rel) }?.takeIf { it.exists() } ?: primary
+    }
 
     private fun treeUri(): Uri? = prefs.getString(KEY_TREE, null)?.let { Uri.parse(it) }
 
@@ -80,7 +108,7 @@ class OfflineStore(private val context: Context) : HubOfflineFiles {
                 val dir = safDir(true, emptyList()) ?: return
                 if (dir.findFile(NO_MEDIA) == null) dir.createFile("application/octet-stream", NO_MEDIA)
             } else {
-                val f = File(defaultRoot, NO_MEDIA)
+                val f = File(writeRoot, NO_MEDIA)
                 if (!f.exists()) { f.parentFile?.mkdirs(); f.createNewFile() }
             }
             noMediaEnsured = true
@@ -99,7 +127,7 @@ class OfflineStore(private val context: Context) : HubOfflineFiles {
                 runCatching { context.contentResolver.openInputStream(it)?.use { s -> s.readBytes() } }.getOrNull()
             }
         } else {
-            File(defaultRoot, segments(relPath).joinToString("/")).takeIf { it.exists() }?.readBytes()
+            fileFor(relPath).takeIf { it.exists() }?.readBytes()
         }
 
     /**
@@ -111,14 +139,14 @@ class OfflineStore(private val context: Context) : HubOfflineFiles {
         if (treeUri() != null) {
             rememberedDoc(relPath)
         } else {
-            File(defaultRoot, segments(relPath).joinToString("/"))
+            fileFor(relPath)
                 .takeIf { it.exists() }
                 ?.let { Uri.fromFile(it) }
         }
 
     override fun exists(relPath: String): Boolean =
         if (treeUri() != null) rememberedDoc(relPath) != null
-        else File(defaultRoot, segments(relPath).joinToString("/")).exists()
+        else fileFor(relPath).exists()
 
     /** Bytes already on disk, for resuming a partial transfer. */
     override fun sizeOf(relPath: String): Long =
@@ -127,7 +155,7 @@ class OfflineStore(private val context: Context) : HubOfflineFiles {
                 ?.let { runCatching { DocumentFile.fromSingleUri(context, it)?.length() }.getOrNull() }
                 ?: 0L
         } else {
-            File(defaultRoot, segments(relPath).joinToString("/")).let { if (it.exists()) it.length() else 0L }
+            fileFor(relPath).let { if (it.exists()) it.length() else 0L }
         }
 
     // ── writes ───────────────────────────────────────────────────────────────
@@ -154,7 +182,13 @@ class OfflineStore(private val context: Context) : HubOfflineFiles {
             // callers must verify with sizeOf() before trusting a resume.
             runCatching { context.contentResolver.openOutputStream(doc.uri, if (append) "wa" else "wt") }.getOrNull()
         } else {
-            val f = File(defaultRoot, segments(relPath).joinToString("/"))
+            // A resume continues the partial file where it is, since that is
+            // the one sizeOf() measured; a fresh write starts in writeRoot and
+            // drops an older copy left in the other root.
+            val existing = fileFor(relPath)
+            val fresh = File(writeRoot, segments(relPath).joinToString("/"))
+            val f = if (append && existing.exists()) existing else fresh
+            if (f != existing && existing.exists()) existing.delete()
             f.parentFile?.mkdirs()
             runCatching { java.io.FileOutputStream(f, append) }.getOrNull()
         }
@@ -173,7 +207,8 @@ class OfflineStore(private val context: Context) : HubOfflineFiles {
             e.apply()
             runCatching { safDir(false, segments(relPath))?.delete() }
         } else {
-            File(defaultRoot, segments(relPath).joinToString("/")).deleteRecursively()
+            val rel = segments(relPath).joinToString("/")
+            listOfNotNull(writeRoot, otherRoot).forEach { File(it, rel).deleteRecursively() }
         }
     }
 
@@ -195,11 +230,11 @@ class OfflineStore(private val context: Context) : HubOfflineFiles {
     override fun usableSpaceBytes(): Long = runCatching {
         if (treeUri() != null) {
             context.contentResolver.openFileDescriptor(treeUri()!!, "r")?.use {
-                android.os.StatFs(defaultRoot.path).availableBytes
-            } ?: android.os.StatFs(defaultRoot.path).availableBytes
+                android.os.StatFs(writeRoot.path).availableBytes
+            } ?: android.os.StatFs(writeRoot.path).availableBytes
         } else {
-            defaultRoot.mkdirs()
-            android.os.StatFs(defaultRoot.path).availableBytes
+            writeRoot.mkdirs()
+            android.os.StatFs(writeRoot.path).availableBytes
         }
     }.getOrDefault(0L)
 

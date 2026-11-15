@@ -5,7 +5,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -84,20 +83,17 @@ object HubSession {
      * token. Credentials go to the user's own servers and nowhere else, which
      * the downloader and the player already enforced.
      *
-     * Matched on host, like the downloader: the scheme or port in a
-     * server-built URL can differ from the one typed in. Only when both halves
-     * live on one host (a LAN box serving each on its own port) does the port
-     * decide, and if even that cannot, the half on screen wins, as before.
+     * Matched on ORIGIN (scheme, host and port; see [isServerOrigin]), like
+     * the downloader. Host alone sent the session to every port on the box and
+     * to http:// on a server reached over https://. Only when both halves are
+     * saved under one origin does the half on screen decide, as before.
      */
     fun targetFor(url: HttpUrl): HubTarget? {
-        val byHost = halves.entries.mapNotNull { (target, half) ->
-            serverUrl(half.server())?.takeIf { it.host.equals(url.host, ignoreCase = true) }?.let { target to it }
+        val matches = halves.entries.mapNotNull { (target, half) ->
+            serverHttpUrl(half.server())?.takeIf { isServerOrigin(url, it) }?.let { target }
         }
-        if (byHost.size <= 1) return byHost.firstOrNull()?.first
-        val byPort = byHost.filter { it.second.port == url.port }.map { it.first }
-        if (byPort.size == 1) return byPort[0]
-        val pool = byPort.ifEmpty { byHost.map { it.first } }
-        return active?.takeIf { it in pool } ?: pool[0]
+        if (matches.size <= 1) return matches.firstOrNull()
+        return active?.takeIf { it in matches } ?: matches[0]
     }
 
     /**
@@ -139,11 +135,6 @@ object HubSession {
         val again = chain.proceed(request.newBuilder().also { signFor(target, it) }.build())
         observe(target, again)
         again
-    }
-
-    private fun serverUrl(server: String?): HttpUrl? {
-        val s = server?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        return (if (s.startsWith("http", ignoreCase = true)) s else "https://$s").toHttpUrlOrNull()
     }
 
     /**

@@ -25,4 +25,12 @@ expect object HubPlatform {
      * deliberately leaving the foreground so the picker does not re-trigger.
      */
     fun openExternal(url: String)
+
+    /**
+     * Copy a credential (an API key, an OPDS link, an invite) to the
+     * clipboard. Android flags it EXTRA_IS_SENSITIVE, so the clipboard preview
+     * and keyboard suggestions do not show it; the desktop has no such flag
+     * and copies plainly.
+     */
+    fun copySensitive(text: String)
 }

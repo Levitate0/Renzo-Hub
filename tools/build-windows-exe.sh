@@ -19,7 +19,11 @@ VERSION="${VERSION:-1.0.0}"
 WORK="${WORK:-/tmp/renzohub-exe}"
 OUT_DIR="${OUT_DIR:-$HUB/build/out}"
 SIGN_DIR="${SIGN_DIR:-}"
-JDK_ZIP_URL="https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
+# The JRE bundled into a signed installer: an exact Temurin build, pinned by
+# Adoptium's published sha256 (not "latest", which changes under the script).
+JDK_VER="21.0.13+9"
+JDK_ZIP_URL="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip"
+JDK_SHA256="a4dbaa05fca4bd89d84584e58c459bd732efebb1722af80ab13c6516832004f9"
 ICON="$HUB/hub-desktop/windows/renzohub.ico"
 # libvlc for the built-in anime player (VlcRuntime finds <app>/vlc), from
 # VideoLAN's own embedding package, which they publish as LGPL-2.1-or-later:
@@ -47,8 +51,11 @@ unzip -l "$JAR" | grep skiko-windows-x64.dll > /dev/null || { echo "jar lacks Wi
 
 echo "── 2/5 windows JRE image"
 mkdir -p "$WORK"
-if [ ! -d "$WORK/win-jdk" ]; then
-  curl -sL -o "$WORK/win-jdk.zip" "$JDK_ZIP_URL"
+# A cache from before the pin (or from another version) is replaced.
+if ! grep -qx "JAVA_RUNTIME_VERSION=\"$JDK_VER-LTS\"" "$WORK/win-jdk/release" 2>/dev/null; then
+  rm -rf "$WORK/win-jdk" "$WORK"/jdk-*
+  curl -sfL -o "$WORK/win-jdk.zip" "$JDK_ZIP_URL"
+  echo "$JDK_SHA256  $WORK/win-jdk.zip" | sha256sum -c --quiet - || { echo "Windows JDK checksum mismatch"; exit 1; }
   (cd "$WORK" && unzip -q win-jdk.zip && mv jdk-* win-jdk)
 fi
 rm -rf "$WORK/jre"
@@ -98,10 +105,15 @@ if [ -n "$SIGN_DIR" ]; then
   PFX="$SIGN_DIR/hub-codesign.pfx"
   [ -r "$PFX" ] && [ -r "$SIGN_DIR/hub-codesign-password.txt" ] \
     || { echo "SIGN_DIR is set but hub-codesign.pfx / hub-codesign-password.txt are not readable there"; exit 1; }
-  PASS="$(cat "$SIGN_DIR/hub-codesign-password.txt")"
+  # The password reaches osslsigncode through -readpass, never argv (which
+  # any local user can read from the process list). A private copy without
+  # the trailing newline keeps the exact value `$(cat …)` used to pass.
+  PASS_FILE="$(umask 077 && mktemp)"
+  trap 'rm -f "$PASS_FILE"' EXIT
+  printf '%s' "$(cat "$SIGN_DIR/hub-codesign-password.txt")" > "$PASS_FILE"
   sign() {
-    osslsigncode sign -pkcs12 "$PFX" -pass "$PASS" \
-      -n "Renzo Hub" -i "https://www.renzo.net" -t http://timestamp.digicert.com \
+    osslsigncode sign -pkcs12 "$PFX" -readpass "$PASS_FILE" \
+      -n "Renzo Hub" -i "https://github.com/Levitate0/Renzo-Hub" -t http://timestamp.digicert.com \
       -in "$1" -out "$1.signed" && mv "$1.signed" "$1"
   }
 else

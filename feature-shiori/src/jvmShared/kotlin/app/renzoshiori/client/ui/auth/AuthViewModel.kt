@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
+import top.levitatemedia.renzo.hub.core.isCertificateFailure
 
 sealed interface AuthStep {
     /**
@@ -37,6 +38,11 @@ data class AuthUiState(
     val step: AuthStep = AuthStep.Connect,
     val loading: Boolean = false,
     val error: String? = null,
+    /**
+     * Connect only: https failed but a server answered on this http:// address.
+     * Never taken automatically — the user has to accept it, warned.
+     */
+    val insecureOffer: String? = null,
 )
 
 /**
@@ -58,6 +64,11 @@ data class PasswordFlowState(
 /** Known product-name aliases a server may report — mirrors the old WebView
  * shell's isRenzoServer() check, including legacy brand names. */
 private val KNOWN_PRODUCTS = setOf("renzo shiori", "renzo", "rensaio")
+
+private const val UNTRUSTED_CERT =
+    "That server's HTTPS certificate isn't trusted (expired, self-signed, or something is " +
+        "intercepting the connection), so Renzo Hub won't sign in to it. Fix the certificate, " +
+        "or, for a server on your own network, enter its address starting with http://."
 
 class AuthViewModel : ViewModel() {
     // Shared singletons from RenzoApp — the SAME TokenStore/NetworkModule the
@@ -193,28 +204,64 @@ class AuthViewModel : ViewModel() {
         _state.value = AuthUiState(step = AuthStep.Connect)
     }
 
+    /**
+     * Find the server at [rawAddress].
+     *
+     * No silent downgrade: this used to retry plain http:// whenever https
+     * failed and save whichever answered, so anyone able to break TLS on the
+     * path got the password and session in the clear. Now an address typed
+     * with a scheme is used exactly as typed, a certificate failure is
+     * reported rather than worked around, and a bare address that only answers
+     * over http is OFFERED ([AuthUiState.insecureOffer]) for the user to
+     * accept with a warning — LAN servers by IP rarely have a certificate.
+     */
     fun connect(rawAddress: String) {
         val trimmed = rawAddress.trim().trimEnd('/')
         if (trimmed.isEmpty()) return
-        _state.value = _state.value.copy(loading = true, error = null)
+        _state.value = _state.value.copy(loading = true, error = null, insecureOffer = null)
         viewModelScope.launch {
-            val candidates = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-                listOf(trimmed)
-            } else {
-                listOf("https://$trimmed", "http://$trimmed")
+            val explicit = trimmed.startsWith("http://", ignoreCase = true) ||
+                trimmed.startsWith("https://", ignoreCase = true)
+            val first = if (explicit) trimmed else "https://$trimmed"
+            val probe = probeServer(first)
+            if (probe.getOrNull() == true) {
+                acceptServer(first)
+                return@launch
             }
-            for (candidate in candidates) {
-                val candidateApi = network.apiFor(candidate)
-                val info = runCatching { candidateApi.systemInfo() }.getOrNull()
-                if (info != null && info.product.lowercase() in KNOWN_PRODUCTS) {
-                    tokenStore.serverUrl = candidate
-                    api = candidateApi
-                    proceedPastConnect(candidate)
+            if (isCertificateFailure(probe.exceptionOrNull())) {
+                _state.value = _state.value.copy(loading = false, error = UNTRUSTED_CERT)
+                return@launch
+            }
+            if (!explicit) {
+                val plain = "http://$trimmed"
+                if (probeServer(plain).getOrNull() == true) {
+                    _state.value = _state.value.copy(loading = false, insecureOffer = plain)
                     return@launch
                 }
             }
             _state.value = _state.value.copy(loading = false, error = "Couldn't find a Renzo Shiori server at that address.")
         }
+    }
+
+    /** The user accepted [AuthUiState.insecureOffer] after the warning. */
+    fun acceptInsecure() {
+        val url = _state.value.insecureOffer ?: return
+        _state.value = _state.value.copy(loading = true, error = null, insecureOffer = null)
+        viewModelScope.launch { acceptServer(url) }
+    }
+
+    fun declineInsecure() {
+        _state.value = _state.value.copy(insecureOffer = null)
+    }
+
+    /** Success = a known Renzo Shiori product answered; failure keeps the cause. */
+    private suspend fun probeServer(candidate: String): Result<Boolean> =
+        runCatching { network.apiFor(candidate).systemInfo().product.lowercase() in KNOWN_PRODUCTS }
+
+    private suspend fun acceptServer(candidate: String) {
+        tokenStore.serverUrl = candidate
+        api = network.apiFor(candidate)
+        proceedPastConnect(candidate)
     }
 
     private suspend fun proceedPastConnect(serverUrl: String) {

@@ -1,7 +1,9 @@
 package top.levitatemedia.renzo.tv
 
 import top.levitatemedia.renzo.hub.core.KeyValuePrefs
+import top.levitatemedia.renzo.hub.core.SecretValue
 import top.levitatemedia.renzo.hub.core.keyValuePrefs
+import top.levitatemedia.renzo.hub.core.secretPrefs
 
 /**
  * App-local persistence. Renzo TV is a client for a server the USER hosts, so
@@ -11,9 +13,25 @@ import top.levitatemedia.renzo.hub.core.keyValuePrefs
  * Backed by the Hub's KeyValuePrefs seam under the SAME store name the
  * Android SharedPreferences file always used ("renzo_tv"), so existing
  * installs keep every value; the desktop reads/writes a .properties twin.
+ * The session alone lives in the secret store (see [session]).
  */
 class Prefs {
     private val p: KeyValuePrefs = keyValuePrefs("renzo_tv")
+
+    /**
+     * The session cookie, in the encrypted store ("renzo_tv_secure", excluded
+     * from backup and device transfer). It used to sit in plain "renzo_tv",
+     * which Auto Backup copies off the device; [SecretValue] lifts a value
+     * found there on first read, so an upgrade does not sign anyone out.
+     * "renzo_tv_secure_fallback" holds a session written while the encrypted
+     * store cannot open, and is excluded from backup for the same reason.
+     */
+    private val session = SecretValue(
+        secretPrefs("renzo_tv_secure"),
+        p,
+        "session",
+        pending = keyValuePrefs("renzo_tv_secure_fallback"),
+    )
 
     /** Normalized base URL ("https://host[:port]", no trailing slash) or null on first run. */
     var serverUrl: String?
@@ -24,10 +42,11 @@ class Prefs {
 
     /** fsa_session cookie VALUE (opaque token). Replayed on every API/media request. */
     var sessionCookie: String?
-        get() = p.getString("session", null)?.takeIf { it.isNotBlank() }
-        // Durable for the same reason as serverUrl — and so a 401-driven
-        // clearSession() is not silently undone by a restart either.
-        set(v) = p.putStringDurable("session", v)
+        get() = session.get()
+        // Durable (every SecretValue write is) for the same reason as
+        // serverUrl — and so a 401-driven clearSession() is not silently
+        // undone by a restart either.
+        set(v) = session.set(v)
 
     /**
      * The 18+ switch, device-local like the web client's localStorage
@@ -108,6 +127,6 @@ class Prefs {
 
     fun clearSession() { sessionCookie = null }
     fun forgetServer() {
-        p.remove("serverUrl"); p.remove("session"); p.remove("lastUsername")
+        p.remove("serverUrl"); session.set(null); p.remove("lastUsername")
     }
 }

@@ -103,6 +103,7 @@ import top.levitatemedia.renzo.tv.ui.components.PillButton
 import top.levitatemedia.renzo.tv.ui.components.focusRing
 import top.levitatemedia.renzo.tv.ui.components.tvClickable
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
+import top.levitatemedia.renzo.hub.core.isServerOrigin
 
 /**
  * Seek to a restored position, clamped against THIS file's duration.
@@ -257,7 +258,7 @@ private fun PlayerContent(
     var upNextEp by remember { mutableStateOf<Int?>(null) }
     var countdown by remember { mutableStateOf(8) }
 
-    val serverHost = remember { runCatching { java.net.URI(app.client.base()).host }.getOrNull() }
+    val server = remember { app.prefs.serverUrl }
 
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
@@ -495,15 +496,14 @@ private fun PlayerContent(
                 player = p
             }
         } else if (s != null) {
-            // Cookie-scoped data source: fsa_session ONLY when the request host
-            // is the user's server (local files + caption tracks). Debrid CDN
-            // hosts must never receive it.
+            // Cookie-scoped data source: fsa_session ONLY when the request is
+            // to the user's server, by origin (local files + caption tracks).
+            // Debrid CDN hosts must never receive it, and the client's
+            // credentialGuard keeps redirects from carrying it on.
             val upstream = OkHttpDataSource.Factory(app.client.http)
             val cookieAware = ResolvingDataSource.Factory(upstream) { spec ->
                 val cookie = app.client.cookieHeader()
-                if (cookie != null && serverHost != null &&
-                    spec.uri.host?.equals(serverHost, ignoreCase = true) == true
-                ) {
+                if (cookie != null && isServerOrigin(spec.uri.toString(), server)) {
                     spec.withAdditionalHeaders(mapOf("Cookie" to cookie))
                 } else spec
             }

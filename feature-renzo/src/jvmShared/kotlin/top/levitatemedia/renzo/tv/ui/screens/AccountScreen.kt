@@ -59,7 +59,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -112,6 +111,8 @@ import top.levitatemedia.renzo.tv.ui.kit.kitClickable
 import top.levitatemedia.renzo.tv.ui.kit.screenWidthDp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import top.levitatemedia.renzo.hub.core.isCleartextServer
+import top.levitatemedia.renzo.hub.core.HubPlatform
 
 // Web spec: frontend/src/app/account/account-view.tsx SECTIONS (id, label, icon).
 private data class SectionDef(val id: String, val label: String, val icon: ImageVector)
@@ -372,6 +373,9 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
             description = "Changing your password signs out all your other sessions.",
         ) {
             var email by remember(user?.email) { mutableStateOf(user?.email ?: "") }
+            // The server requires the current password to change the email (it is where
+            // reset links go), so a session alone can't redirect them. (web account-pane.tsx emailPass)
+            var emailPass by remember { mutableStateOf("") }
             var savingEmail by remember { mutableStateOf(false) }
             var curPass by remember { mutableStateOf("") }
             var newPass by remember { mutableStateOf("") }
@@ -392,14 +396,15 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
                 RenzoButton(
                     text = if (savingEmail) "Saving…" else "Save",
                     busy = savingEmail,
-                    enabled = email.trim() != (user?.email ?: ""),
+                    enabled = email.trim() != (user?.email ?: "") && emailPass.isNotEmpty(),
                     onClick = {
                         savingEmail = true
                         scope.launch {
                             try {
-                                val u = app.repo.setEmail(email.trim())
+                                val u = app.repo.setEmail(email.trim(), emailPass)
+                                emailPass = ""
                                 refreshUser(u)
-                                msg = if (!u.email.isNullOrEmpty()) "Email updated" else "Email cleared"
+                                msg = if (!u.email.isNullOrEmpty()) "Email saved" else "Email cleared"
                             } catch (e: Exception) { msg = e.message ?: "Failed to update email" }
                             savingEmail = false
                         }
@@ -416,6 +421,17 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
                 emailField()
                 Spacer(Modifier.height(8.dp))
                 emailSave()
+            }
+            if (email.trim() != (user?.email ?: "")) {
+                Spacer(Modifier.height(8.dp))
+                RenzoTextField(
+                    value = emailPass,
+                    onValueChange = { emailPass = it },
+                    // web: className="w-full sm:w-1/2"
+                    modifier = if (!LocalIsTv.current && screenWidthDp() >= 640.dp) Modifier.fillMaxWidth(0.5f) else Modifier,
+                    placeholder = "Current password (required to change email)",
+                    password = true,
+                )
             }
             KitHint("Password-reset links are sent here. Leave empty to disable email reset for this account.")
 
@@ -509,7 +525,9 @@ private fun AccountPane(app: AppServices, onLogout: () -> Unit, onChangeServer: 
         SettingsCard(
             title = "Session",
             description = "Signed in as ${user?.username ?: "—"}" +
-                (user?.role?.let { " (${roleLabel(it)})" } ?: "") + " on this device.",
+                (user?.role?.let { " (${roleLabel(it)})" } ?: "") + " on this device." +
+                // Shown for as long as it holds: Connect only gets here past a warning.
+                (if (isCleartextServer(app.prefs.serverUrl)) " Not secure — connected over http://." else ""),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RenzoButton(
@@ -1020,7 +1038,6 @@ private fun DefaultsPane(app: AppServices) {
 @Composable
 private fun ApiKeyPane(app: AppServices) {
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
     var info by remember { mutableStateOf<ApiKeyInfo?>(null) }
     var loading by remember { mutableStateOf(true) }
     var show by remember { mutableStateOf(false) }
@@ -1037,7 +1054,9 @@ private fun ApiKeyPane(app: AppServices) {
 
     fun copyText(text: String, ok: String) {
         if (text.isEmpty()) { msg = "Nothing to copy"; return }
-        clipboard.setText(AnnotatedString(text))
+        // Marked sensitive: Android 13+ then keeps it out of the clipboard
+        // preview and keyboard suggestions. The key IS the account to Jellyfin.
+        HubPlatform.copySensitive(text)
         msg = ok
     }
     fun rotate() {

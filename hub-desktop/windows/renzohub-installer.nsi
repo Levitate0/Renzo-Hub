@@ -16,9 +16,11 @@ UninstallIcon "${ICON}"
 SetCompressor /SOLID lzma
 
 !include "MUI2.nsh"
+!include "FileFunc.nsh"
 !define MUI_ICON "${ICON}"
 !define MUI_UNICON "${ICON}"
 !insertmacro MUI_PAGE_WELCOME
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE OwnInstallDir
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN "$INSTDIR\RenzoHub.exe"
@@ -43,7 +45,18 @@ SetCompressor /SOLID lzma
   Sleep 800
 !macroend
 
+; Always install into a folder of our own. Picking an existing folder (say
+; Documents) used to install straight into it — and then the process sweep
+; above and the uninstaller acted on everything in that folder.
+Function OwnInstallDir
+  ${GetFileName} "$INSTDIR" $0
+  StrCmp $0 "${APPNAME}" +2
+    StrCpy $INSTDIR "$INSTDIR\${APPNAME}"
+FunctionEnd
+
 Section "Install"
+  ; Again here for silent installs (/D=), which skip the directory page.
+  Call OwnInstallDir
   !insertmacro CloseRunningApp
   ; Start the JRE clean: a newer JRE may drop files the old one shipped,
   ; and overwrite-in-place would leave a mixed runtime behind.
@@ -78,6 +91,14 @@ Section "Uninstall"
   !insertmacro CloseRunningApp
   Delete "$SMPROGRAMS\${APPNAME}.lnk"
   Delete "$DESKTOP\${APPNAME}.lnk"
-  RMDir /r "$INSTDIR"
+  ; Only what the installer put there; the folder itself goes only if that
+  ; leaves it empty, so nothing a user saved alongside is ever wiped.
+  RMDir /r "$INSTDIR\jre"
+  RMDir /r "$INSTDIR\vlc"
+  Delete "$INSTDIR\RenzoHub.exe"
+  Delete "$INSTDIR\RenzoHub.jar"
+  Delete "$INSTDIR\set-aumid.ps1"
+  Delete "$INSTDIR\Uninstall.exe"
+  RMDir "$INSTDIR"
   DeleteRegKey HKCU "${UNINSTKEY}"
 SectionEnd

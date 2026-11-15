@@ -63,6 +63,7 @@ import top.levitatemedia.renzo.tv.api.PublicUser
 import top.levitatemedia.renzo.tv.ui.components.focusRing
 import top.levitatemedia.renzo.tv.ui.components.tvClickable
 import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
+import top.levitatemedia.renzo.hub.core.isCleartextServer
 
 /**
  * Sign-in gate, matched to the Shiori half's login page (AuthUi.kt /
@@ -244,9 +245,11 @@ fun LoginScreen(app: AppServices, onBackToPicker: (() -> Unit)? = null, onChange
             GateLinkRow("Back to app picker", onClick = onBackToPicker)
         }
         app.prefs.serverUrl?.let {
+            // Plain http: the password below goes out unencrypted — say so.
+            val insecure = isCleartextServer(it)
             Text(
-                it,
-                color = RenzoColors.MutedForeground,
+                if (insecure) "Not secure · $it" else it,
+                color = if (insecure) RenzoColors.Destructive else RenzoColors.MutedForeground,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),

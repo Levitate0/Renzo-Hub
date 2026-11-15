@@ -45,6 +45,7 @@ import app.renzoshiori.client.ui.util.rememberOfflineFolderPicker
 import app.renzoshiori.client.data.model.ChangePasswordRequestDto
 import app.renzoshiori.client.data.model.UpdateUserDto
 import app.renzoshiori.client.data.model.UserDto
+import app.renzoshiori.client.data.model.UserLevel
 import app.renzoshiori.client.data.network.AccountApi
 import app.renzoshiori.client.ui.theme.RenzoColors
 import app.renzoshiori.client.ui.tv.LocalIsTv
@@ -127,11 +128,15 @@ fun AccountScreen(
     }
 
     val notificationsHere = ReleaseAlerts.supported && !LocalIsTv.current
+    // account/page.tsx: site logins write the ONE browser session the server
+    // shares (and the auto-buy switch spends it), so the section is the
+    // Owner's alone; the server refuses those writes below Owner.
+    val canOwner = (user?.level ?: UserLevel.USER) >= UserLevel.OWNER
     val sections = listOfNotNull(
         SettingsNavSection("account", "Account", Icons.Filled.Person),
         // Web: MonitorSmartphone — the remembered sign-ins on this account.
         SettingsNavSection("devices", "Devices", Icons.Filled.Devices),
-        SettingsNavSection("site-logins", "Site Logins", Icons.Filled.VpnKey),
+        if (canOwner) SettingsNavSection("site-logins", "Site Logins", Icons.Filled.VpnKey) else null,
         SettingsNavSection("scrobbler", "Scrobbler", Icons.Filled.Sensors),
         // Android phones only: the web has no notifications.
         if (notificationsHere) SettingsNavSection("notifications", "Notifications", Icons.Filled.Notifications) else null,
@@ -487,7 +492,7 @@ fun AccountScreen(
                 }
 
                 // ── Site logins ─────────────────────────────────────────
-                "site-logins" -> SettingsCard(
+                "site-logins" -> if (canOwner) SettingsCard(
                     title = "Site Logins",
                     description = "Log in to coin/paid sites (e.g. EzManga) so Renzo Shiori can load " +
                         "chapters you own — these credentials are yours alone and aren't visible to " +

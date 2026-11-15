@@ -3,13 +3,14 @@ package top.levitatemedia.renzo.tv.api
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
+import top.levitatemedia.renzo.hub.core.credentialGuard
+import top.levitatemedia.renzo.hub.core.isServerOrigin
 import top.levitatemedia.renzo.tv.Prefs
 import java.util.concurrent.TimeUnit
 
@@ -44,6 +45,11 @@ class ApiClient(private val prefs: Prefs) {
         .addInterceptor { chain ->
             chain.proceed(chain.request()).also { captureSession(it) }
         }
+        // The session cookie is set by hand (here and by the players), and
+        // OkHttp keeps a hand-set Cookie on every redirect hop. This client
+        // also streams debrid links, so any hop off the user's server goes
+        // out without it.
+        .addNetworkInterceptor(credentialGuard { isServerOrigin(it, prefs.serverUrl) })
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(75, TimeUnit.SECONDS)
         .followRedirects(true)
@@ -70,11 +76,10 @@ class ApiClient(private val prefs: Prefs) {
      * the old cookie expired and the next launch was a sign-in.
      *
      * Only the user's own server is listened to: the player sends this client
-     * to debrid CDNs too, and no other host gets to set this session.
+     * to debrid CDNs too, and no other origin gets to set this session.
      */
     fun captureSession(res: okhttp3.Response) {
-        val server = prefs.serverUrl?.toHttpUrlOrNull()?.host ?: return
-        if (!res.request.url.host.equals(server, ignoreCase = true)) return
+        if (!isServerOrigin(res.request.url, prefs.serverUrl)) return
         res.headers("Set-Cookie").forEach { c ->
             val v = SESSION_COOKIE.find(c)?.groupValues?.get(1) ?: return@forEach
             if (v.isEmpty()) prefs.clearSession() else prefs.sessionCookie = v
@@ -142,10 +147,13 @@ class ApiClient(private val prefs: Prefs) {
         json.decodeFromString(raw(path, "POST", body))
 
     /** Unauthenticated reachability probe: a Renzo server answers /version with a build id. */
-    suspend fun probe(url: String): Boolean = withContext(Dispatchers.IO) {
-        try {
+    suspend fun probe(url: String): Boolean = probeDetailed(url).getOrDefault(false)
+
+    /** [probe], keeping the failure so Connect can tell a bad certificate from no server. */
+    suspend fun probeDetailed(url: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        runCatching {
             val res = http.newCall(Request.Builder().url("$url/version").get().build()).execute()
             res.use { it.isSuccessful && (it.body?.string() ?: "").contains("\"build\"") }
-        } catch (_: Exception) { false }
+        }
     }
 }

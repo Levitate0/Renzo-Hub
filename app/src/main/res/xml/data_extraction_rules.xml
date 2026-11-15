@@ -12,6 +12,8 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="renzo_secure.xml" />
         <exclude domain="sharedpref" path="renzo_secure_fallback.xml" />
+        <exclude domain="sharedpref" path="renzo_tv_secure.xml" />
+        <exclude domain="sharedpref" path="renzo_tv_secure_fallback.xml" />
         <exclude domain="external" path="offline" />
         <exclude domain="file" path="offline" />
         <exclude domain="file" path="last-crash.txt" />
@@ -19,6 +21,8 @@
     <device-transfer>
         <exclude domain="sharedpref" path="renzo_secure.xml" />
         <exclude domain="sharedpref" path="renzo_secure_fallback.xml" />
+        <exclude domain="sharedpref" path="renzo_tv_secure.xml" />
+        <exclude domain="sharedpref" path="renzo_tv_secure_fallback.xml" />
         <exclude domain="external" path="offline" />
         <exclude domain="file" path="offline" />
         <exclude domain="file" path="last-crash.txt" />

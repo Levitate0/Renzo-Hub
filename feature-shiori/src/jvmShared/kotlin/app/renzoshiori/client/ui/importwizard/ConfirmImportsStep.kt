@@ -886,7 +886,7 @@ private fun MatchRow(
                             modifier = if (matchUrl.isNullOrEmpty()) {
                                 Modifier
                             } else {
-                                Modifier.clickable { runCatching { uriHandler.openUri(matchUrl) } }
+                                Modifier.clickable { app.renzoshiori.client.ui.util.openSourceUrl(uriHandler, matchUrl) }
                             },
                         ) {
                             Text(

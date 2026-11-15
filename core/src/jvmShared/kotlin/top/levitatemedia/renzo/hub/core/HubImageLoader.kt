@@ -18,6 +18,9 @@ object HubImageLoader {
     fun build(context: PlatformContext): ImageLoader {
         val client = OkHttpClient.Builder()
             .addInterceptor(HubSession.interceptor)
+            // A redirect off the server must not carry the signature along
+            // (and Coil per-request headers can add a Cookie of their own).
+            .addNetworkInterceptor(credentialGuard { HubSession.targetFor(it) != null })
             .build()
 
         return ImageLoader.Builder(context)

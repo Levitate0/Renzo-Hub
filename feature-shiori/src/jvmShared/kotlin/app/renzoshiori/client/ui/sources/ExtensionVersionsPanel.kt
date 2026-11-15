@@ -65,7 +65,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * like the web's `enabled: open` query.
  */
 @Composable
-internal fun ExtensionVersionsPanel(api: SourcesApi?, snackbar: SnackbarHostState) {
+internal fun ExtensionVersionsPanel(
+    api: SourcesApi?,
+    snackbar: SnackbarHostState,
+    /** Owner: sideloading runs an arbitrary APK's code on the server (extensions/sideload is Owner-only). */
+    canSideload: Boolean = false,
+) {
     val scope = rememberCoroutineScope()
 
     var open by remember { mutableStateOf(false) }
@@ -185,37 +190,39 @@ internal fun ExtensionVersionsPanel(api: SourcesApi?, snackbar: SnackbarHostStat
                     modifier = Modifier.padding(top = 12.dp),
                 )
                 // "Install APK" — beside the paragraph on desktop, under it here.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .padding(top = 12.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(RenzoColors.Primary.copy(alpha = 0.10f))
-                        .border(1.dp, RenzoColors.Primary.copy(alpha = 0.40f), RoundedCornerShape(50))
-                        .clickable(enabled = !busy) { apkPicker() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                ) {
-                    if (sideloading) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp,
+                if (canSideload) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .padding(top = 12.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(RenzoColors.Primary.copy(alpha = 0.10f))
+                            .border(1.dp, RenzoColors.Primary.copy(alpha = 0.40f), RoundedCornerShape(50))
+                            .clickable(enabled = !busy) { apkPicker() }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        if (sideloading) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                color = RenzoColors.Primary,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.FileUpload,
+                                contentDescription = null,
+                                tint = RenzoColors.Primary,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                        Text(
+                            "Install APK",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
                             color = RenzoColors.Primary,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    } else {
-                        Icon(
-                            Icons.Filled.FileUpload,
-                            contentDescription = null,
-                            tint = RenzoColors.Primary,
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.padding(start = 6.dp),
                         )
                     }
-                    Text(
-                        "Install APK",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        color = RenzoColors.Primary,
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
                 }
 
                 when {

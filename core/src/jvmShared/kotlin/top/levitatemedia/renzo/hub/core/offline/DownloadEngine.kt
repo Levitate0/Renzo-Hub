@@ -5,11 +5,12 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import top.levitatemedia.renzo.hub.core.HubSession
 import top.levitatemedia.renzo.hub.core.HubTarget
+import top.levitatemedia.renzo.hub.core.credentialGuard
+import top.levitatemedia.renzo.hub.core.isServerOrigin
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -41,6 +42,9 @@ class DownloadEngine(
             .connectTimeout(20, TimeUnit.SECONDS)
             // No read timeout: a large episode body legitimately takes minutes.
             .readTimeout(0, TimeUnit.SECONDS)
+            // Signing is scoped to the server below; this keeps a redirect off
+            // it from carrying the credential along. See credentialGuard.
+            .addNetworkInterceptor(credentialGuard { HubSession.targetFor(it) != null })
             .build()
     }
 
@@ -354,8 +358,9 @@ class DownloadEngine(
         // stream URL is frequently an absolute link to a third-party debrid CDN,
         // and signing that unconditionally would hand a session cookie (or a
         // Bearer token) to a host that has no business seeing it. The player has
-        // always scoped this by host; the downloader must match.
-        val signed = sameHost(absolute, baseUrl)
+        // always scoped this; the downloader must match, by origin (see
+        // isServerOrigin) so an http:// link never carries an https session.
+        val signed = isServerOrigin(absolute, baseUrl)
         if (signed) HubSession.signFor(target, builder)
         if (already > 0) builder.header("Range", "bytes=$already-")
 
@@ -419,12 +424,6 @@ class DownloadEngine(
     }
 
     /**
-     * True only when [url] is on the same host as the user's own server.
-     * Anything unparseable is treated as foreign — failing closed here means a
-     * download without credentials, which is recoverable; failing open would
-     * leak the session.
-     */
-    /**
      * Sends [request], letting the half that signed it see the response and,
      * after a 401, renew its credential and try once more.
      *
@@ -444,13 +443,6 @@ class DownloadEngine(
         HubSession.observe(target, again)
         return again
     }
-
-    private fun sameHost(url: String, baseUrl: String): Boolean = runCatching {
-        val a = url.toHttpUrlOrNull() ?: return false
-        val b = (if (baseUrl.startsWith("http")) baseUrl else "https://$baseUrl").toHttpUrlOrNull()
-            ?: return false
-        a.host.equals(b.host, ignoreCase = true)
-    }.getOrDefault(false)
 
     /** Records the expected total of an in-flight partial — its release identity. */
     private fun partialKey(relPath: String) = "partial.total.$relPath"

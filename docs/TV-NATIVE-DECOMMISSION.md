@@ -1,6 +1,6 @@
 # Retiring `tv-native` in favour of Renzo Hub
 
-**For:** the Renzo chat (`/opt/zurg-stack/renzo-ecosystem/renzo`, `renzo-clients/tv-native`).
+**For:** the Renzo chat (`<ecosystem>/renzo`, `renzo-clients/tv-native`).
 **Date:** 2026-08-04. Written from a diff of both trees at that date.
 
 Renzo Hub (`hub`) is one APK carrying Renzo and Renzo Shiori. It
@@ -63,7 +63,7 @@ lower or equal code permanently.
 
 ```
 ./gradlew :app:assembleRelease      # unsigned
-# then apksigner with ../signing/renzo-release.jks
+# then apksigner with the release keystore (kept outside the repo)
 ```
 
 The Hub instead has a Gradle `signingConfig` that reads an untracked
@@ -74,8 +74,8 @@ cannot upgrade a release-signed install and Play will reject it outright.
 Pick one before cutover:
 
 - **Gradle signs it** — create `hub/key.properties` with
-  `keystoreFile=../signing/renzo-release.jks` plus the three passwords from
-  `signing/CREDENTIALS.txt`. It is already gitignored.
+  `keystoreFile=` pointing at the release keystore, plus its three passwords
+  from the private signing folder. It is already gitignored.
 - **Keep the manual flow** — leave `key.properties` absent and sign the output
   with `apksigner`, exactly as `tv-native` does today.
 
@@ -91,7 +91,7 @@ Either is fine. What is not fine is shipping the current fallback.
   Deleting it breaks the Hub build. Only `android/app/` and
   `android/build-apk.sh` are actually dead. (Your README already says this —
   repeating it because "purge tv" is exactly the moment someone deletes it.)
-- **`renzo-clients/signing/`** — Play binds the listing to this key forever.
+- **The private signing folder** — Play binds the listing to this key forever.
 - **`renzo-clients/artifacts/`** — the Play listing assets
   (`feature-graphic-1024x500.png`, `play-icon-512-dark.png`,
   `tv-banner-1280x720.png`) are still needed. `Renzo.apk`/`Renzo.aab` there are

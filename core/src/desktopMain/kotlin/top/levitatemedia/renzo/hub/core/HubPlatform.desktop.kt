@@ -17,10 +17,18 @@ actual object HubPlatform {
             ?.takeIf { it.isNotBlank() } ?: "Desktop"
 
     actual fun openExternal(url: String) {
+        if (!isWebUrl(url)) return
         runCatching {
             if (java.awt.Desktop.isDesktopSupported()) {
                 java.awt.Desktop.getDesktop().browse(java.net.URI(url))
             }
+        }
+    }
+
+    actual fun copySensitive(text: String) {
+        runCatching {
+            java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                .setContents(java.awt.datatransfer.StringSelection(text), null)
         }
     }
 }

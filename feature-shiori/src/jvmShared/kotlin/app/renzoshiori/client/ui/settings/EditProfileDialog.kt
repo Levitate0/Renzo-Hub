@@ -30,8 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -99,7 +97,6 @@ fun UserEditDialog(
 ) {
     val app = ShioriRuntime.app
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
 
     var level by remember(user.id) { mutableStateOf(user.level) }
     var isActive by remember(user.id) { mutableStateOf(user.isActive) }
@@ -244,7 +241,8 @@ fun UserEditDialog(
                     if (copied) RenzoColors.Green else RenzoColors.MutedForeground,
                 ) {
                     val base = app.tokenStore.serverUrl?.trimEnd('/') ?: ""
-                    clipboard.setText(AnnotatedString("$base/${opdsPath.trimStart('/')}"))
+                    // Sensitive: the OPDS path is a bearer credential for the whole library.
+                    top.levitatemedia.renzo.hub.core.HubPlatform.copySensitive("$base/${opdsPath.trimStart('/')}")
                     copied = true
                 }
             }

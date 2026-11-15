@@ -3,7 +3,9 @@ package top.levitatemedia.renzo.hub.core
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
@@ -86,6 +88,9 @@ private class PropertiesKeyValue(name: String) : KeyValuePrefs {
     private var loadedStamp = -1L
 
     init {
+        // Files written before stores were created owner-only (sessions sat in
+        // world-readable renzo_tv / shiori_session files) are tightened here.
+        if (file.exists()) restrictToOwner(file.toPath())
         reloadIfChanged()
     }
 
@@ -135,6 +140,7 @@ private class PropertiesKeyValue(name: String) : KeyValuePrefs {
                 // already serialises this, so the unique name is insurance for
                 // the fallback path where locking is unavailable.
                 val tmp = File(file.parentFile, "${file.name}.${ProcessHandle.current().pid()}.${System.nanoTime()}.tmp")
+                createOwnerOnly(tmp.toPath())
                 tmp.outputStream().use { disk.store(it, null) }
                 runCatching {
                     Files.move(
@@ -208,4 +214,21 @@ private class PropertiesKeyValue(name: String) : KeyValuePrefs {
         reloadIfChanged()
         return props.stringPropertyNames()
     }
+}
+
+/**
+ * rw------- on POSIX filesystems. These stores hold the server address and,
+ * through secretPrefs, the sessions; on Linux and macOS the default umask left
+ * them readable by every account on the machine. Windows has no POSIX view:
+ * %APPDATA% is already private to the user there, and secrets are DPAPI-sealed.
+ */
+private val OWNER_ONLY = PosixFilePermissions.fromString("rw-------")
+
+private fun restrictToOwner(path: Path) {
+    runCatching { Files.setPosixFilePermissions(path, OWNER_ONLY) }
+}
+
+/** Created with the permissions already set, so there is no readable window before a chmod. */
+private fun createOwnerOnly(path: Path) {
+    runCatching { Files.createFile(path, PosixFilePermissions.asFileAttribute(OWNER_ONLY)) }
 }

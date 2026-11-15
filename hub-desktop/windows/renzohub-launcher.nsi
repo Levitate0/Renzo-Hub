@@ -11,5 +11,7 @@ RequestExecutionLevel user
 
 Section
   SetOutPath "$EXEDIR"
-  Exec '"$EXEDIR\jre\bin\javaw.exe" -jar "$EXEDIR\RenzoHub.jar"'
+  ; allowAmbiguousCommands=false: strict argv quoting when the Hub launches
+  ; an external player with server-supplied titles/URLs.
+  Exec '"$EXEDIR\jre\bin\javaw.exe" -Djdk.lang.Process.allowAmbiguousCommands=false -jar "$EXEDIR\RenzoHub.jar"'
 SectionEnd

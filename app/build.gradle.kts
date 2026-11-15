@@ -6,8 +6,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Release signing details live in an untracked key.properties. Without it the
-// release build falls back to the debug key so the tree still builds anywhere.
+// Release signing details live in an untracked key.properties. Without it a
+// release/beta build still compiles, but packaging it fails (see the end of
+// this file) instead of quietly signing a "release" with the public debug key.
 val keyProps = Properties().apply {
     val f = rootProject.file("key.properties")
     if (f.exists()) f.inputStream().use { load(it) }
@@ -26,8 +27,8 @@ android {
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         // Above tv-native's 44 — the Hub upgrades those installs in place.
-        versionCode = 84
-        versionName = "1.6.15"
+        versionCode = 85
+        versionName = "1.6.16"
     }
 
     signingConfigs {
@@ -56,10 +57,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = if (keyProps.isNotEmpty())
-                signingConfigs.getByName("release")
-            else
-                signingConfigs.getByName("debug")
+            if (keyProps.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
         }
         /**
          * SIDE-BY-SIDE release: identical to `release` but a different
@@ -72,10 +70,7 @@ android {
             applicationIdSuffix = ".beta"
             versionNameSuffix = "-beta"
             matchingFallbacks += "release"
-            signingConfig = if (keyProps.isNotEmpty())
-                signingConfigs.getByName("release")
-            else
-                signingConfigs.getByName("debug")
+            if (keyProps.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -103,4 +98,19 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.work.runtime.ktx)
+}
+
+// A "release" signed with a debug key looks shippable but cannot update real
+// installs, and debug keys are not kept secret. Compiling stays possible for
+// checks; producing a release/beta APK or AAB does not.
+if (keyProps.isEmpty()) {
+    val signedOutput = Regex("(package|bundle|sign)(Release|Beta)(Bundle)?")
+    tasks.matching { signedOutput.matches(it.name) }.configureEach {
+        doFirst {
+            throw GradleException(
+                "key.properties is missing: release builds must be signed with the release key. " +
+                    "Use :app:assembleDebug for a local build.",
+            )
+        }
+    }
 }

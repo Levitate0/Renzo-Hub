@@ -42,8 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -493,7 +491,6 @@ private fun CreateUserDialog(onDismiss: () -> Unit, onCreated: () -> Unit) {
 private fun InviteDialog(user: UserDto, onDismiss: () -> Unit) {
     val app = ShioriRuntime.app
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
     var message by remember(user.id) { mutableStateOf<String?>(null) }
     var errorText by remember(user.id) { mutableStateOf("") }
     var pending by remember(user.id) { mutableStateOf(false) }
@@ -506,7 +503,8 @@ private fun InviteDialog(user: UserDto, onDismiss: () -> Unit) {
             .onSuccess {
                 message = it?.message
                 it?.message?.let { text ->
-                    clipboard.setText(AnnotatedString(text))
+                    // Sensitive: the message carries the user's OPDS path and invite token.
+                    top.levitatemedia.renzo.hub.core.HubPlatform.copySensitive(text)
                     copied = true
                 }
             }
@@ -545,7 +543,7 @@ private fun InviteDialog(user: UserDto, onDismiss: () -> Unit) {
                 small = true,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
-                    clipboard.setText(AnnotatedString(text))
+                    top.levitatemedia.renzo.hub.core.HubPlatform.copySensitive(text)
                     copied = true
                 },
             )

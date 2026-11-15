@@ -43,6 +43,10 @@ fun ConnectScreen(
     loading: Boolean,
     error: String?,
     onConnect: (String) -> Unit,
+    /** An http:// address offered after https failed; shown with a warning, never taken silently. */
+    insecureOffer: String? = null,
+    onAcceptInsecure: () -> Unit = {},
+    onDeclineInsecure: () -> Unit = {},
     /** Hub only: escape back to the app picker — a wrong URL must never strand anyone here. */
     onBackToPicker: (() -> Unit)? = null,
 ) {
@@ -83,7 +87,10 @@ fun ConnectScreen(
                 Spacer(Modifier.height(8.dp))
                 AuthInput(
                     value = address,
-                    onValueChange = { address = it },
+                    onValueChange = {
+                        address = it
+                        if (insecureOffer != null) onDeclineInsecure()
+                    },
                     placeholder = "https://renzo-shiori.example.com",
                     keyboardType = KeyboardType.Uri,
                     imeAction = ImeAction.Go,
@@ -99,11 +106,19 @@ fun ConnectScreen(
                 )
                 Spacer(Modifier.height(16.dp))
 
-                AuthPrimaryButton(
-                    text = if (loading) "Connecting…" else "Connect",
-                    onClick = { submit() },
-                    enabled = !loading && address.isNotBlank(),
-                )
+                if (insecureOffer != null) {
+                    AuthErrorBox(insecureWarning(insecureOffer))
+                    Spacer(Modifier.height(16.dp))
+                    AuthOutlineButton(text = "Connect anyway (not secure)", onClick = onAcceptInsecure)
+                    Spacer(Modifier.height(8.dp))
+                    AuthPrimaryButton(text = "Cancel", onClick = onDeclineInsecure)
+                } else {
+                    AuthPrimaryButton(
+                        text = if (loading) "Connecting…" else "Connect",
+                        onClick = { submit() },
+                        enabled = !loading && address.isNotBlank(),
+                    )
+                }
                 if (loading) {
                     Spacer(Modifier.height(16.dp))
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -122,3 +137,9 @@ fun ConnectScreen(
         }
     }
 }
+
+/** Same words as the Renzo half's Connect gate (its own copy). */
+private fun insecureWarning(url: String): String =
+    "Not secure: there's no HTTPS at this address, only $url. Your password and session " +
+        "would travel unencrypted, readable by anyone on the network in between. Only " +
+        "continue for a server on a network you trust."

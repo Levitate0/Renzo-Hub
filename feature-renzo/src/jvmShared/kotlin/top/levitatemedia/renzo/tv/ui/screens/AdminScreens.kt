@@ -44,8 +44,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -156,7 +154,6 @@ private fun SmallButton(label: String, destructive: Boolean = false, onClick: ()
 @Composable
 fun UsersScreen(app: AppServices, onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
     var users by remember { mutableStateOf<List<PublicUser>>(emptyList()) }
     var invites by remember { mutableStateOf<List<InviteItem>>(emptyList()) }
     var msg by remember { mutableStateOf<String?>(null) }
@@ -254,7 +251,8 @@ fun UsersScreen(app: AppServices, onClose: () -> Unit) {
                     scope.launch {
                         try {
                             val inv = app.repo.createInvite(inviteRole, inviteEmail, inviteName)
-                            clipboard.setText(AnnotatedString(inv.url))
+                            // Sensitive: the invite link is a sign-up token.
+                            top.levitatemedia.renzo.hub.core.HubPlatform.copySensitive(inv.url)
                             inviteName = ""; inviteEmail = ""
                             msg = "Invite created — link copied"
                             reload++
@@ -286,7 +284,7 @@ fun UsersScreen(app: AppServices, onClose: () -> Unit) {
                             )
                         }
                         SmallButton("Copy") {
-                            clipboard.setText(AnnotatedString(inv.url)); msg = "Invite link copied"
+                            top.levitatemedia.renzo.hub.core.HubPlatform.copySensitive(inv.url); msg = "Invite link copied"
                         }
                         Spacer(Modifier.width(8.dp))
                         SmallButton("Revoke", destructive = true) {

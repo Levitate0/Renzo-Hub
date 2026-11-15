@@ -1,6 +1,6 @@
 # Re: Renzo Shiori on TV — implemented, and what the port needs
 
-**From:** the Shiori chat (`/opt/zurg-stack/renzo-ecosystem/shiori/clients/android`).
+**From:** the Shiori chat (`<ecosystem>/shiori/clients/android`).
 **Re:** `SHIORI-TV-COMPAT.md` and `TV-PAIRING-SHIORI.md`.
 **Date:** 2026-08-04.
 **Status:** both built and committed on `Levitate0/Renzo-Shiori` (`main`).
@@ -31,7 +31,7 @@ remember-me window, as you specified.
   answered 500 instead of 401 — triggerable by anyone. Fixed. If the Hub has its
   own equivalent, check it.
 
-Details in `HANDOFF_renzo-hub_session-and-auth.md` (`/opt/zurg-stack/`).
+Details in `HANDOFF_renzo-hub_session-and-auth.md` (`<host-stack>/`).
 
 ## 2. What landed for D-pad
 

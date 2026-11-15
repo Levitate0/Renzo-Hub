@@ -2,6 +2,7 @@ package app.renzoshiori.client.ui.util
 
 import androidx.compose.ui.platform.UriHandler
 import top.levitatemedia.renzo.hub.core.HubPlatform
+import top.levitatemedia.renzo.hub.core.isWebUrl
 
 /**
  * Open a source-site link in the system browser.
@@ -24,6 +25,8 @@ fun openSourceUrl(uriHandler: UriHandler, raw: String?) {
     if (!url.contains("://")) {
         url = if (url.startsWith("//")) "https:$url" else "https://$url"
     }
+    // Source links are site-supplied: only ever hand a browser http(s).
+    if (!isWebUrl(url)) return
     val opened = runCatching { uriHandler.openUri(url) }.isSuccess
     if (!opened) HubPlatform.openExternal(url)
 }

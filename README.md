@@ -90,8 +90,13 @@ the current user without admin rights and adds Start menu and desktop
 shortcuts. Run a newer installer to update.
 
 **First run:** pick *Anime* or *Manga*, enter that server's address (for
-example `192.168.1.10:8787` — the app tries `https://` then `http://`), and
-sign in with your account on that server. Repeat for the other half if you use
+example `192.168.1.10:8787`), and sign in with your account on that server.
+The app tries `https://` first. It never switches to `http://` on its own: if
+a bare address only answers over plain `http://`, it asks you first, with a
+*Not secure* warning, and keeps showing *Not secure* while you are connected
+that way. An address you type with `https://` is used exactly as typed, and a
+server whose HTTPS certificate is not trusted is refused rather than retried
+over `http://`. Repeat for the other half if you use
 both. A brand-new server needs its owner account created from its web UI
 first.
 
@@ -103,7 +108,8 @@ Details, checksums and upgrade notes:
 Requires JDK 21 and an Android SDK with platform 36.
 
 ```bash
-./gradlew :app:assembleRelease                  # Android APK (all form factors)
+./gradlew :app:assembleDebug                    # Android APK (all form factors)
+./gradlew :app:assembleRelease                  # signed release (needs key.properties)
 ./gradlew :feature-shiori:compileKotlinDesktop  # fastest compile check
 ./gradlew :hub-desktop:run                      # run the desktop app
 tools/build-windows-exe.sh                      # Windows installer (cross-built on Linux)

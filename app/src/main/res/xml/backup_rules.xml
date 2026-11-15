@@ -6,12 +6,15 @@
   settings across a reinstall or a new device. Two things are deliberately
   excluded:
 
-  1. `renzo_secure` — the EncryptedSharedPreferences file. Its contents are
+  1. `renzo_secure` (Shiori) and `renzo_tv_secure` (Renzo's session) — the
+     EncryptedSharedPreferences files. Their contents are
      encrypted with a key held in the Android Keystore, and Keystore keys are
      NEVER backed up. Restoring the file without its key produces a store that
      cannot be decrypted, which the app then has to detect and wipe. Excluding
      it means a restored install simply asks you to sign in, instead of
-     restoring a file that is guaranteed to be unreadable.
+     restoring a file that is guaranteed to be unreadable. The `_fallback`
+     twins are plain files that hold a session only while the Keystore cannot
+     open; they are secrets too, so they never leave the device either.
 
   2. Downloaded chapters and episodes — potentially gigabytes, and all
      re-downloadable from the user's own server.
@@ -19,6 +22,8 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="renzo_secure.xml" />
     <exclude domain="sharedpref" path="renzo_secure_fallback.xml" />
+    <exclude domain="sharedpref" path="renzo_tv_secure.xml" />
+    <exclude domain="sharedpref" path="renzo_tv_secure_fallback.xml" />
     <exclude domain="external" path="offline" />
     <exclude domain="file" path="offline" />
     <exclude domain="file" path="last-crash.txt" />

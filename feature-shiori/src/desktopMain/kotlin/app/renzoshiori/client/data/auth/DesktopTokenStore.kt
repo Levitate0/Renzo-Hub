@@ -1,27 +1,30 @@
 package app.renzoshiori.client.data.auth
 
+import top.levitatemedia.renzo.hub.core.SecretValue
 import top.levitatemedia.renzo.hub.core.keyValuePrefs
+import top.levitatemedia.renzo.hub.core.secretPrefs
 
 /**
- * Desktop [TokenStore]: connection details AND session credentials in the OS
- * config dir (%APPDATA%\RenzoHub on Windows).
+ * Desktop [TokenStore], in the OS config dir (%APPDATA%\RenzoHub on Windows).
  *
- * The Android split-store exists because the Keystore can invalidate the
- * encrypted half; the desktop has no such failure mode, so one store is
- * enough and [wasReset] is always false.
- *
- * TODO(security): the session file is plain text, protected only by OS file
- * permissions — same posture as the WPF client's WebView2 cookie store this
- * replaces. DPAPI (Windows) / keychain would be strictly better.
+ * Connection details stay in the plain "shiori_session" store; the access
+ * token and the remember-me cookie live in the secret store — DPAPI-sealed on
+ * Windows, an owner-only file elsewhere (see secretPrefs). They used to sit
+ * in "shiori_session" as plain text; [SecretValue] lifts them out on first
+ * read, so an upgrade keeps the sign-in. The desktop store cannot be
+ * invalidated the way the Android Keystore can, so [wasReset] is always false.
  */
 class DesktopTokenStore : TokenStore {
     private val prefs = keyValuePrefs("shiori_session")
+    private val secrets = secretPrefs("shiori_session_secure")
+    private val token = SecretValue(secrets, prefs, KEY_TOKEN)
+    private val refresh = SecretValue(secrets, prefs, KEY_REFRESH)
 
     override val wasReset: Boolean = false
 
     override var accessToken: String?
-        get() = prefs.getString(KEY_TOKEN, null)
-        set(value) = prefs.putString(KEY_TOKEN, value)
+        get() = token.get()
+        set(value) = token.set(value)
 
     override var serverUrl: String?
         get() = prefs.getString(KEY_SERVER, null)
@@ -32,12 +35,12 @@ class DesktopTokenStore : TokenStore {
         set(value) = prefs.putString(KEY_USERNAME, value)
 
     override var refreshCookie: String?
-        get() = prefs.getString(KEY_REFRESH, null)
-        set(value) = prefs.putString(KEY_REFRESH, value)
+        get() = refresh.get()
+        set(value) = refresh.set(value)
 
     override fun clearSession() {
-        prefs.remove(KEY_TOKEN)
-        prefs.remove(KEY_REFRESH)
+        token.set(null)
+        refresh.set(null)
     }
 
     private companion object {

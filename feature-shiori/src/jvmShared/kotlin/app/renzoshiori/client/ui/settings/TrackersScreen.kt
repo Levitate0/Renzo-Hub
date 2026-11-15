@@ -54,8 +54,10 @@ import app.renzoshiori.client.data.model.ScrobblerProvider
 import app.renzoshiori.client.data.model.ScrobblerSearchResultDto
 import app.renzoshiori.client.data.model.SeriesMatchSearchDto
 import app.renzoshiori.client.data.model.SeriesMatchStatusDto
+import app.renzoshiori.client.data.model.UserLevel
 import app.renzoshiori.client.data.model.scrobblerRouteName
 import app.renzoshiori.client.data.model.scrobblerShortIcon
+import app.renzoshiori.client.data.network.AccountApi
 import app.renzoshiori.client.data.network.DisableLinkRequestDto
 import app.renzoshiori.client.data.network.ScrobblerApi
 import app.renzoshiori.client.data.network.SeriesDetailApi
@@ -122,6 +124,12 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
     var matchTarget by remember { mutableStateOf<SeriesMatchStatusDto?>(null) }
 
     var comicVineApiKey by remember { mutableStateOf("") }
+    // The ComicVine key is server-wide (POST .../comicvine/apikey is Owner-only).
+    var canOwner by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val level = runCatching { app.network.currentServiceOf<AccountApi>()?.me()?.level }.getOrNull()
+        canOwner = (level ?: UserLevel.USER) >= UserLevel.OWNER
+    }
     var kitsuEmail by remember { mutableStateOf("") }
     var kitsuPassword by remember { mutableStateOf("") }
     var mdUsername by remember { mutableStateOf("") }
@@ -432,6 +440,12 @@ fun ScrobblerSettings(snackbar: SnackbarHostState) {
                                 },
                             )
                         }
+
+                        config.provider == ScrobblerProvider.COMIC_VINE && !canOwner -> Text(
+                            "The owner sets the ComicVine API key.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = RenzoColors.MutedForeground,
+                        )
 
                         config.provider == ScrobblerProvider.COMIC_VINE -> {
                             LabelledField(

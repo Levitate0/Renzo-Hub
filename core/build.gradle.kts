@@ -59,6 +59,10 @@ kotlin {
         }
         val desktopMain by getting {
             dependsOn(jvmShared)
+            dependencies {
+                // DPAPI for the secret store on Windows (HubSecrets.desktop.kt).
+                implementation(libs.jna)
+            }
         }
         val androidUnitTest by getting {
             dependencies {
