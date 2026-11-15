@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -83,7 +85,7 @@ private fun SecondaryButton(text: String, onClick: () -> Unit, content: (@Compos
  * ever knowing one had ended:
  * - its own dark surface with the theme accent along both edges, so it stands
  *   out against any artwork and on every reader background, white included;
- * - the whole width of the screen (the caller breaks it out of the strip);
+ * - exactly as wide as the page column, long chapter names wrapping inside it;
  * - the next chapter's name in large type.
  *
  * Height is the caller's: a break between chapters rests at 60% of the screen,
@@ -196,6 +198,7 @@ private fun BreakEyebrow(text: String) {
  * block as a break, so when the next chapter lands and a break takes its
  * place, it reads as the same thing.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EndOfChapter(
     chapterLabel: String,
@@ -219,7 +222,11 @@ fun EndOfChapter(
         modifier = modifier,
     ) {
         Spacer(Modifier.height(32.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        // web: flex flex-wrap items-center justify-center gap-2
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             if (hasPrev) {
                 SecondaryButton("Previous", onPrev) {
                     Icon(Icons.Filled.ChevronLeft, contentDescription = null, modifier = Modifier.size(16.dp))

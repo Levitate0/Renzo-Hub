@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -1322,12 +1321,11 @@ private fun ContinuousReader(
                         }
                     }
 
-                    // The strip is only as wide as the pages (native cap ×
-                    // zoom); the divider and end cells are viewport-wide
-                    // sections on the web, and squeezing their button rows
-                    // into a narrow strip wraps the labels one letter per
-                    // line — requiredWidth breaks out of the strip's
-                    // constraint and centers them on the screen.
+                    // The divider and end cells are exactly as wide as the
+                    // page column (the strip), like the web: screen-wide ones
+                    // overhung the pages and the list clipped them, cutting
+                    // long chapter names off at both edges. Their button rows
+                    // wrap instead of squeezing.
                     //
                     // A break rests at 60% of the screen: one nobody scrolls
                     // past without noticing, but not a whole screen of nothing
@@ -1338,7 +1336,7 @@ private fun ContinuousReader(
                         finishedLabel = segments.getOrNull(item.segIndex - 1)?.name ?: "",
                         nextLabel = seg.name,
                         onExit = onExit,
-                        modifier = Modifier.requiredWidth(screenWidth).heightIn(min = screenHeight * 0.6f),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = screenHeight * 0.6f),
                     )
 
                     else -> {
@@ -1360,7 +1358,7 @@ private fun ContinuousReader(
                             appendError = state.appendError,
                             appending = state.appending,
                             onRetryAppend = onRetryAppend,
-                            modifier = Modifier.requiredWidth(screenWidth).heightIn(min = screenHeight),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = screenHeight),
                         )
                     }
                 }
