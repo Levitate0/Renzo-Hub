@@ -486,7 +486,10 @@ private fun TitleHero(
     var descriptionExpanded by rememberSaveable(d.id) { mutableStateOf(false) }
     val desc = remember(d.id) { cleanDescription(d.description) }
     val maxAvailable = (d.availableEpisodes ?: d.episodeList.size).coerceAtLeast(1)
-    val playEp = (watchedThrough + 1).coerceIn(1, maxAvailable)
+    // Stopped part-way through an episode? Play resumes THAT one (the player
+    // seeks to the saved point) and says where — web hero.tsx twin.
+    val resume = d.resumePoint?.takeIf { it.episode in 1..maxAvailable && it.positionMs > 0 }
+    val playEp = resume?.episode ?: (watchedThrough + 1).coerceIn(1, maxAvailable)
     val scope = rememberCoroutineScope()
     var auto by remember(d.id) { mutableStateOf(d.autoDownload) }
     // Shiori's cover lightbox (SeriesHeroSection): click the cover to expand.
@@ -665,7 +668,11 @@ private fun TitleHero(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(top = 4.dp),
             ) {
-                val label = if (watchedThrough > 0 && playEp > 1) "Continue E$playEp" else "Play E$playEp"
+                val label = when {
+                    resume != null -> "Resume E$playEp · ${resumeClock(resume.positionMs)}"
+                    watchedThrough > 0 && playEp > 1 -> "Continue E$playEp"
+                    else -> "Play E$playEp"
+                }
                 HeroActionButton(
                     icon = Icons.Filled.PlayArrow,
                     contentDescription = label,
@@ -1404,4 +1411,13 @@ internal fun seasonLabel(ref: SeasonRef, short: Boolean = false): String {
         else -> "Season ${ref.num ?: 1}" + (ref.part?.takeIf { it > 1 }?.let { " Part $it" } ?: "")
     }
     return chip + (ref.year?.let { " · $it" } ?: "")
+}
+
+/** m:ss / h:mm:ss, as the web's fmtTime. */
+private fun resumeClock(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    val h = s / 3600
+    val m = (s % 3600) / 60
+    val ss = (s % 60).toString().padStart(2, '0')
+    return if (h > 0) "$h:${m.toString().padStart(2, '0')}:$ss" else "$m:$ss"
 }

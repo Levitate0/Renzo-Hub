@@ -50,8 +50,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.BiasAlignment
@@ -62,6 +65,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -223,12 +227,33 @@ private fun PlayerContent(
      */
     var resumeLoaded by remember { mutableStateOf(false) }
 
+    /** Set at the first STATE_READY, where the restore seek happens. */
+    var readyOnce by remember { mutableStateOf(false) }
+
     // Server-owned so the position follows you between phone, TV and the web
     // player. The local copy is the offline fallback, not the source of truth.
+    //
+    // The player is built without waiting for this read, so the two race: a
+    // download or a quick stream reached READY first, found no position, and
+    // started from 0:00 — the server's point arrived afterwards and was never
+    // applied. Seed the local copy at once, and if READY has already been and
+    // gone, apply the server's point late, unless the viewer has moved on.
     LaunchedEffect(titleId, ep) {
         val local = app.prefs.resumePositionMs(resumeKey)
+        if (!readyOnce) resumeMs = local
         val remote = runCatching { app.repo.resumePoints(titleId)[ep.toString()] }.getOrNull()
-        resumeMs = remote?.positionMs ?: local
+        val target = remote?.positionMs ?: local
+        val p = player
+        if (readyOnce && p != null) {
+            val started = if (local > 0L) local else 0L
+            if (target > 0L && target != started &&
+                kotlin.math.abs(p.currentPosition - started) < RESUME_MIN_MS
+            ) {
+                seekToResume(p, target)
+            }
+        } else {
+            resumeMs = target
+        }
         resumeLoaded = true
     }
     val endedHandled = remember { mutableStateOf(false) }
@@ -392,6 +417,7 @@ private fun PlayerContent(
                             seekToResume(p, resumeMs)
                             resumeMs = 0L
                         }
+                        readyOnce = true
                         if (!offline && !prefetched.value) {
                             // Warm the server's cache so auto-next is instant.
                             prefetched.value = true
@@ -657,6 +683,26 @@ private fun PlayerContent(
                     }
                     !controlsVisible -> { poke(); false }
                     else -> { poke(); false }
+                }
+            }
+            // Touch. Until this existed only a key press could bring the overlay
+            // back, so on a phone it auto-hid 4s after playback started and was
+            // gone for good. Any touch wakes it and restarts the hide timer (web
+            // #watchStage onTouchStart={showControls}); a tap on bare video while
+            // it is up hides it again, or closes an open menu. Buttons, the seek
+            // bar and menu rows consume their own taps and drags, so those never
+            // reach the hide branch. Seen first in the Initial pass so a child
+            // can't hide the wake-up. PlayerView is not in the way: useController
+            // = false makes it non-clickable, so it never claims the touch.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val wasVisible = controlsVisible
+                    poke()
+                    val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                    if (!wasVisible) return@awaitEachGesture
+                    if ((up.position - down.position).getDistance() > viewConfiguration.touchSlop) return@awaitEachGesture
+                    if (menu != null) menu = null else controlsVisible = false
                 }
             }
             .focusable(),

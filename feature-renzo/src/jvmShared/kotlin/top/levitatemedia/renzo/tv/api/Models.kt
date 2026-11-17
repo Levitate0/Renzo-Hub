@@ -164,6 +164,7 @@ data class TitleDetail(
     val nextUp: SeasonRef? = null,
     val episodeList: List<EpisodeInfo> = emptyList(),
     val watchedThrough: Int = 0,
+    val resumePoint: TitleResume? = null,
     val inLibrary: Boolean = false,
     val lists: List<String> = emptyList(),
     val folder: String? = null,
@@ -201,7 +202,19 @@ data class DownloadJob(
 data class ResumePoint(
     val positionMs: Long = 0,
     val durationMs: Long = 0,
-    val updatedAt: Long = 0,
+    /** ISO-8601 from the server. This was a Long, so every GET
+     *  /titles/:id/resume failed to decode and Hub fell back to the device's
+     *  own copy: a position saved on the web (or another device) never
+     *  resumed here. */
+    val updatedAt: String = "",
+)
+
+/** GET /titles/:id `resumePoint`: where you last stopped in this title. */
+@Serializable
+data class TitleResume(
+    val episode: Int,
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
 )
 
 /** One entry of POST /api/titles/{id}/play. */

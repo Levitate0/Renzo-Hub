@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
@@ -68,7 +69,8 @@ import top.levitatemedia.renzo.tv.ui.theme.RenzoColors
  * [pill tabs on wide screens] [spacer] [search box] [avatar]. 56dp tall.
  * The hamburger is ALWAYS there (it opens the NavDrawer); pills appear only
  * when the window is wide enough (tablets landscape / TV), like the web's lg
- * break — narrow phones get hamburger + search + avatar, same as web mobile.
+ * break — narrow phones get Shiori's mobile bar: hamburger, brand, a search icon
+ * that opens the field, the Online pill and the avatar.
  */
 @Composable
 fun TopBar(
@@ -202,7 +204,7 @@ fun TopBar(
                     }
                 },
             )
-        } else {
+        } else if (app.isTv) {
             Row(barModifier, verticalAlignment = Alignment.CenterVertically) {
                 if (showHamburger) {
                     HamburgerButton(onClick = onMenu)
@@ -220,6 +222,42 @@ fun TopBar(
                     modifier = Modifier.padding(start = 6.dp, end = 4.dp),
                 )
             }
+        } else {
+            // Phones and narrow windows: Shiori's mobile bar (HomeShell's
+            // narrow row / command-bar.tsx <lg). Search is an icon that opens
+            // a focused field; while it is open the wordmark and the Online
+            // pill step aside so the field has room, and closing it clears the
+            // query. An always-open box squeezed the bar on a phone.
+            var searchOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+            Row(barModifier, verticalAlignment = Alignment.CenterVertically) {
+                if (showHamburger) {
+                    HamburgerButton(onClick = onMenu)
+                    Spacer(Modifier.width(10.dp))
+                }
+                Brand(showName = !searchOpen)
+                Spacer(Modifier.weight(1f))
+                if (searchOpen) {
+                    SearchBox(
+                        onSearch = onSearch,
+                        autoFocus = true,
+                        modifier = Modifier.width(176.dp),
+                    )
+                }
+                BarIconButton(
+                    icon = if (searchOpen) Icons.Filled.Close else Icons.Filled.Search,
+                    contentDescription = if (searchOpen) "Close search" else "Open search",
+                    onClick = {
+                        if (searchOpen && app.searchQuery.value.isNotEmpty()) onSearch("")
+                        searchOpen = !searchOpen
+                    },
+                )
+                if (!searchOpen) OnlinePill()
+                AvatarButton(
+                    user = user,
+                    onClick = onAccount,
+                    modifier = Modifier.padding(start = 6.dp, end = 4.dp),
+                )
+            }
         }
     }
 }
@@ -230,20 +268,22 @@ fun TopBar(
  * 28dp tall, at which size its own "Renzo" lettering was a smudge.
  */
 @Composable
-private fun Brand() {
+private fun Brand(showName: Boolean = true) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Image(
             painter = painterResource(Res.drawable.renzo_mark),
             contentDescription = "Renzo home",
             modifier = Modifier.size(28.dp),
         )
-        Text(
-            "Renzo",
-            style = MaterialTheme.typography.titleSmall,
-            color = RenzoColors.Foreground,
-            maxLines = 1,
-            modifier = Modifier.padding(start = 8.dp),
-        )
+        if (showName) {
+            Text(
+                "Renzo",
+                style = MaterialTheme.typography.titleSmall,
+                color = RenzoColors.Foreground,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
     }
 }
 
@@ -262,11 +302,20 @@ private fun tabIcon(tab: Tab) = when (tab) {
  *  search — 320ms debounce like the web's search context, with the keyboard
  *  Search action still submitting immediately. */
 @Composable
-private fun SearchBox(onSearch: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun SearchBox(
+    onSearch: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    /** The phone bar's field opens on a tap of the search icon, so it takes
+     *  focus (and the keyboard) at once, like Shiori's mobile input. */
+    autoFocus: Boolean = false,
+) {
     var text by remember { mutableStateOf("") }
     var focused by remember { mutableStateOf(false) }
     val isDesktop = top.levitatemedia.renzo.hub.core.HubPlatform.isDesktop
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    if (autoFocus) {
+        androidx.compose.runtime.LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    }
     if (isDesktop) {
         // ⌘K / Ctrl-K from anywhere focuses this box (hub-desktop's window
         // key handler calls the registered requester).
@@ -505,7 +554,15 @@ fun PillBadge(n: Int, onActivePill: Boolean) {
 }
 
 @Composable
-private fun HamburgerButton(onClick: () -> Unit) {
+private fun HamburgerButton(onClick: () -> Unit) =
+    BarIconButton(Icons.Default.Menu, "Open menu", onClick)
+
+@Composable
+private fun BarIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
@@ -517,8 +574,8 @@ private fun HamburgerButton(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.Default.Menu,
-            contentDescription = "Open menu",
+            icon,
+            contentDescription = contentDescription,
             tint = if (focused) RenzoColors.Foreground else RenzoColors.MutedForeground,
             modifier = Modifier.size(20.dp),
         )
