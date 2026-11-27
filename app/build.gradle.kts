@@ -27,8 +27,8 @@ android {
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         // Above tv-native's 44 — the Hub upgrades those installs in place.
-        versionCode = 87
-        versionName = "1.6.18"
+        versionCode = 88
+        versionName = "1.6.19"
     }
 
     signingConfigs {

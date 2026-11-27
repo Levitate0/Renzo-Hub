@@ -68,6 +68,16 @@ rm -rf "$WORK/stage"
 mkdir -p "$WORK/stage"
 cp "$JAR" "$WORK/stage/RenzoHub.jar"
 cp -r "$WORK/jre" "$WORK/stage/jre"
+# A javaw.exe copy branded Renzo Hub, so Task Manager doesn't list the app as
+# "OpenJDK Platform binary". resedit edits PE resources in plain JS; both
+# packages pinned (exact versions, not ranges).
+RESEDIT="$WORK/resedit"
+if [ ! -d "$RESEDIT/node_modules/resedit" ]; then
+  mkdir -p "$RESEDIT" && echo '{"private":true}' > "$RESEDIT/package.json"
+  (cd "$RESEDIT" && npm install --no-audit --no-fund --silent --save-exact resedit@3.0.2 pe-library@2.0.1)
+fi
+cp "$HUB/hub-desktop/windows/brand-javaw.mjs" "$RESEDIT/"
+node "$RESEDIT/brand-javaw.mjs" "$WORK/stage/jre/bin/javaw.exe" "$WORK/stage/jre/bin/RenzoHub.exe" "$ICON"
 # libvlc + plugins. Pruned of what an embedded player never loads (scripting,
 # streaming/mux output, visualisations, discovery) and of the four plugins the
 # package still carries under a GPL label; the guard below then refuses to
@@ -121,6 +131,7 @@ else
   sign() { :; }
 fi
 sign "$WORK/stage/RenzoHub.exe"
+sign "$WORK/stage/jre/bin/RenzoHub.exe"
 mkdir -p "$OUT_DIR"
 makensis -DVERSION="$VERSION" -DSRC="$WORK/stage" -DICON="$ICON" \
   -DOUTFILE="$WORK/RenzoHub-Setup.exe" \

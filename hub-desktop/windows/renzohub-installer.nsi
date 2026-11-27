@@ -32,7 +32,7 @@ SetCompressor /SOLID lzma
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
 
 ; Close every process running from $INSTDIR. A running Renzo Hub IS
-; javaw.exe loaded out of $INSTDIR\jre, so each mapped DLL stays
+; jre\bin\RenzoHub.exe (a branded javaw) loaded out of $INSTDIR\jre, so each mapped DLL stays
 ; write-locked and an in-place upgrade dies on "Error opening file for
 ; writing: ...\awt.dll". Matching by executable path (via an env var, so
 ; quotes/apostrophes in the path can't break the PowerShell string) kills

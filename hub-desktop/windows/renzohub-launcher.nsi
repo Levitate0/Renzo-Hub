@@ -13,5 +13,7 @@ Section
   SetOutPath "$EXEDIR"
   ; allowAmbiguousCommands=false: strict argv quoting when the Hub launches
   ; an external player with server-supplied titles/URLs.
-  Exec '"$EXEDIR\jre\bin\javaw.exe" -Djdk.lang.Process.allowAmbiguousCommands=false -jar "$EXEDIR\RenzoHub.jar"'
+  ; jre\bin\RenzoHub.exe is javaw.exe with Renzo Hub's name and icon
+  ; (brand-javaw.mjs), so that is what Task Manager shows.
+  Exec '"$EXEDIR\jre\bin\RenzoHub.exe" -Djdk.lang.Process.allowAmbiguousCommands=false -jar "$EXEDIR\RenzoHub.jar"'
 SectionEnd
